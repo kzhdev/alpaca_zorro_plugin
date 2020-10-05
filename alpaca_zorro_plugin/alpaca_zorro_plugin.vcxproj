@@ -89,7 +89,6 @@
     <ClInclude Include="alpaca\account.h" />
     <ClInclude Include="alpaca\client.h" />
     <ClInclude Include="alpaca\clock.h" />
-    <ClInclude Include="alpaca\logger.h" />
     <ClInclude Include="alpaca\order.h" />
     <ClInclude Include="alpaca\response.h" />
     <ClInclude Include="resource.h" />

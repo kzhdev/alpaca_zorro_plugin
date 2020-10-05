@@ -36,9 +36,6 @@
     <ClInclude Include="alpaca\order.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="alpaca\logger.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="alpaca\clock.h">
       <Filter>Header Files</Filter>
     </ClInclude>

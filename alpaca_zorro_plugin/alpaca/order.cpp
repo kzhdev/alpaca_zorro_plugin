@@ -5,7 +5,7 @@
 
 namespace alpaca {
 
-	void Order::fromJSON(const rapidjson::Document& json) {
-		//TODO
-	}
+    void Order::fromJSON(const rapidjson::Document& json) {
+        //TODO
+    }
 } // namespace alpaca
