@@ -93,6 +93,8 @@ namespace alpaca {
 
     template<typename T>
     inline Response<T> Client::request(const std::string& path, const char* data) const {
+        // unfortunately need to make a copy of headers for every request. Otherwise only the first request has headers.
+        auto headers = headers_;
         int id = http_send((char*)(baseUrl_ + path).c_str(), (char*)data, (char*)headers_.c_str());
 
 #ifdef _DEBUG

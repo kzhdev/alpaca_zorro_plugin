@@ -84,24 +84,19 @@ namespace alpaca
 
     DLLFUNC_C int BrokerTime(DATE* pTimeGMT)
     {
-        int retry = 10;
-        while (retry--) {
-            auto response = client->getClock();
-            if (!response) {
+        auto response = client->getClock();
+        if (!response) {
 #ifdef _DEBUG
-                BrokerError(response.what().c_str());
+            BrokerError(response.what().c_str());
 #endif
-                Sleep(100);
-                continue;
-            }
-
-            auto& clock = response.content();
-            BrokerError(std::to_string(clock.timestamp).c_str());
-
-            *pTimeGMT = convertTime(clock.timestamp);
-            return clock.is_open ? 2 : 1;
+            return 0;
         }
-        return 0;
+
+        auto& clock = response.content();
+        BrokerError(std::to_string(clock.timestamp).c_str());
+
+        *pTimeGMT = convertTime(clock.timestamp);
+        return clock.is_open ? 2 : 1;
     }
 
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)

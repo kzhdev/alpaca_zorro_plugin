@@ -21,13 +21,10 @@ namespace alpaca {
 
     Client::Client(std::string key, std::string secret, bool isPaperTrading)
         : baseUrl_(isPaperTrading ? kAPIBaseURLPaper : kAPIBaseURLLive)
-        , headers_("APCA-API-KEY-ID: " + std::move(key) + "\n" + "APCA-API-SECRET-KEY: " + std::move(secret))
-#ifdef _DEBUG
-        , log_(fopen("./Log/alpaca.log", "w"))
-#endif
+        , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + std::move(key) + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
     {
 #ifdef _DEBUG
-        if (!log_) {
+        if (fopen_s(&log_, "./Log/alpaca.log", "w")) {
             throw std::runtime_error("Failed to open log. ./Log/alpaca.log");
         }
 #endif
