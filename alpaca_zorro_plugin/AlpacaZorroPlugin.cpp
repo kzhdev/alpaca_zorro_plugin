@@ -56,8 +56,6 @@ namespace alpaca
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
         client = std::make_unique<Client>(User, Pwd, isPaperTrading);
 
-        //client->getClock();
-
         //attempt login
         auto response = client->getAccount();
         if (!response) {
@@ -93,7 +91,6 @@ namespace alpaca
         }
 
         auto& clock = response.content();
-        BrokerError(std::to_string(clock.timestamp).c_str());
 
         *pTimeGMT = convertTime(clock.timestamp);
         return clock.is_open ? 2 : 1;
@@ -101,9 +98,44 @@ namespace alpaca
 
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
-        auto response = client->getAsset(Asset);
+        auto response = client->getLastQuote(Asset);
         if (!response) {
             return 0;
+        }
+
+        if (!pPrice) {
+            // this is subscribe
+            return 1;
+        }
+
+        auto& lastQuote = response.content();
+
+        if (pPrice) {
+            *pPrice = lastQuote.quote.ask_price;
+        }
+
+        if (pSpread) {
+            *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
+        }
+
+        if (pVolume) {
+            auto barResponse = client->getBars({ Asset }, 0, 0, 1, 1);
+            auto& bars = barResponse.content().bars;
+            if (barResponse && !bars.empty() && !bars[Asset].empty()) {
+                *pVolume = bars[Asset][0].volume;
+            }
+        }
+
+        if (pLotAmount) {
+            *pLotAmount = 1;
+        }
+
+        if (pRollLong) {
+            *pRollLong = 0.;
+        }
+
+        if (pRollShort) {
+            *pRollShort = 0.;
         }
 
         return 1;
@@ -114,22 +146,37 @@ namespace alpaca
 
         if (!client || !Asset || !ticks || !nTicks) return 0;
 
-        auto response = client->getBars({ Asset }, "start", "", "", "", "1Min", nTicks);
+        auto start = convertTime(tStart);
+        auto end = convertTime(tEnd);
+
+        auto response = client->getBars({ Asset }, start, end, nTickMinutes, nTicks);
         if (!response) {
+            BrokerError(response.what().c_str());
             return 0;
         }
 
-        uint32_t i = 0;
-        for (auto& bar : response.content().bars[Asset]) {
-            auto& tick = ticks[i++];
-            tick.time = bar.time;
+        auto& bars = response.content().bars;
+        auto iter = bars.find(Asset);
+        if (iter == bars.end()) {
+            return 0;
+        }
+
+        if (iter->second.empty()) {
+            return 0;
+        }
+        
+        int n = 0;
+        for (int i = iter->second.size() - 1; i >= 0; --i) {
+            auto& tick = ticks[n++];
+            auto& bar = iter->second[i];
+            tick.time = convertTime((__time32_t)bar.time);
             tick.fOpen = bar.open_price;
             tick.fHigh = bar.high_price;
             tick.fLow = bar.low_price;
             tick.fClose = bar.close_price;
             tick.fVol = bar.volume;
         }
-        return i;
+        return n;
     }
 
     DLLFUNC_C int BrokerAccount(char* Account, double* pdBalance, double* pdTradeVal, double* pdMarginVal)
@@ -139,16 +186,17 @@ namespace alpaca
             return 0;
         }
 
-        if (strcmp(Account, response.content().account_number.c_str()) != 0) {
-            assert(false);
-            return 0;
+        if (pdBalance) {
+            *pdBalance = response.content().cash;
         }
 
-        *pdBalance = response.content().equity;
+        if (pdTradeVal) {
+            *pdTradeVal = response.content().equity - response.content().cash;
+        }
         return 1;
     }
 
-    DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill)
+    DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill) 
     {
         // TODO
         return 0;
@@ -156,7 +204,49 @@ namespace alpaca
 
     DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter)
     {
-        // TODO
-        return .0;
+        static int SetMultiplier;
+        static std::string SetSymbol;
+
+        std::string Data, response;
+        int i = 0;
+        double price = 0., spread = 0.;
+
+        switch (Command)
+        {
+        case GET_COMPLIANCE:
+            return 15; // full NFA compliant
+
+        case GET_BROKERZONE:
+            return EST; // for now since Alpaca only support US
+
+        case GET_MAXTICKS:
+            return 1000;
+
+        case GET_MAXREQUESTS:
+            return 3;   // Alpaca rate limit is 200 requests per minutes
+
+        case GET_POSITION: {
+            break;
+        }
+
+        case SET_SYMBOL:
+            SetSymbol = (char*)dwParameter;
+            return 1;
+
+        case SET_MULTIPLIER:
+            SetMultiplier = (int)dwParameter;
+            return 1;
+
+        case SET_DIAGNOSTICS:
+            if ((int)dwParameter == 1 || (int)dwParameter == 0) {
+                client->set_diagnostic(dwParameter);
+                return 1;
+            }
+
+        default:
+            BrokerError((std::to_string(Command) + " " + std::to_string(dwParameter)).c_str());
+            break;
+        }
+        return 0;
     }
 }

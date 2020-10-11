@@ -1,11 +1,12 @@
 #include "stdafx.h"
 #include "alpaca/client.h"
 
-#include <utility>
+#include <sstream>
 
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
+#include "date/date.h"
 
 namespace {
     /// The base URL for API calls to the live trading API
@@ -21,29 +22,34 @@ namespace alpaca {
 
     Client::Client(std::string key, std::string secret, bool isPaperTrading)
         : baseUrl_(isPaperTrading ? kAPIBaseURLPaper : kAPIBaseURLLive)
+        , dataUrl_(isPaperTrading ? kAPIDataURL : kPolygonDataURL)
         , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + std::move(key) + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
+#ifdef _DEBUG
+        , log_(fopen("./Log/alpaca.log", "w"))
+#endif
     {
 #ifdef _DEBUG
-        if (fopen_s(&log_, "./Log/alpaca.log", "w")) {
+        if (!log_) {
             throw std::runtime_error("Failed to open log. ./Log/alpaca.log");
         }
 #endif
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account>("/v2/account");
+        return request<Account>(baseUrl_ + "/v2/account");
     }
 
     Response<Clock> Client::getClock() const {
-        return request<Clock>("/v2/clock");
+        auto rt = request<Clock>(baseUrl_ + "/v2/clock");
+        return rt;
     }
 
     Response<Asset> Client::getAsset(const std::string& symbol) const {
-        return request<Asset>("/v2/assets/" + symbol);
+        return request<Asset>(baseUrl_ + "/v2/assets/" + symbol);
     }
 
     Response<Order> Client::getOrder(const std::string& id, const bool nested) const {
-        auto url = "/v2/orders/" + id;
+        auto url = baseUrl_ + "/v2/orders/" + id;
         if (nested) {
             url += "?nested=true";
         }
@@ -198,14 +204,10 @@ namespace alpaca {
 
     Response<Bars> Client::getBars(
         const std::vector<std::string>& symbols,
-        const std::string& start,
-        const std::string& end,
-        const std::string& after,
-        const std::string& until,
-        const std::string& timeframe,
+        __time32_t start,
+        __time32_t end,
+        int nTickMinutes,
         const uint32_t limit) const {
-        Bars bars;
-
         std::string symbols_string = "";
         for (size_t i = 0; i < symbols.size(); ++i) {
             symbols_string += symbols[i];
@@ -214,9 +216,55 @@ namespace alpaca {
         // remove trailing ','
         symbols_string.pop_back();
 
-        auto url = "/v1/bars/" + timeframe;
+        std::string timeframe = "1Min";
+        if (nTickMinutes >= 5 && nTickMinutes < 15) {
+            timeframe = "5Min";
+        }
+        else if (nTickMinutes >= 15 && nTickMinutes < 1440) {
+            timeframe = "15Min";
+        } 
+        else if (nTickMinutes >= 1440) {
+            timeframe = "1D";
+        }
 
-        return request<Bars>(url);
+        std::string sStart;
+        std::string sEnd;
+        {
+            using namespace date;
+            try {
+                if (start) {
+                    sStart = format("%FT%T", date::sys_seconds{ std::chrono::seconds{ start } });
+                    sStart.append("-00:00");    // add UTC timezone offset
+                }
+                
+                if (end) {
+                    sEnd = format("%FT%T", date::sys_seconds{ std::chrono::seconds{ end } });
+                    sEnd.append("-00:00");  // add UTC timezone offset
+                }
+            }
+            catch (const std::exception& e) {
+                assert(false);
+            }
+        }
+
+        std::stringstream url;
+        url << dataUrl_ << "/v1/bars/" << timeframe << "?symbols=" << symbols_string << "&limit=" << limit
+            << (sStart.empty() ? "" : "&start=" + sStart) << (sEnd.empty() ? "" : "&end=" + sEnd);
+
+        auto rt = request<Bars>(url.str());
+#ifdef _DEBUG
+        if (rt) {
+            int i = 0;
+            for (const auto& bar : rt.content().bars.begin()->second) {
+                fprintf(log_, "%d %s\n", i++, timeToString(bar.time).c_str());
+            }
+        }
+#endif
+        return rt;
+    }
+
+    Response<LastQuote> Client::getLastQuote(const std::string& symbol) const {
+        return request<LastQuote>(dataUrl_ + "/v1/last_quote/stocks/" + symbol);
     }
 
 } // namespace alpaca

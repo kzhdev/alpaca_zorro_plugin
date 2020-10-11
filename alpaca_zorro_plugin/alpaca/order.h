@@ -157,6 +157,10 @@ namespace alpaca {
 
     private:
         template<typename> friend class Response;
-        void fromJSON(const rapidjson::Document& d);
+
+        template<typename T>
+        void fromJSON(const T& parser) {
+
+        }
     };
 } // namespace alpaca

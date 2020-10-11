@@ -42,6 +42,12 @@
     <ClInclude Include="alpaca\response.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="alpaca\json.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\bars.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -56,19 +62,7 @@
     <ClCompile Include="alpaca\client.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="alpaca\account.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="alpaca\asset.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="alpaca\bars.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="alpaca\clock.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="alpaca\order.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

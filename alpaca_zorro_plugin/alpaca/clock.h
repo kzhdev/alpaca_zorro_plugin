@@ -1,9 +1,11 @@
 #pragma once
 
 #include <string>
-#include "rapidjson/document.h"
 
 namespace alpaca {
+
+    __time32_t parseTimeStamp(std::string&& timestamp);
+    int32_t getTimeZoneOffset(const std::string& timestamp);
 
     struct Clock {
         __time32_t next_close;
@@ -13,6 +15,13 @@ namespace alpaca {
 
     private:
         template<typename> friend class Response;
-        void fromJSON(const rapidjson::Document& d);
+
+        template<typename T>
+        void fromJSON(const T& parser) {
+            parser.get<bool>("is_open", is_open);
+            next_close = parseTimeStamp(parser.get<std::string>("next_close"));
+            next_open = parseTimeStamp(parser.get<std::string>("next_open"));
+            timestamp = parseTimeStamp(std::move(parser.get<std::string>("timestamp")));
+        }
     };
 } // namespace alpaca

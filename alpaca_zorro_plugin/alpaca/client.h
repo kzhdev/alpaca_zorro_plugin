@@ -3,12 +3,14 @@
 #include <string>
 #include <vector>
 
+#include "alpaca/response.h"
 #include "alpaca/account.h"
 #include "alpaca/asset.h"
 #include "alpaca/bars.h"
+#include "alpaca/quote.h"
 #include "alpaca/clock.h"
 #include "alpaca/order.h"
-#include "alpaca/response.h"
+
 
 //extern int print(int to, char* format, ...);
 
@@ -26,6 +28,11 @@ namespace alpaca {
         explicit Client() = delete;
         explicit Client(std::string key, std::string secret, bool isPaperTrading);
         ~Client() = default;
+
+        bool daignostic_enabled() const noexcept { return diagnostic_enabled_;  }
+        void set_diagnostic(bool enabled) noexcept { diagnostic_enabled_ = enabled; }
+
+        uint32_t getTimeZoneOffset() const noexcept { return tz_offset_; }
 
         Response<Account> getAccount() const;
 
@@ -71,12 +78,12 @@ namespace alpaca {
 
         Response<Bars> getBars(
             const std::vector<std::string>& symbols,
-            const std::string& start,
-            const std::string& end,
-            const std::string& after = "",
-            const std::string& until = "",
-            const std::string& timeframe = "1D",
+            __time32_t start,
+            __time32_t end,
+            int nTickMinutes = 1,
             const uint32_t limit = 100) const;
+
+        Response<LastQuote> getLastQuote(const std::string& symbol) const;
 
     private:
         template<typename T>
@@ -84,21 +91,23 @@ namespace alpaca {
 
     private:
         const std::string baseUrl_;
+        const std::string dataUrl_;
         const std::string headers_;
-#ifdef _DEBUG
         FILE* log_;
-#endif;
+        bool diagnostic_enabled_ = false;
+        mutable int32_t tz_offset_ = 0;
+        mutable std::string tz_offset_string_;
     };
 
 
     template<typename T>
-    inline Response<T> Client::request(const std::string& path, const char* data) const {
+    inline Response<T> Client::request(const std::string& url, const char* data) const {
         // unfortunately need to make a copy of headers for every request. Otherwise only the first request has headers.
         auto headers = headers_;
-        int id = http_send((char*)(baseUrl_ + path).c_str(), (char*)data, (char*)headers_.c_str());
+        int id = http_send((char*)url.c_str(), (char*)data, (char*)headers.c_str());
 
 #ifdef _DEBUG
-        fprintf(log_, "--> %d %s%s\n", id, baseUrl_.c_str(), path.c_str());
+        fprintf(log_, "--> %d %s\n", id, url.c_str());
         if (data) {
             fprintf(log_, "Data:\n%s\n", data);
         }

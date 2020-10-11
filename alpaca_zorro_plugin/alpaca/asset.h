@@ -2,7 +2,6 @@
 
 #include <string>
 #include <cassert>
-#include "rapidjson/document.h"
 
 namespace alpaca {
 
@@ -38,6 +37,17 @@ namespace alpaca {
 
 	private:
 		template<typename> friend class Response;
-		void fromJSON(const rapidjson::Document& d);
+		template<typename T>
+		void fromJSON(const T& parser) {
+			parser.get<std::string>("class", asset_class);
+			parser.get<bool>("easy_to_borrow", easy_to_borrow);
+			parser.get<std::string>("exchange", exchange);
+			parser.get<std::string>("id", id);
+			parser.get<bool>("marginable", marginable);
+			parser.get<bool>("shortable", shortable);
+			parser.get<std::string>("status", status);
+			parser.get<std::string>("symbol", symbol);
+			parser.get<bool>("tradable", tradable);
+		}
 	};
 } // namespace alpaca

@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
-#include "rapidjson/document.h"
-
 namespace alpaca {
+
+	std::string timeToString(__time32_t time);
 
 	struct Bar {
 		uint32_t time;
@@ -19,7 +19,16 @@ namespace alpaca {
 	private:
 		template<typename> friend class Response;
 		friend class Bars;
-		void fromJSON(rapidjson::GenericValue<rapidjson::UTF8<char>, rapidjson::MemoryPoolAllocator<rapidjson::CrtAllocator>>&d);
+
+		template<typename T>
+		void fromJSON(const T& parser) {
+			parser.get<uint32_t>("t", time);
+			parser.get<double>("o", open_price);
+			parser.get<double>("h", high_price);
+			parser.get<double>("l", low_price);
+			parser.get<double>("c", close_price);
+			parser.get<uint32_t>("v", volume);
+		}
 	};
 
 	/**
@@ -31,6 +40,18 @@ namespace alpaca {
 
 	private:
 		template<typename> friend class Response;
-		void fromJSON(const rapidjson::Document& d);
+
+		template<typename T>
+		void fromJSON(const T& parser) {
+			for (auto symbol_bars = parser.json.MemberBegin(); symbol_bars != parser.json.MemberEnd(); symbol_bars++) {
+				bars[symbol_bars->name.GetString()] = std::vector<Bar>{};
+				for (auto& symbol_bar : symbol_bars->value.GetArray()) {
+					Bar bar;
+					Parser<decltype(symbol_bar.GetObject())> parser(symbol_bar.GetObject());
+					bar.fromJSON(parser);
+					bars[symbol_bars->name.GetString()].emplace_back(std::move(bar));
+				}
+			}
+		}
 	};
 } // namespace alpaca

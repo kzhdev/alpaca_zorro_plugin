@@ -4,7 +4,7 @@
 #include <string>
 #include <cassert>
 
-#include "rapidjson/document.h"
+#include "json.h"
 
 namespace alpaca {
 
@@ -142,7 +142,8 @@ namespace alpaca {
             }
 
             try {
-                content_.fromJSON(d);
+                Parser<rapidjson::Document> parser(d);
+                content_.fromJSON(parser);
             }
             catch (std::exception& e) {
                 code_ = 1;

@@ -87,8 +87,10 @@
   <ItemGroup>
     <ClInclude Include="AlpacaZorroPlugin.h" />
     <ClInclude Include="alpaca\account.h" />
+    <ClInclude Include="alpaca\bars.h" />
     <ClInclude Include="alpaca\client.h" />
     <ClInclude Include="alpaca\clock.h" />
+    <ClInclude Include="alpaca\json.h" />
     <ClInclude Include="alpaca\order.h" />
     <ClInclude Include="alpaca\response.h" />
     <ClInclude Include="resource.h" />
@@ -97,12 +99,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AlpacaZorroPlugin.cpp" />
-    <ClCompile Include="alpaca\account.cpp" />
-    <ClCompile Include="alpaca\asset.cpp" />
-    <ClCompile Include="alpaca\bars.cpp" />
     <ClCompile Include="alpaca\client.cpp" />
     <ClCompile Include="alpaca\clock.cpp" />
-    <ClCompile Include="alpaca\order.cpp" />
     <ClCompile Include="dllmain.cpp">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
