@@ -20,9 +20,22 @@
 #include <algorithm> // transform
 
 #include "alpaca/client.h"
+#include "alpaca/logger.h"
 #include "include/functions.h"
 
 #define PLUGIN_VERSION	2
+
+using namespace alpaca;
+
+namespace {
+    TimeInForce s_tif = TimeInForce::Day;
+    std::string s_asset;
+    int s_multiplier = 1;
+    std::string s_lastUUID;
+    Logger* s_logger = nullptr;
+    std::string s_nextOrderText;
+    int s_priceType = 0;
+}
 
 namespace alpaca
 {
@@ -55,6 +68,7 @@ namespace alpaca
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
         client = std::make_unique<Client>(User, Pwd, isPaperTrading);
+        s_logger = &client->logger();
 
         //attempt login
         auto response = client->getAccount();
@@ -149,6 +163,8 @@ namespace alpaca
         auto start = convertTime(tStart);
         auto end = convertTime(tEnd);
 
+        s_logger->logInfo("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+
         auto response = client->getBars({ Asset }, start, end, nTickMinutes, nTicks);
         if (!response) {
             BrokerError(response.what().c_str());
@@ -198,15 +214,71 @@ namespace alpaca
 
     DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill) 
     {
-        // TODO
-        return 0;
+        OrderSide side = nAmount > 0 ? OrderSide::Buy : OrderSide::Sell;
+        OrderType type = OrderType::Market;
+        if (dLimit) {
+            type = OrderType::Limit;
+        }
+        std::string limit;
+        if (dLimit) {
+            limit = std::to_string(dLimit);
+        }
+        std::string stop;
+        if (dStopDist) {
+
+        }
+        auto response = client->submitOrder(Asset, std::abs(nAmount), side, type, s_tif, limit, stop, false, s_nextOrderText);
+        if (!response) {
+            BrokerError(response.what().c_str());
+            return 0;
+        }
+        s_lastUUID = response.content().id;
+        if (pPrice) {
+            *pPrice = response.content().filled_avg_price;
+        }
+        if (pFill) {
+            *pFill = response.content().filled_qty;
+        }
+        return -1;
+    }
+
+    DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
+        assert(nTradeID == -1);
+        auto response = client->getOrder(s_lastUUID);
+        if (!response) {
+            BrokerError(response.what().c_str());
+            return NAY;
+        }
+
+        auto& order = response.content();
+
+        if (pOpen) {
+            *pOpen = order.filled_avg_price;
+        }
+
+        if (pProfit && order.filled_qty) {
+            auto resp = client->getLastQuote(order.symbol);
+            if (resp) {
+                auto& quote = resp.content().quote;
+                *pProfit = order.side == OrderSide::Buy ? ((quote.ask_price - order.filled_avg_price) * order.filled_qty) : (order.filled_avg_price - quote.bid_price) * order.filled_qty;
+            }
+        }
+        return order.filled_qty;
+    }
+
+    double getPosition(const std::string& asset) {
+        auto response = client->getPosition(asset);
+        if (!response) {
+            BrokerError(("Get position failed. " + response.what()).c_str());
+            return 0;
+        }
+
+        return response.content().qty * (response.content().side == PositionSide::Long ? 1 : -1);
     }
 
     DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter)
     {
         static int SetMultiplier;
-        static std::string SetSymbol;
-
         std::string Data, response;
         int i = 0;
         double price = 0., spread = 0.;
@@ -217,7 +289,7 @@ namespace alpaca
             return 15; // full NFA compliant
 
         case GET_BROKERZONE:
-            return EST; // for now since Alpaca only support US
+            return ET; // for now since Alpaca only support US
 
         case GET_MAXTICKS:
             return 1000;
@@ -225,26 +297,71 @@ namespace alpaca
         case GET_MAXREQUESTS:
             return 3;   // Alpaca rate limit is 200 requests per minutes
 
-        case GET_POSITION: {
-            break;
-        }
+        case GET_LOCK:
+            return 0;
+
+        case GET_POSITION:
+            return getPosition((char*)dwParameter);
+
+        case SET_ORDERTEXT:
+            s_nextOrderText = (char*)dwParameter;
+            client->logger().logDebug("SET_ORDERTEXT: %s\n", s_nextOrderText.c_str());
+            return dwParameter;
 
         case SET_SYMBOL:
-            SetSymbol = (char*)dwParameter;
+            s_asset = (char*)dwParameter;
             return 1;
 
         case SET_MULTIPLIER:
-            SetMultiplier = (int)dwParameter;
+            s_multiplier = (int)dwParameter;
             return 1;
+
+        case SET_ORDERTYPE: {
+            switch ((int)dwParameter) {
+            case 0:
+                s_tif = TimeInForce::IOC;
+                return 0;
+            case 1:
+                s_tif = TimeInForce::FOK;
+                return 1;
+            case 2:
+                s_tif = TimeInForce::GTC;
+                return 2;
+            case 3:
+                s_tif = TimeInForce::FOK;
+                return 0;
+            }
+
+            if ((int)dwParameter >= 8) {
+                return (int)dwParameter;
+            }
+            return 0;
+        }
+        case SET_PRICETYPE:
+            return dwParameter;
+
+        case GET_UUID:
+            strcpy((char*)dwParameter, s_lastUUID.c_str());
+            s_logger->logDebug("GET_UUID %s\n", (char*)(dwParameter));
+            return dwParameter;
+
+        case SET_UUID:
+            s_logger->logDebug("SET_UUID %s\n", (char*)(dwParameter));
+            return dwParameter;
 
         case SET_DIAGNOSTICS:
             if ((int)dwParameter == 1 || (int)dwParameter == 0) {
-                client->set_diagnostic(dwParameter);
+                client->logger().level = (int)dwParameter ? LogLevel::L_DEBUG : LogLevel::L_INFO;
                 return 1;
             }
+            break;
+
+        case SET_HWND:
+        case GET_CALLBACK:
+            break;
 
         default:
-            BrokerError((std::to_string(Command) + " " + std::to_string(dwParameter)).c_str());
+            s_logger->logDebug("Unhandled command: %d %lu\n", Command, dwParameter);
             break;
         }
         return 0;

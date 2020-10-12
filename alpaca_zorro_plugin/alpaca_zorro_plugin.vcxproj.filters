@@ -48,6 +48,12 @@
     <ClInclude Include="alpaca\bars.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="alpaca\logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\position.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

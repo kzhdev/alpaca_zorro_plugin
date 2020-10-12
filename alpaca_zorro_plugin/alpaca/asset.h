@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cassert>
+#include <unordered_map>
 
 namespace alpaca {
 
@@ -15,10 +16,18 @@ namespace alpaca {
 	/**
 	 * @brief A helper to convert an AssetClass to a string
 	 */
-	inline constexpr const char* assetClassToString(AssetClass asset_class) {
-		constexpr const char* sAssetClassToString[] = { "USEquity" };
+	inline constexpr const char* assetClassToString(AssetClass asset_class) noexcept {
+		constexpr const char* sAssetClassToString[] = { "us_equity" };
 		assert(asset_class == AssetClass::USEquity);
 		return sAssetClassToString[asset_class];
+	}
+
+	inline AssetClass to_assetClass(const std::string& asset_class) noexcept {
+		static std::unordered_map<std::string, AssetClass> assetClasses = {
+			{"us_equity" , AssetClass::USEquity},
+		};
+		assert(assetClasses.find(asset_class) != assetClasses.end());
+		return assetClasses[asset_class];
 	}
 
 	/**

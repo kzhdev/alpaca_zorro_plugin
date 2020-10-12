@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cassert>
+#include <unordered_map>
 #include "rapidjson/document.h"
 
 namespace alpaca {
@@ -35,9 +36,13 @@ namespace alpaca {
      * @brief A helper to convert an OrderSide to a string
      */
     inline constexpr const char* to_string(OrderSide side) {
-        constexpr const char* sOrderSide[] = { "Buy", "Sell" };
+        constexpr const char* sOrderSide[] = { "buy", "sell" };
         assert(side >= OrderSide::Buy && side <= OrderSide::Sell);
         return sOrderSide[side];
+    }
+
+    inline OrderSide to_orderSide(const std::string& side) {
+        return side == "buy" ? OrderSide::Buy : OrderSide::Sell;
     }
 
     /**
@@ -51,6 +56,7 @@ namespace alpaca {
         Limit,
         Stop,
         StopLimit,
+        TrailingStop,
     };
 
     /**
@@ -58,9 +64,21 @@ namespace alpaca {
      */
     inline constexpr const char* to_string(OrderType type)
     {
-        constexpr const char* sOrderType[] = { "Market", "Limit", "Stop", "StopLimit" };
+        constexpr const char* sOrderType[] = { "market", "limit", "stop", "stop_limit", "trailing_stop" };
         assert(type >= OrderType::Market && type <= OrderType::StopLimit);
         return sOrderType[type];
+    }
+
+    inline OrderType to_orderType(const std::string& type) {
+        static std::unordered_map<std::string, OrderType> orderTypes = {
+            {"market", OrderType::Market},
+            {"limit", OrderType::Limit},
+            {"stop", OrderType::Stop},
+            {"stop_limit", OrderType::StopLimit},
+            {"trailing_stop", OrderType::TrailingStop}
+        };
+        assert(orderTypes.find(type) != orderTypes.end());
+        return orderTypes[type];
     }
 
     /**
@@ -69,22 +87,35 @@ namespace alpaca {
      * For more information on the supported designations, see:
      * https://alpaca.markets/docs/trading-on-alpaca/orders/#time-in-force
      */
-    enum OrderTimeInForce : uint8_t {
+    enum TimeInForce : uint8_t {
         Day,
-        GoodUntilCanceled,
+        GTC,
         OPG,
         CLS,
-        ImmediateOrCancel,
-        FillOrKill,
+        IOC,
+        FOK,
     };
 
     /**
      * @brief A helper to convert an OrderTimeInForce to a string
      */
-    inline constexpr const char* to_string(OrderTimeInForce tif) {
-        constexpr const char* sTIF[] = { "Day", "GTC", "OPG", "CLS", "IOC", "FAK" };
-        assert(tif >= OrderTimeInForce::Day && tif <= OrderTimeInForce::FillOrKill);
+    inline constexpr const char* to_string(TimeInForce tif) {
+        constexpr const char* sTIF[] = { "day", "gtc", "opg", "cls", "ioc", "fok" };
+        assert(tif >= TimeInForce::Day && tif <= TimeInForce::FOK);
         return sTIF[tif];
+    }
+
+    inline TimeInForce to_timeInForce(const std::string& tif) {
+        static std::unordered_map<std::string, TimeInForce> tifs = {
+            {"day", TimeInForce::Day},
+            {"gtc", TimeInForce::GTC},
+            {"opg", TimeInForce::OPG},
+            {"cls", TimeInForce::CLS},
+            {"ioc", TimeInForce::IOC},
+            {"fok", TimeInForce::FOK},
+        };
+        assert(tifs.find(tif) != tifs.end());
+        return tifs[tif];
     }
 
     /**
@@ -96,17 +127,28 @@ namespace alpaca {
     enum OrderClass : uint8_t {
         Simple,
         Bracket,
-        OneCancelsOther,
-        OneTriggersOther,
+        OCO,
+        OTO,
     };
 
     /**
      * @brief A helper to convert an OrderClass to a string
      */
     inline constexpr const char* to_string(OrderClass order_class) {
-        constexpr const char* sOrderClass[] = { "Simple", "Bracket", "OCO", "OTO" };
-        assert(order_class >= OrderClass::Simple && order_class <= OrderClass::OneTriggersOther);
+        constexpr const char* sOrderClass[] = { "simple", "bracket", "oco", "oto" };
+        assert(order_class >= OrderClass::Simple && order_class <= OrderClass::OTO);
         return sOrderClass[order_class];
+    }
+
+    inline OrderClass to_orderClass(const std::string& order_class) {
+        static std::unordered_map<std::string, OrderClass> orderClasses = {
+            {"simple", OrderClass::Simple},
+            {"bracket", OrderClass::Bracket},
+            {"oco", OrderClass::OCO},
+            {"oto", OrderClass::OTO},
+        };
+        assert(orderClasses.find(order_class) != orderClasses.end());
+        return orderClasses[order_class];
     }
 
     /**
@@ -131,28 +173,29 @@ namespace alpaca {
      * @brief A type representing an Alpaca order.
      */
     struct Order {
-        std::string asset_class;
+        double filled_avg_price = 0.;
+        double limit_price = 0.;
+        double stop_price = 0.;
+        uint32_t qty = 0;
+        uint32_t filled_qty = 0;
+        AssetClass asset_class = AssetClass::USEquity;
+        OrderSide side;
+        TimeInForce tif;
+        OrderType type;
+        bool extended_hours = false;
+        std::vector<Order> legs;
+
+        std::string symbol;
         std::string asset_id;
         std::string canceled_at;
         std::string client_order_id;
         std::string created_at;
         std::string expired_at;
-        bool extended_hours;
         std::string failed_at;
         std::string filled_at;
-        std::string filled_avg_price;
-        std::string filled_qty;
         std::string id;
-        bool legs;
-        std::string limit_price;
-        std::string qty;
-        std::string side;
         std::string status;
-        std::string stop_price;
         std::string submitted_at;
-        std::string symbol;
-        std::string time_in_force;
-        std::string type;
         std::string updated_at;
 
     private:
@@ -160,7 +203,28 @@ namespace alpaca {
 
         template<typename T>
         void fromJSON(const T& parser) {
-
+            parser.get<std::string>("id", id);
+            parser.get<std::string>("client_order_id", client_order_id);
+            parser.get<std::string>("created_at", created_at);
+            parser.get<std::string>("updated_at", updated_at);
+            parser.get<std::string>("submitted_at", submitted_at);
+            parser.get<std::string>("filled_at", filled_at);
+            parser.get<std::string>("expired_at", expired_at);
+            parser.get<std::string>("canceled_at", canceled_at);
+            parser.get<std::string>("failed_at", failed_at);
+            parser.get<std::string>("asset_id", asset_id);
+            parser.get<std::string>("symbol", symbol);
+            asset_class = to_assetClass(parser.get<std::string>("asset_class"));
+            parser.get<uint32_t>("qty", qty);
+            parser.get<uint32_t>("filled_qty", filled_qty);
+            type = to_orderType(parser.get<std::string>("type"));
+            side = to_orderSide(parser.get<std::string>("side"));
+            tif = to_timeInForce(parser.get<std::string>("time_in_force"));
+            parser.get<double>("limit_price", limit_price);
+            parser.get<double>("stop_price", stop_price);
+            parser.get<double>("filled_avg_price", filled_avg_price);
+            parser.get<std::string>("status", status);
+            parser.get<bool>("extended_hours", extended_hours);
         }
     };
 } // namespace alpaca

@@ -24,15 +24,7 @@ namespace alpaca {
         : baseUrl_(isPaperTrading ? kAPIBaseURLPaper : kAPIBaseURLLive)
         , dataUrl_(isPaperTrading ? kAPIDataURL : kPolygonDataURL)
         , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + std::move(key) + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
-#ifdef _DEBUG
-        , log_(fopen("./Log/alpaca.log", "w"))
-#endif
     {
-#ifdef _DEBUG
-        if (!log_) {
-            throw std::runtime_error("Failed to open log. ./Log/alpaca.log");
-        }
-#endif
     }
 
     Response<Account> Client::getAccount() const {
@@ -41,6 +33,7 @@ namespace alpaca {
 
     Response<Clock> Client::getClock() const {
         auto rt = request<Clock>(baseUrl_ + "/v2/clock");
+        is_open_ = rt.content().is_open;
         return rt;
     }
 
@@ -57,10 +50,6 @@ namespace alpaca {
         return request<Order>(url);
     }
 
-    //std::pair<Status, Order> Client::getOrderByClientOrderID(const std::string& client_order_id) const {
-
-    //}
-    //
     //std::pair<Status, std::vector<Order>> Client::getOrders(const ActionStatus status,
     //                                                        const int limit,
     //                                                        const std::string& after,
@@ -74,7 +63,7 @@ namespace alpaca {
         const int quantity,
         const OrderSide side,
         const OrderType type,
-        const OrderTimeInForce tif,
+        const TimeInForce tif,
         const std::string& limit_price,
         const std::string& stop_price,
         const bool extended_hours,
@@ -82,6 +71,10 @@ namespace alpaca {
         const OrderClass order_class,
         TakeProfitParams* take_profit_params,
         StopLossParams* stop_loss_params) const {
+
+        if (!is_open_) {
+            return Response<Order>(1, "Market Closed");
+        }
 
         rapidjson::StringBuffer s;
         s.Clear();
@@ -103,12 +96,12 @@ namespace alpaca {
         writer.Key("time_in_force");
         writer.String(to_string(tif));
 
-        if (limit_price != "") {
+        if (!limit_price.empty()) {
             writer.Key("limit_price");
             writer.String(limit_price.c_str());
         }
 
-        if (stop_price != "") {
+        if (!stop_price.empty()) {
             writer.Key("stop_price");
             writer.String(stop_price.c_str());
         }
@@ -118,9 +111,9 @@ namespace alpaca {
             writer.Bool(extended_hours);
         }
 
-        if (client_order_id != "") {
+        if (!client_order_id.empty()) {
             writer.Key("client_order_id");
-            writer.String(client_order_id.c_str());
+            writer.String(client_order_id.size() > 48 ? client_order_id.substr(0, 48).c_str() : client_order_id.c_str());   // client_order_id <= 48 charaters
         }
 
         if (order_class != OrderClass::Simple) {
@@ -141,11 +134,11 @@ namespace alpaca {
         if (stop_loss_params != nullptr) {
             writer.Key("stop_loss");
             writer.StartObject();
-            if (stop_loss_params->limitPrice != "") {
+            if (!stop_loss_params->limitPrice.empty()) {
                 writer.Key("limit_price");
                 writer.String(stop_loss_params->limitPrice.c_str());
             }
-            if (stop_loss_params->stopPrice != "") {
+            if (!stop_loss_params->stopPrice.empty()) {
                 writer.Key("stop_price");
                 writer.String(stop_loss_params->stopPrice.c_str());
             }
@@ -155,48 +148,8 @@ namespace alpaca {
         writer.EndObject();
         auto data = s.GetString();
 
-        return request<Order>("/v2/orders", data);
+        return request<Order>(baseUrl_ + "/v2/orders", data);
     }
-
-    //Response<Order> Client::replaceOrder(const std::string& id,
-    //                                              const int quantity,
-    //                                              const OrderTimeInForce tif,
-    //                                              const std::string& limit_price,
-    //                                              const std::string& stop_price,
-    //                                              const std::string& client_order_id) const {
-    //  Order order;
-    //
-    //  rapidjson::StringBuffer s;
-    //  s.Clear();
-    //  rapidjson::Writer<rapidjson::StringBuffer> writer(s);
-    //  writer.StartObject();
-    //
-    //  writer.Key("qty");
-    //  writer.Int(quantity);
-    //
-    //  writer.Key("time_in_force");
-    //  writer.String(orderTimeInForceToString(tif).c_str());
-    //
-    //  if (limit_price != "") {
-    //    writer.Key("limit_price");
-    //    writer.String(limit_price.c_str());
-    //  }
-    //
-    //  if (stop_price != "") {
-    //    writer.Key("stop_price");
-    //    writer.String(stop_price.c_str());
-    //  }
-    //
-    //  if (client_order_id != "") {
-    //    writer.Key("client_order_id");
-    //    writer.String(client_order_id.c_str());
-    //  }
-    //
-    //  writer.EndObject();
-    //  auto body = s.GetString();
-    //
-    //  auto url = "/v2/orders/" + id;
-    //}
 
     //Response<std::vector<Order>> Client::cancelOrders() const {
     //}
@@ -252,14 +205,12 @@ namespace alpaca {
             << (sStart.empty() ? "" : "&start=" + sStart) << (sEnd.empty() ? "" : "&end=" + sEnd);
 
         auto rt = request<Bars>(url.str());
-#ifdef _DEBUG
         if (rt) {
             int i = 0;
             for (const auto& bar : rt.content().bars.begin()->second) {
-                fprintf(log_, "%d %s\n", i++, timeToString(bar.time).c_str());
+                logger_.logTrace("%d %s\n", i++, timeToString(bar.time).c_str());
             }
         }
-#endif
         return rt;
     }
 
@@ -267,4 +218,7 @@ namespace alpaca {
         return request<LastQuote>(dataUrl_ + "/v1/last_quote/stocks/" + symbol);
     }
 
+    Response<Position> Client::getPosition(const std::string& symbol) const {
+        return request<Position>(baseUrl_ + "/v2/positions/" + symbol);
+    }
 } // namespace alpaca
