@@ -89,6 +89,7 @@
     <ClInclude Include="alpaca\account.h" />
     <ClInclude Include="alpaca\bars.h" />
     <ClInclude Include="alpaca\client.h" />
+    <ClInclude Include="alpaca\client_order_id_generator.h" />
     <ClInclude Include="alpaca\clock.h" />
     <ClInclude Include="alpaca\json.h" />
     <ClInclude Include="alpaca\logger.h" />

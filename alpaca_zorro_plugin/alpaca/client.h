@@ -45,6 +45,7 @@ namespace alpaca {
             const bool nested = false) const;
 
         Response<Order> getOrder(const std::string& id, const bool nested = false) const;
+        Response<Order> getOrderByClientOrderId(const std::string& clientOrderId) const;
 
         Response<Order> submitOrder(
             const std::string& symbol,
@@ -54,11 +55,19 @@ namespace alpaca {
             const TimeInForce tif,
             const std::string& limit_price = "",
             const std::string& stop_price = "",
-            const bool extended_hours = false,
+            bool extended_hours = false,
             const std::string& client_order_id = "",
             const OrderClass order_class = OrderClass::Simple,
             TakeProfitParams* take_profit_params = nullptr,
-            StopLossParams* stop_loss_params = nullptr) const;
+            StopLossParams* stop_loss_params = nullptr);
+
+        Response<Order> replaceOrder(
+            const std::string& id,
+            const int quantity,
+            const TimeInForce tif,
+            const std::string& limit_price = "",
+            const std::string& stop_price = "",
+            const std::string& client_order_id = "") const;
 
         Response<std::vector<Order>> cancelOrders() const;
 
@@ -66,9 +75,9 @@ namespace alpaca {
 
         Response<Bars> getBars(
             const std::vector<std::string>& symbols,
-            __time32_t start,
-            __time32_t end,
-            int nTickMinutes = 1,
+            const __time32_t start,
+            const __time32_t end,
+            const int nTickMinutes = 1,
             const uint32_t limit = 100) const;
 
         Response<LastQuote> getLastQuote(const std::string& symbol) const;
@@ -83,7 +92,7 @@ namespace alpaca {
         const std::string baseUrl_;
         const std::string dataUrl_;
         const std::string headers_;
-        mutable std::unordered_map<std::string, Asset> subscribed_assets_;
+        std::unordered_map<std::string, Asset> subscribed_assets_;
         mutable bool is_open_ = false;
         mutable Logger logger_;
     };
@@ -122,7 +131,6 @@ namespace alpaca {
             free(buffer); //free up memory allocation
         }
         http_free(id); //always clean up the id!
-
 
         logger_.logTrace("<-- %d %s\n", id, ss.str().c_str());
 

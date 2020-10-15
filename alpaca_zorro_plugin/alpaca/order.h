@@ -19,7 +19,7 @@ namespace alpaca {
      * @brief A helper to convert an OrderDirection to a string
      */
     inline constexpr const char* to_string(OrderDirection direction) {
-        constexpr const char* sOrderDirection[] = { "Ascending", "Descending" };
+        constexpr const char* sOrderDirection[] = { "asc", "desc" };
         assert(direction >= OrderDirection::Ascending && direction <= OrderDirection::Descending);
         return sOrderDirection[direction];
     }
@@ -178,6 +178,7 @@ namespace alpaca {
         double stop_price = 0.;
         uint32_t qty = 0;
         uint32_t filled_qty = 0;
+        int32_t internal_id = 0;
         AssetClass asset_class = AssetClass::USEquity;
         OrderSide side;
         TimeInForce tif;

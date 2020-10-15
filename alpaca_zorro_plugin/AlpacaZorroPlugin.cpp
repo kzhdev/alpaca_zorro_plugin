@@ -31,10 +31,11 @@ namespace {
     TimeInForce s_tif = TimeInForce::Day;
     std::string s_asset;
     int s_multiplier = 1;
-    std::string s_lastUUID;
     Logger* s_logger = nullptr;
     std::string s_nextOrderText;
     int s_priceType = 0;
+    std::unordered_map<uint32_t, std::string> s_mapClientOrderIdToUUID;
+    std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
 }
 
 namespace alpaca
@@ -104,6 +105,10 @@ namespace alpaca
             return 0;
         }
 
+        for (int i = 0; i < 5000; i++) {
+            client->getClock();
+        }
+
         auto& clock = response.content();
 
         *pTimeGMT = convertTime(clock.timestamp);
@@ -163,7 +168,7 @@ namespace alpaca
         auto start = convertTime(tStart);
         auto end = convertTime(tEnd);
 
-        s_logger->logInfo("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+        s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
 
         auto response = client->getBars({ Asset }, start, end, nTickMinutes, nTicks);
         if (!response) {
@@ -214,6 +219,8 @@ namespace alpaca
 
     DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill) 
     {
+        auto start = std::time(nullptr);
+
         OrderSide side = nAmount > 0 ? OrderSide::Buy : OrderSide::Sell;
         OrderType type = OrderType::Market;
         if (dLimit) {
@@ -227,30 +234,85 @@ namespace alpaca
         if (dStopDist) {
 
         }
+
+        s_logger->logDebug("BrokerBuy2 %s orderText=%s nAmount=%d dStopDist=%f limit=%f\n", Asset, s_nextOrderText.c_str(), nAmount, dStopDist, dLimit);
+
         auto response = client->submitOrder(Asset, std::abs(nAmount), side, type, s_tif, limit, stop, false, s_nextOrderText);
         if (!response) {
             BrokerError(response.what().c_str());
             return 0;
         }
-        s_lastUUID = response.content().id;
-        if (pPrice) {
-            *pPrice = response.content().filled_avg_price;
+
+        auto* order = &response.content();
+        auto exchOrdId = order->id;
+        auto internalOrdId = order->internal_id;
+        s_mapClientOrderIdToUUID.emplace(internalOrdId, order->id);
+        s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
+
+        if (order->filled_qty) {
+            if (pPrice) {
+                *pPrice = response.content().filled_avg_price;
+            }
+            if (pFill) {
+                *pFill = response.content().filled_qty;
+            }
+            //return -1;
+            return internalOrdId;
         }
-        if (pFill) {
-            *pFill = response.content().filled_qty;
+
+        if (s_tif == TimeInForce::IOC || s_tif == TimeInForce::FOK) {
+            // order not filled in the submitOrder response
+            // query order status to get fill status
+            do {
+                auto response2 = client->getOrder(exchOrdId);
+                if (!response2) {
+                    break;
+                }
+                order = &response2.content();
+                s_mapOrderByClientOrderId[internalOrdId] = *order;
+                if (pPrice) {
+                    *pPrice = order->filled_avg_price;
+                }
+                if (pFill) {
+                    *pFill = order->filled_qty;
+                }
+
+                if (order->status == "canceled" ||
+                    order->status == "filled" ||
+                    order->status == "expired") {
+                    break;
+                }
+
+                auto timePast = std::difftime(std::time(nullptr), start);
+                if (timePast >= 30) {
+                    auto response3 = client->cancelOrder(exchOrdId);
+                    if (!response3) {
+                        BrokerError(("Failed to cancel unfilled FOK/IOC order " + exchOrdId + " " + response3.what()).c_str());
+                    }
+                    return 0;
+                }
+            } while (!order->filled_qty);
         }
-        return -1;
+        //return -1;
+        return internalOrdId;
     }
 
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
-        assert(nTradeID == -1);
-        auto response = client->getOrder(s_lastUUID);
+        s_logger->logInfo("BrokerTrade: %d\n", nTradeID);
+       /* if (nTradeID != -1) {
+            BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
+            return NAY;
+        }*/
+
+        //auto response = client->getOrder(s_lastUUID);
+        auto response = client->getOrderByClientOrderId(std::to_string(nTradeID));
         if (!response) {
             BrokerError(response.what().c_str());
             return NAY;
         }
 
         auto& order = response.content();
+        s_mapOrderByClientOrderId[order.internal_id] = order;
 
         if (pOpen) {
             *pOpen = order.filled_avg_price;
@@ -264,6 +326,63 @@ namespace alpaca
             }
         }
         return order.filled_qty;
+    }
+
+    DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
+        s_logger->logDebug("BrokerSell2 nTradeID=%d nAmount=%d limit=%f\n", nTradeID,nAmount, Limit);
+
+        auto iter = s_mapOrderByClientOrderId.find(nTradeID);
+        if (iter == s_mapOrderByClientOrderId.end()) {
+            BrokerError(("Order " + std::to_string(nTradeID) + " not found.").c_str());
+            return 0;
+        }
+
+        auto& order = iter->second;
+        if (order.status == "filled") {
+            // order has been filled
+            auto closeTradeId = BrokerBuy2((char*)order.symbol.c_str(), -nAmount, 0, Limit, pProfit, pFill);
+            if (closeTradeId) {
+                auto iter2 = s_mapOrderByClientOrderId.find(closeTradeId);
+                if (iter2 != s_mapOrderByClientOrderId.end()) {
+                    auto& closeTrade = iter2->second;
+                    if (pClose) {
+                        *pClose = closeTrade.filled_avg_price;
+                    }
+                    if (pFill) {
+                        *pFill = closeTrade.filled_qty;
+                    }
+                    if (pProfit) {
+                        *pProfit = (closeTrade.filled_avg_price - order.filled_avg_price) * closeTrade.filled_qty;
+                    }
+                }
+                return nTradeID;
+            }
+            return 0;
+        }
+        else {
+            // close open order?
+            BrokerError(("Close open order " + std::to_string(nTradeID)).c_str());
+            if (nAmount == order.qty) {
+                auto response = client->cancelOrder(std::to_string(nTradeID));
+                if (response) {
+                    return nTradeID;
+                }
+                BrokerError(("Failed to close trade " + std::to_string(nTradeID) + " " + response.what()).c_str());
+                return 0;
+            }
+            else {
+                auto response = client->replaceOrder(order.id, nAmount, order.tif, (Limit ? std::to_string(Limit) : ""), s_nextOrderText);
+                if (response) {
+                    auto& replacedOrder = response.content();
+                    uint32_t orderId = replacedOrder.internal_id;
+                    s_mapClientOrderIdToUUID.emplace(orderId, replacedOrder.id);
+                    s_mapOrderByClientOrderId.emplace(orderId, std::move(replacedOrder));
+                    return orderId;
+                }
+                BrokerError(("Failed to modify trade " + std::to_string(nTradeID) + " " + response.what()).c_str());
+                return 0;
+            }
+        }
     }
 
     double getPosition(const std::string& asset) {
@@ -288,8 +407,8 @@ namespace alpaca
         case GET_COMPLIANCE:
             return 15; // full NFA compliant
 
-        case GET_BROKERZONE:
-            return ET; // for now since Alpaca only support US
+        //case GET_BROKERZONE:
+            //return ET; // for now since Alpaca only support US
 
         case GET_MAXTICKS:
             return 1000;
@@ -298,7 +417,7 @@ namespace alpaca
             return 3;   // Alpaca rate limit is 200 requests per minutes
 
         case GET_LOCK:
-            return 0;
+            return -1;
 
         case GET_POSITION:
             return getPosition((char*)dwParameter);
@@ -319,10 +438,10 @@ namespace alpaca
         case SET_ORDERTYPE: {
             switch ((int)dwParameter) {
             case 0:
-                s_tif = TimeInForce::IOC;
+                s_tif = TimeInForce::FOK;
                 return 0;
             case 1:
-                s_tif = TimeInForce::FOK;
+                s_tif = TimeInForce::IOC;
                 return 1;
             case 2:
                 s_tif = TimeInForce::GTC;
@@ -340,22 +459,14 @@ namespace alpaca
         case SET_PRICETYPE:
             return dwParameter;
 
-        case GET_UUID:
-            strcpy((char*)dwParameter, s_lastUUID.c_str());
-            s_logger->logDebug("GET_UUID %s\n", (char*)(dwParameter));
-            return dwParameter;
-
-        case SET_UUID:
-            s_logger->logDebug("SET_UUID %s\n", (char*)(dwParameter));
-            return dwParameter;
-
         case SET_DIAGNOSTICS:
             if ((int)dwParameter == 1 || (int)dwParameter == 0) {
-                client->logger().level = (int)dwParameter ? LogLevel::L_DEBUG : LogLevel::L_INFO;
-                return 1;
+                client->logger().setLevel((int)dwParameter ? LogLevel::L_DEBUG : LogLevel::L_OFF);
+                return dwParameter;
             }
             break;
 
+        case GET_BROKERZONE:
         case SET_HWND:
         case GET_CALLBACK:
             break;
