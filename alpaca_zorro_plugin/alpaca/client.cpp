@@ -113,8 +113,8 @@ namespace alpaca {
         TakeProfitParams* take_profit_params,
         StopLossParams* stop_loss_params) {
 
-        if (!is_open_) {
-            extended_hours = true;
+        if (!is_open_ && !extended_hours) {
+            return Response<Order>(1, "Market Close.");
         }
 
         Response<Order> response;

@@ -34,7 +34,6 @@ namespace {
     Logger* s_logger = nullptr;
     std::string s_nextOrderText;
     int s_priceType = 0;
-    std::unordered_map<uint32_t, std::string> s_mapClientOrderIdToUUID;
     std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
 }
 
@@ -103,10 +102,6 @@ namespace alpaca
             BrokerError(response.what().c_str());
 #endif
             return 0;
-        }
-
-        for (int i = 0; i < 5000; i++) {
-            client->getClock();
         }
 
         auto& clock = response.content();
@@ -246,7 +241,6 @@ namespace alpaca
         auto* order = &response.content();
         auto exchOrdId = order->id;
         auto internalOrdId = order->internal_id;
-        s_mapClientOrderIdToUUID.emplace(internalOrdId, order->id);
         s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
 
         if (order->filled_qty) {
@@ -303,12 +297,30 @@ namespace alpaca
             BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
             return NAY;
         }*/
-
-        //auto response = client->getOrder(s_lastUUID);
-        auto response = client->getOrderByClientOrderId(std::to_string(nTradeID));
-        if (!response) {
-            BrokerError(response.what().c_str());
-            return NAY;
+        
+        Response<Order> response;
+        auto iter = s_mapOrderByClientOrderId.find(nTradeID);
+        if (iter == s_mapOrderByClientOrderId.end()) {
+            // unknown order?
+            std::stringstream clientOrderId;
+            clientOrderId << "ZORRO_";
+            if (!s_nextOrderText.empty()) {
+                clientOrderId << s_nextOrderText << "_";
+            }
+            clientOrderId << nTradeID;
+            response = client->getOrderByClientOrderId(clientOrderId.str());
+            if (!response) {
+                BrokerError(response.what().c_str());
+                return NAY;
+            }
+            s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
+        }
+        else {
+            response = client->getOrder(iter->second.id);
+            if (!response) {
+                BrokerError(response.what().c_str());
+                return NAY;
+            }
         }
 
         auto& order = response.content();
@@ -363,7 +375,7 @@ namespace alpaca
             // close open order?
             BrokerError(("Close open order " + std::to_string(nTradeID)).c_str());
             if (nAmount == order.qty) {
-                auto response = client->cancelOrder(std::to_string(nTradeID));
+                auto response = client->cancelOrder(iter->second.id);
                 if (response) {
                     return nTradeID;
                 }
@@ -375,7 +387,6 @@ namespace alpaca
                 if (response) {
                     auto& replacedOrder = response.content();
                     uint32_t orderId = replacedOrder.internal_id;
-                    s_mapClientOrderIdToUUID.emplace(orderId, replacedOrder.id);
                     s_mapOrderByClientOrderId.emplace(orderId, std::move(replacedOrder));
                     return orderId;
                 }
@@ -436,6 +447,8 @@ namespace alpaca
             return 1;
 
         case SET_ORDERTYPE: {
+            s_logger->logDebug("SET_ORDERTYPE: %d\n", (int)dwParameter);
+
             switch ((int)dwParameter) {
             case 0:
                 s_tif = TimeInForce::FOK;

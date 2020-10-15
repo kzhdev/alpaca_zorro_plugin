@@ -71,7 +71,7 @@ namespace alpaca {
                 int retry = 10;
                 int32_t last_order_id = 0;
                 int32_t conflict_count = 0;
-                auto newBase = getBase();
+                auto newBase = getBase() / 100000;
                 std::string until;
                 while (!last_order_id && retry--) {
                     auto response = client.getOrders(ActionStatus::All, 50, "", until);
@@ -84,6 +84,8 @@ namespace alpaca {
                                     // order placed by other application, try next order
                                     continue;
                                 }
+
+                                client.logger().logDebug("cleintOrderId=%s\n", clientOrderId.c_str());
 
                                 auto internalOrdId = clientOrderId;
                                 auto pos = internalOrdId.rfind("_");
@@ -98,8 +100,8 @@ namespace alpaca {
                                         conflict_count = 0;
                                     }
                                     else {
-                                        conflict_count = internal_id / 10000;
-                                        last_order_id = internal_id % 10000 + 1;
+                                        conflict_count = (internal_id % 100000) / 10000;
+                                        last_order_id = internal_id % 10000;
                                     }
                                     break;
                                 }
@@ -115,7 +117,8 @@ namespace alpaca {
                 next_order_id_ = reinterpret_cast<std::atomic<NextId>*>(lpvMem_);
             }
             //conflict_count_ = new (ptr + 64) std::atomic_uint32_t(0);
-            client.logger().logInfo("next_order_id_=%d\n", next_order_id_->load(std::memory_order_relaxed));
+            auto next = next_order_id_->load(std::memory_order_relaxed);
+            client.logger().logInfo("last_order_id_: conflit_cout=%d, id=%d\n", next.conflict_count, next.next_id);
         }
 
         ~ClientOrderIdGenerator() {
@@ -131,13 +134,12 @@ namespace alpaca {
         }
 
         int32_t nextOrderId() noexcept {
-            
             constexpr const uint32_t mask = 8191;   // Max order count allowed in single day is 8192.
             auto current = next_order_id_->load(std::memory_order_relaxed);
             NextId next = current;
             do {
                 next.next_id = (next.next_id + 1) & mask;
-            } while (next_order_id_->compare_exchange_weak(current, next, std::memory_order_release));
+            } while (!next_order_id_->compare_exchange_weak(current, next, std::memory_order_release));
             return getBase() + next.conflict_count + next.next_id;
         }
             
@@ -153,7 +155,7 @@ namespace alpaca {
                     // can't have 9 conflict in a day
                     break;
                 }
-            } while (next_order_id_->compare_exchange_weak(current, next, std::memory_order_release));
+            } while (!next_order_id_->compare_exchange_weak(current, next, std::memory_order_release));
         }
 
     private:
