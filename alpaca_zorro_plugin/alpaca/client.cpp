@@ -316,16 +316,7 @@ namespace alpaca {
         url << dataUrl_ << "/v1/bars/" << timeframe << "?symbols=" << symbols_string << "&limit=" << limit
             << (sStart.empty() ? "" : "&start=" + sStart) << (sEnd.empty() ? "" : "&end=" + sEnd);
 
-        auto rt = request<Bars>(url.str());
-        if (rt) {
-            if (logger_.getLevel() >= LogLevel::L_TRACE2) {
-                int i = 0;
-                for (const auto& bar : rt.content().bars.begin()->second) {
-                    logger_.logTrace("%d %s\n", i++, timeToString(bar.time).c_str());
-                }
-            }
-        }
-        return rt;
+        return request<Bars>(url.str());
     }
 
     Response<LastQuote> Client::getLastQuote(const std::string& symbol) const {

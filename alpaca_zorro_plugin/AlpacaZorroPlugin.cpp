@@ -185,7 +185,9 @@ namespace alpaca
         for (int i = iter->second.size() - 1; i >= 0; --i) {
             auto& tick = ticks[n++];
             auto& bar = iter->second[i];
-            tick.time = convertTime((__time32_t)bar.time);
+            // change time to bar close time
+            __time32_t barCloseTime = bar.time + nTickMinutes * 60;
+            tick.time = convertTime(barCloseTime);
             tick.fOpen = bar.open_price;
             tick.fHigh = bar.high_price;
             tick.fLow = bar.low_price;
@@ -399,6 +401,11 @@ namespace alpaca
     double getPosition(const std::string& asset) {
         auto response = client->getPosition(asset);
         if (!response) {
+            if (response.getCode() == 40410000) {
+                // no open position
+                return 0;
+            }
+
             BrokerError(("Get position failed. " + response.what()).c_str());
             return 0;
         }
