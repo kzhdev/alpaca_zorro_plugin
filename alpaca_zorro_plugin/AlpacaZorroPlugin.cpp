@@ -170,30 +170,37 @@ namespace alpaca
         auto start = convertTime(tStart);
         auto end = convertTime(tEnd);
 
-        int n;
-        do {
-            s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+        s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+
+        int barsDownloaded = 0;
+
+        // make sure enough bar downloaded logic seems doesn't need. Comment out for now
+
+        //do {
+            //s_logger->logDebug("download bars %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
 
             auto response = client->getBars({ Asset }, start, end, nTickMinutes, nTicks);
             if (!response) {
                 BrokerError(response.what().c_str());
-                return 0;
+                return barsDownloaded;
             }
 
             auto& bars = response.content().bars;
             auto iter = bars.find(Asset);
             if (iter == bars.end()) {
-                return 0;
+                return barsDownloaded;
             }
 
             if (iter->second.empty()) {
-                return 0;
+                return barsDownloaded;
             }
 
-            n = 0;
             for (int i = iter->second.size() - 1; i >= 0; --i) {
-                auto& tick = ticks[n++];
                 auto& bar = iter->second[i];
+                //if (i == iter->second.size() - 1) {
+                //    s_logger->logDebug("first bar %s\n", timeToString(bar.time).c_str());
+                //}
+                auto& tick = ticks[barsDownloaded++];
                 // change time to bar close time
                 __time32_t barCloseTime = bar.time + nTickMinutes * 60;
                 tick.time = convertTime(barCloseTime);
@@ -203,11 +210,13 @@ namespace alpaca
                 tick.fClose = bar.close_price;
                 tick.fVol = bar.volume;
             }
-            nTicks -= n;
-            end = iter->second.front().time;
-            s_logger->logDebug("%d bars downloaded\n", n);
-        } while (nTicks && end >= start);
-        return n;
+        //    s_logger->logDebug("last bar %s\n", timeToString(iter->second.front().time).c_str());
+        //    nTicks -= iter->second.size();
+        //    end = iter->second.front().time - nTickMinutes * 60;
+        //    s_logger->logDebug("next end %s\n", timeToString(end).c_str());
+        //    s_logger->logDebug("%d bars downloaded\n", iter->second.size());
+        //} while (nTicks && end >= start);
+        return barsDownloaded;
     }
 
     DLLFUNC_C int BrokerAccount(char* Account, double* pdBalance, double* pdTradeVal, double* pdMarginVal)
