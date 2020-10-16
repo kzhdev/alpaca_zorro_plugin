@@ -157,43 +157,56 @@ namespace alpaca
 
     DLLFUNC_C int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd, int nTickMinutes, int nTicks, T6* ticks)
     {
-
         if (!client || !Asset || !ticks || !nTicks) return 0;
+
+        if (!nTickMinutes) {
+            BrokerError("Tick data download is not supported by Alpaca.");
+            return 0;
+        }
+
+        // Alpaca only suport 1Min, 5Min, 15Min and 1D bars
+        assert(nTickMinutes == 1 || nTickMinutes == 5 || nTickMinutes == 15 || nTickMinutes == 1440);
 
         auto start = convertTime(tStart);
         auto end = convertTime(tEnd);
 
-        s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+        int n;
+        do {
+            s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
 
-        auto response = client->getBars({ Asset }, start, end, nTickMinutes, nTicks);
-        if (!response) {
-            BrokerError(response.what().c_str());
-            return 0;
-        }
+            auto response = client->getBars({ Asset }, start, end, nTickMinutes, nTicks);
+            if (!response) {
+                BrokerError(response.what().c_str());
+                return 0;
+            }
 
-        auto& bars = response.content().bars;
-        auto iter = bars.find(Asset);
-        if (iter == bars.end()) {
-            return 0;
-        }
+            auto& bars = response.content().bars;
+            auto iter = bars.find(Asset);
+            if (iter == bars.end()) {
+                return 0;
+            }
 
-        if (iter->second.empty()) {
-            return 0;
-        }
-        
-        int n = 0;
-        for (int i = iter->second.size() - 1; i >= 0; --i) {
-            auto& tick = ticks[n++];
-            auto& bar = iter->second[i];
-            // change time to bar close time
-            __time32_t barCloseTime = bar.time + nTickMinutes * 60;
-            tick.time = convertTime(barCloseTime);
-            tick.fOpen = bar.open_price;
-            tick.fHigh = bar.high_price;
-            tick.fLow = bar.low_price;
-            tick.fClose = bar.close_price;
-            tick.fVol = bar.volume;
-        }
+            if (iter->second.empty()) {
+                return 0;
+            }
+
+            n = 0;
+            for (int i = iter->second.size() - 1; i >= 0; --i) {
+                auto& tick = ticks[n++];
+                auto& bar = iter->second[i];
+                // change time to bar close time
+                __time32_t barCloseTime = bar.time + nTickMinutes * 60;
+                tick.time = convertTime(barCloseTime);
+                tick.fOpen = bar.open_price;
+                tick.fHigh = bar.high_price;
+                tick.fLow = bar.low_price;
+                tick.fClose = bar.close_price;
+                tick.fVol = bar.volume;
+            }
+            nTicks -= n;
+            end = iter->second.front().time;
+            s_logger->logDebug("%d bars downloaded\n", n);
+        } while (nTicks && end >= start);
         return n;
     }
 
@@ -477,6 +490,7 @@ namespace alpaca
             return 0;
         }
         case SET_PRICETYPE:
+            s_priceType = (int)dwParameter;
             return dwParameter;
 
         case SET_DIAGNOSTICS:
