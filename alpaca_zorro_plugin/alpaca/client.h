@@ -69,8 +69,6 @@ namespace alpaca {
             const std::string& stop_price = "",
             const std::string& client_order_id = "") const;
 
-        Response<std::vector<Order>> cancelOrders() const;
-
         Response<Order> cancelOrder(const std::string& id) const;
 
         Response<Bars> getBars(
@@ -104,7 +102,7 @@ namespace alpaca {
         auto headers = headers_;
         int id = http_send((char*)url.c_str(), (char*)data, (char*)headers.c_str());
 
-        logger_.logTrace("--> %d %s\n", id, url.c_str());
+        logger_.logDebug("--> %d %s\n", id, url.c_str());
         if (data) {
             logger_.logTrace("Data:\n%s\n", data);
         }

@@ -259,10 +259,6 @@ namespace alpaca {
         return request<Order>(baseUrl_ + "/v2/orders/" + id, body.c_str());
     }
 
-    //Response<std::vector<Order>> Client::cancelOrders() const {
-    //}
-    //
-
     Response<Order> Client::cancelOrder(const std::string& id) const {
         return request<Order>(baseUrl_ + "/v2/orders/" + id, "#DELETE");
     }
