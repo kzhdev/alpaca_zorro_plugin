@@ -41,7 +41,7 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   //  4 - DAY
   //  5 - OPG
   //  6 - CLS
-  //rCom
+  //
   // NOTE: brokemand(SET_ORDERTYPE, 0) will be ignored, this is because Zorro always call brokerCommand(SET_ORDERTYPE, 0) before setting limit price.
 
   brokerCommand(SET_ORDERTYPE, 4);  // set TIF to Day
