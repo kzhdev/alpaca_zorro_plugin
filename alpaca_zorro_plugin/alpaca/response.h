@@ -110,7 +110,8 @@ namespace alpaca {
                     assert(false);
                     continue;
                 }
-                Parser<decltype(item.GetObject())> itemParser(item.GetObject());
+                auto objJson = item.GetObject();
+                Parser<decltype(item.GetObject())> itemParser(objJson);
                 U::value_type obj;
                 obj.fromJSON(itemParser);
                 content.emplace_back(std::move(obj));

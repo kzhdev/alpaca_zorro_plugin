@@ -46,8 +46,9 @@ namespace alpaca {
 			for (auto symbol_bars = parser.json.MemberBegin(); symbol_bars != parser.json.MemberEnd(); symbol_bars++) {
 				bars[symbol_bars->name.GetString()] = std::vector<Bar>{};
 				for (auto& symbol_bar : symbol_bars->value.GetArray()) {
+					auto barJson = symbol_bar.GetObject();
+					Parser<decltype(symbol_bar.GetObject())> parser(barJson);
 					Bar bar;
-					Parser<decltype(symbol_bar.GetObject())> parser(symbol_bar.GetObject());
 					bar.fromJSON(parser);
 					bars[symbol_bars->name.GetString()].emplace_back(std::move(bar));
 				}
