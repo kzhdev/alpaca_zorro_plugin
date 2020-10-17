@@ -79,29 +79,23 @@ namespace alpaca {
                         if (!response.content().empty()) {
                             // Returned orders are in desending order
                             for (const auto& order : response.content()) {
-                                auto& clientOrderId = order.client_order_id;
-                                if (clientOrderId.substr(0, 6) != "ZORRO_") {
+                                if (order.client_order_id.substr(0, 6) != "ZORRO_") {
                                     // order placed by other application, try next order
                                     continue;
                                 }
 
-                                client.logger().logDebug("cleintOrderId=%s\n", clientOrderId.c_str());
+                                client.logger().logDebug("cleintOrderId=%s\n", order.client_order_id.c_str());
 
-                                auto internalOrdId = clientOrderId;
-                                auto pos = internalOrdId.rfind("_");
-                                assert(pos != std::string::npos);
-                                internalOrdId = internalOrdId.substr(pos + 1);
-                                if (!internalOrdId.empty() && internalOrdId.find_first_not_of("0123456789") == std::string::npos) {
-                                    auto internal_id = atoi(internalOrdId.c_str());
-                                    int32_t base = internal_id / 100000;
+                                if (order.internal_id) {
+                                    int32_t base = order.internal_id / 100000;
                                     if (base != newBase) {
                                         // New day reset counter
                                         last_order_id = 1;
                                         conflict_count = 0;
                                     }
                                     else {
-                                        conflict_count = (internal_id % 100000) / 10000;
-                                        last_order_id = internal_id % 10000;
+                                        conflict_count = (order.internal_id % 100000) / 10000;
+                                        last_order_id = order.internal_id % 10000;
                                     }
                                     break;
                                 }

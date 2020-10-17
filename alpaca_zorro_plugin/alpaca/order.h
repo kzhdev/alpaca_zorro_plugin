@@ -226,6 +226,16 @@ namespace alpaca {
             parser.get<double>("filled_avg_price", filled_avg_price);
             parser.get<std::string>("status", status);
             parser.get<bool>("extended_hours", extended_hours);
+
+            if (client_order_id.substr(0, 6) != "ZORRO_") {
+                return;
+            }
+            auto pos = client_order_id.rfind("_");
+            assert(pos != std::string::npos);
+            auto internalOrderId = client_order_id.substr(pos + 1);
+            if (!internalOrderId.empty() && internalOrderId.find_first_not_of("0123456789") == std::string::npos) {
+                internal_id = atoi(internalOrderId.c_str());
+            }
         }
     };
 } // namespace alpaca

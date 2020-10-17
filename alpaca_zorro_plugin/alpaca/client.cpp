@@ -82,16 +82,20 @@ namespace alpaca {
             }
             url << queries[i];
         }
-
+        logger_.logDebug("--> %s\n", url.str().c_str());
         return request<std::vector<Order>>(url.str());
     }
 
-    Response<Order> Client::getOrder(const std::string& id, const bool nested) const {
+    Response<Order> Client::getOrder(const std::string& id, const bool nested, const bool logResponse) const {
         auto url = baseUrl_ + "/v2/orders/" + id;
         if (nested) {
             url += "?nested=true";
         }
 
+        Response<Order> response;
+        if (logResponse) {
+            return request<Order, true>(url);
+        }
         return request<Order>(url);
     }
 
@@ -205,7 +209,11 @@ namespace alpaca {
             writer.EndObject();
             auto data = s.GetString();
 
-            response = request<Order>(baseUrl_ + "/v2/orders", data);
+            logger_.logDebug("--> POST %s/v2/orders\n", baseUrl_.c_str());
+            if (data) {
+                logger_.logTrace("Data:\n%s\n", data);
+            }
+            response = request<Order, true>(baseUrl_ + "/v2/orders", data);
             if (!response && response.what() == "client_order_id must be unique") {
                 // clinet order id has been used.
                 // increment conflict count and try again.
@@ -213,7 +221,7 @@ namespace alpaca {
             }   
         } while (!response && retry--);
 
-        response.content().internal_id = internalOrderId;
+        assert(!response || response.content().internal_id == internalOrderId);
         return response;
     }
 
@@ -231,7 +239,7 @@ namespace alpaca {
         writer.StartObject();
 
         writer.Key("qty");
-        writer.Int(quantity);
+        writer.String(std::to_string(quantity).c_str());
 
         writer.Key("time_in_force");
         writer.String(to_string(tif));
@@ -246,21 +254,51 @@ namespace alpaca {
             writer.String(stop_price.c_str());
         }
 
-        if (client_order_id != "") {
-            writer.Key("client_order_id");
-            writer.String(client_order_id.c_str());
+        auto internalOrderId = s_orderIdGen->nextOrderId();
+        std::stringstream clientOrderId;
+        clientOrderId << "ZORRO_";
+        if (!client_order_id.empty()) {
+            if (client_order_id.size() > 32) {  // Alpaca client order id max length is 48
+                clientOrderId << client_order_id.substr(0, 32);
+            }
+            else {
+                clientOrderId << client_order_id;
+            }
+            clientOrderId << "_";
         }
+
+        clientOrderId << internalOrderId;
+        writer.Key("client_order_id");
+        writer.String(clientOrderId.str().c_str());
 
         writer.EndObject();
         std::string body("#PATCH");
         body.append(s.GetString());
 
-        auto url = "/v2/orders/" + id;
-        return request<Order>(baseUrl_ + "/v2/orders/" + id, body.c_str());
+        logger_.logDebug("--> %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
+        logger_.logTrace("Data:\n%s\n", body.c_str());
+        return request<Order, true>(baseUrl_ + "/v2/orders/" + id, body.c_str());
     }
 
     Response<Order> Client::cancelOrder(const std::string& id) const {
-        return request<Order>(baseUrl_ + "/v2/orders/" + id, "#DELETE");
+        logger_.logDebug("--> DELETE %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
+        auto response = request<Order, true>(baseUrl_ + "/v2/orders/" + id, "#DELETE");
+        if (!response) {
+            // Alpaca cancelOrder not return a object
+            Order* order;
+            do {
+                auto resp = getOrder(id, false, true);
+                if (resp) {
+                    order = &resp.content();
+                    if (order->status == "canceled" || order->status == "filled") {
+                        return resp;
+                    }
+                }
+            } while (order->status == "pending_cancel");
+            logger_.logWarning("failed to cancel order %s. order status=%s", id.c_str(), order->status.c_str());
+            return Response<Order>(1, "Failed to cancel order");
+        }
+        return response;
     }
 
     Response<Bars> Client::getBars(
@@ -312,6 +350,7 @@ namespace alpaca {
         url << dataUrl_ << "/v1/bars/" << timeframe << "?symbols=" << symbols_string << "&limit=" << limit
             << (sStart.empty() ? "" : "&start=" + sStart) << (sEnd.empty() ? "" : "&end=" + sEnd);
 
+        logger_.logDebug("--> %s\n", url.str().c_str());
         return request<Bars>(url.str());
     }
 

@@ -28,7 +28,7 @@
 using namespace alpaca;
 
 namespace {
-    TimeInForce s_tif = TimeInForce::Day;
+    TimeInForce s_tif = TimeInForce::FOK;
     std::string s_asset;
     int s_multiplier = 1;
     Logger* s_logger = nullptr;
@@ -282,7 +282,7 @@ namespace alpaca
             // order not filled in the submitOrder response
             // query order status to get fill status
             do {
-                auto response2 = client->getOrder(exchOrdId);
+                auto response2 = client->getOrder(exchOrdId, false, true);
                 if (!response2) {
                     break;
                 }
@@ -348,7 +348,7 @@ namespace alpaca
         }
 
         auto& order = response.content();
-        s_mapOrderByClientOrderId[order.internal_id] = order;
+        s_mapOrderByClientOrderId[nTradeID] = order;
 
         if (pOpen) {
             *pOpen = order.filled_avg_price;
@@ -396,9 +396,9 @@ namespace alpaca
             return 0;
         }
         else {
-            // close open order?
-            BrokerError(("Close open order " + std::to_string(nTradeID)).c_str());
-            if (nAmount == order.qty) {
+            // close working order?
+            BrokerError(("Close working order " + std::to_string(nTradeID)).c_str());
+            if (std::abs(nAmount) == order.qty) {
                 auto response = client->cancelOrder(iter->second.id);
                 if (response) {
                     return nTradeID;
@@ -407,7 +407,7 @@ namespace alpaca
                 return 0;
             }
             else {
-                auto response = client->replaceOrder(order.id, nAmount, order.tif, (Limit ? std::to_string(Limit) : ""), s_nextOrderText);
+                auto response = client->replaceOrder(order.id, -nAmount, order.tif, (Limit ? std::to_string(Limit) : ""), "", iter->second.client_order_id);
                 if (response) {
                     auto& replacedOrder = response.content();
                     uint32_t orderId = replacedOrder.internal_id;
@@ -433,6 +433,12 @@ namespace alpaca
         }
 
         return response.content().qty * (response.content().side == PositionSide::Long ? 1 : -1);
+    }
+
+    constexpr int tifToZorroOrderType(TimeInForce tif) noexcept {
+        constexpr const int converter[] = {0, 2, 0, 0, 1, 0};
+        assert(tif >= 0 && tif < sizeof(converter) / sizeof(int));
+        return converter[tif];
     }
 
     DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter)
@@ -476,27 +482,36 @@ namespace alpaca
             return 1;
 
         case SET_ORDERTYPE: {
-            s_logger->logDebug("SET_ORDERTYPE: %d\n", (int)dwParameter);
-
+           
             switch ((int)dwParameter) {
             case 0:
-                s_tif = TimeInForce::FOK;
                 return 0;
             case 1:
                 s_tif = TimeInForce::IOC;
-                return 1;
+                break;
             case 2:
                 s_tif = TimeInForce::GTC;
-                return 2;
+                break;
             case 3:
                 s_tif = TimeInForce::FOK;
-                return 0;
+                break;
+            case 4:
+                s_tif = TimeInForce::Day;
+                break;
+            case 5:
+                s_tif = TimeInForce::OPG;
+                break;
+            case 6:
+                s_tif = TimeInForce::CLS;
+                break;
             }
 
             if ((int)dwParameter >= 8) {
                 return (int)dwParameter;
             }
-            return 0;
+
+            s_logger->logDebug("SET_ORDERTYPE: %d s_tif=%s\n", (int)dwParameter, to_string(s_tif));
+            return tifToZorroOrderType(s_tif);
         }
         case SET_PRICETYPE:
             s_priceType = (int)dwParameter;

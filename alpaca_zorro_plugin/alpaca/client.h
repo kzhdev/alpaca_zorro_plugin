@@ -44,7 +44,7 @@ namespace alpaca {
             const OrderDirection = OrderDirection::Descending,
             const bool nested = false) const;
 
-        Response<Order> getOrder(const std::string& id, const bool nested = false) const;
+        Response<Order> getOrder(const std::string& id, const bool nested = false, const bool logResponse = false) const;
         Response<Order> getOrderByClientOrderId(const std::string& clientOrderId) const;
 
         Response<Order> submitOrder(
@@ -83,7 +83,7 @@ namespace alpaca {
         Response<Position> getPosition(const std::string& symbol) const;
 
     private:
-        template<typename T>
+        template<typename T, bool LogResponse = false>
         inline Response<T> request(const std::string& path, const char* data = nullptr) const;
 
     private:
@@ -96,16 +96,11 @@ namespace alpaca {
     };
 
 
-    template<typename T>
+    template<typename T, bool LogResonse>
     inline Response<T> Client::request(const std::string& url, const char* data) const {
         // unfortunately need to make a copy of headers for every request. Otherwise only the first request has headers.
         auto headers = headers_;
         int id = http_send((char*)url.c_str(), (char*)data, (char*)headers.c_str());
-
-        logger_.logDebug("--> %d %s\n", id, url.c_str());
-        if (data) {
-            logger_.logTrace("Data:\n%s\n", data);
-        }
 
         if (!id) {
             return Response<T>(1, "Cannot connect to server");
@@ -130,7 +125,9 @@ namespace alpaca {
         }
         http_free(id); //always clean up the id!
 
-        logger_.logTrace("<-- %d %s\n", id, ss.str().c_str());
+        if (LogResonse) {
+            logger_.logTrace("<-- %s\n", ss.str().c_str());
+        }
 
         Response<T> response;
         response.parseContent(ss.str());
