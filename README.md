@@ -6,7 +6,7 @@
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.1.0/AlpacaZorroPlugin_0.1.0.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.1.1/AlpacaZorroPlugin_0.1.1.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
