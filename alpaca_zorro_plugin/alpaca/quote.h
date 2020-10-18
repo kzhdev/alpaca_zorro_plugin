@@ -43,7 +43,8 @@ namespace alpaca {
 			parser.get<std::string>("symbol", symbol);
 
 			if (parser.json.HasMember("last") && parser.json["last"].IsObject()) {
-				Parser<decltype(parser.json["last"].GetObject())> p(parser.json["last"].GetObject());
+				auto obj = parser.json["last"].GetObject();
+				Parser<decltype(parser.json["last"].GetObject())> p(obj);
 				quote.fromJSON(p);
 			}
 		}

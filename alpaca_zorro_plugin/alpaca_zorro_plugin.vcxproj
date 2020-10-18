@@ -86,6 +86,7 @@
   <ItemGroup>
     <ClInclude Include="AlpacaZorroPlugin.h" />
     <ClInclude Include="alpaca\account.h" />
+    <ClInclude Include="alpaca\asset.h" />
     <ClInclude Include="alpaca\bars.h" />
     <ClInclude Include="alpaca\client.h" />
     <ClInclude Include="alpaca\client_order_id_generator.h" />
@@ -94,6 +95,7 @@
     <ClInclude Include="alpaca\logger.h" />
     <ClInclude Include="alpaca\order.h" />
     <ClInclude Include="alpaca\position.h" />
+    <ClInclude Include="alpaca\quote.h" />
     <ClInclude Include="alpaca\response.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />

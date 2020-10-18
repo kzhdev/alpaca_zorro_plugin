@@ -57,6 +57,12 @@
     <ClInclude Include="alpaca\client_order_id_generator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="alpaca\asset.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\quote.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

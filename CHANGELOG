@@ -1,0 +1,5 @@
+v0.1.1
+[hotfix] - Fix get Quote deserialization cause crash in prod build.
+
+v0.1.0
+- Initial Release
