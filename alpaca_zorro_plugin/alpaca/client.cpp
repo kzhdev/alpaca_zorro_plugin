@@ -25,7 +25,7 @@ namespace alpaca {
 
     Client::Client(std::string key, std::string secret, bool isPaperTrading)
         : baseUrl_(isPaperTrading ? kAPIBaseURLPaper : kAPIBaseURLLive)
-        , dataUrl_(isPaperTrading ? kAPIDataURL : kPolygonDataURL)
+        , dataUrl_(kAPIDataURL)
         , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + std::move(key) + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
     {
         s_orderIdGen = std::make_unique<ClientOrderIdGenerator>(*this);
