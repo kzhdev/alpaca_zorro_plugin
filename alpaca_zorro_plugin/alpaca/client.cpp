@@ -272,7 +272,7 @@ namespace alpaca {
         writer.String(clientOrderId.str().c_str());
 
         writer.EndObject();
-        std::string body("#PATCH");
+        std::string body("#PATCH ");
         body.append(s.GetString());
 
         logger_.logDebug("--> %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());

@@ -407,7 +407,7 @@ namespace alpaca
                 return 0;
             }
             else {
-                auto response = client->replaceOrder(order.id, -nAmount, order.tif, (Limit ? std::to_string(Limit) : ""), "", iter->second.client_order_id);
+                auto response = client->replaceOrder(order.id, iter->second.qty - nAmount, order.tif, (Limit ? std::to_string(Limit) : ""), "", iter->second.client_order_id);
                 if (response) {
                     auto& replacedOrder = response.content();
                     uint32_t orderId = replacedOrder.internal_id;
