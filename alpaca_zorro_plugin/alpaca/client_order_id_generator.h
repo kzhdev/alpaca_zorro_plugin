@@ -4,7 +4,7 @@
 #include <tchar.h>
 #include <cstdint>
 #include <atomic>
-#include "alpaca/logger.h"
+#include "logger.h"
 #include "alpaca/client.h"
 
 namespace alpaca {

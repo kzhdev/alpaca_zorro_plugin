@@ -16,7 +16,7 @@ namespace alpaca {
     private:
         template<typename> friend class Response;
 
-        template<typename T>
+        template<typename CallerT, typename T>
         void fromJSON(const T& parser) {
             parser.get<bool>("is_open", is_open);
             next_close = parseTimeStamp(parser.get<std::string>("next_close"));

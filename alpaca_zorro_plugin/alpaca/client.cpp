@@ -3,46 +3,50 @@
 
 #include <sstream>
 #include <memory>
+#include <optional>
 
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 #include "date/date.h"
 #include "alpaca/client_order_id_generator.h"
+#include "market_data/alpaca_market_data.h"
+#include "market_data/polygon.h"
 
 namespace {
     /// The base URL for API calls to the live trading API
-    constexpr const char* kAPIBaseURLLive = "https://api.alpaca.markets";
+    constexpr const char* s_APIBaseURLLive = "https://api.alpaca.markets";
     /// The base URL for API calls to the paper trading API
-    constexpr const char* kAPIBaseURLPaper = "https://paper-api.alpaca.markets";
-    /// The base URL for API calls to the data API
-    constexpr const char* kAPIDataURL = "https://data.alpaca.markets";
-    constexpr const char* kPolygonDataURL = "https://api.polygon.io";
+    constexpr const char* s_APIBaseURLPaper = "https://paper-api.alpaca.markets";
     std::unique_ptr<alpaca::ClientOrderIdGenerator> s_orderIdGen;
+
+    std::unique_ptr<alpaca::AlpacaMarketData> alpacaMarketData;
+    std::unique_ptr<alpaca::Polygon> polygon;
 }
 
 namespace alpaca {
 
     Client::Client(std::string key, std::string secret, bool isPaperTrading)
-        : baseUrl_(isPaperTrading ? kAPIBaseURLPaper : kAPIBaseURLLive)
-        , dataUrl_(isPaperTrading ? kAPIDataURL : kPolygonDataURL)
-        , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + std::move(key) + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
+        : baseUrl_(isPaperTrading ? s_APIBaseURLPaper : s_APIBaseURLLive)
+        , apiKey_(std::move(key))
+        , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + apiKey_ + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
+        , isLiveMode_(!isPaperTrading)
     {
         s_orderIdGen = std::make_unique<ClientOrderIdGenerator>(*this);
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account>(baseUrl_ + "/v2/account");
+        return request<Account, Client>(baseUrl_ + "/v2/account", headers_);
     }
 
     Response<Clock> Client::getClock() const {
-        auto rt = request<Clock>(baseUrl_ + "/v2/clock");
+        auto rt = request<Clock, Client>(baseUrl_ + "/v2/clock", headers_);
         is_open_ = rt.content().is_open;
         return rt;
     }
 
     Response<Asset> Client::getAsset(const std::string& symbol) const {
-        return request<Asset>(baseUrl_ + "/v2/assets/" + symbol);
+        return request<Asset, Client>(baseUrl_ + "/v2/assets/" + symbol, headers_);
     }
 
     Response<std::vector<Order>> Client::getOrders(
@@ -83,7 +87,7 @@ namespace alpaca {
             url << queries[i];
         }
         logger_.logDebug("--> %s\n", url.str().c_str());
-        return request<std::vector<Order>>(url.str());
+        return request<std::vector<Order>, Client>(url.str(), headers_);
     }
 
     Response<Order> Client::getOrder(const std::string& id, const bool nested, const bool logResponse) const {
@@ -94,13 +98,13 @@ namespace alpaca {
 
         Response<Order> response;
         if (logResponse) {
-            return request<Order, true>(url);
+            return request<Order, Client>(url, headers_, nullptr, &logger_);
         }
-        return request<Order>(url);
+        return request<Order, Client>(url, headers_);
     }
 
     Response<Order> Client::getOrderByClientOrderId(const std::string& clientOrderId) const {
-        return request<Order>(baseUrl_ + "/v2/orders:by_client_order_id?client_order_id=" + clientOrderId);
+        return request<Order, Client>(baseUrl_ + "/v2/orders:by_client_order_id?client_order_id=" + clientOrderId, headers_);
     }
 
     Response<Order> Client::submitOrder(
@@ -115,10 +119,12 @@ namespace alpaca {
         const std::string& client_order_id,
         const OrderClass order_class,
         TakeProfitParams* take_profit_params,
-        StopLossParams* stop_loss_params) {
+        StopLossParams* stop_loss_params) const {
 
         if (!is_open_ && !extended_hours) {
-            return Response<Order>(1, "Market Close.");
+            //return Response<Order>(1, "Market Close.");
+            extended_hours = true;
+            (TimeInForce)tif = TimeInForce::Day;
         }
 
         Response<Order> response;
@@ -213,7 +219,7 @@ namespace alpaca {
             if (data) {
                 logger_.logTrace("Data:\n%s\n", data);
             }
-            response = request<Order, true>(baseUrl_ + "/v2/orders", data);
+            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_, data, &logger_);
             if (!response && response.what() == "client_order_id must be unique") {
                 // clinet order id has been used.
                 // increment conflict count and try again.
@@ -277,12 +283,12 @@ namespace alpaca {
 
         logger_.logDebug("--> %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
         logger_.logTrace("Data:\n%s\n", body.c_str());
-        return request<Order, true>(baseUrl_ + "/v2/orders/" + id, body.c_str());
+        return request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_, body.c_str(), &logger_);
     }
 
     Response<Order> Client::cancelOrder(const std::string& id) const {
         logger_.logDebug("--> DELETE %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
-        auto response = request<Order, true>(baseUrl_ + "/v2/orders/" + id, "#DELETE");
+        auto response = request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_, "#DELETE", &logger_);
         if (!response) {
             // Alpaca cancelOrder not return a object
             Order* order;
@@ -301,64 +307,7 @@ namespace alpaca {
         return response;
     }
 
-    Response<Bars> Client::getBars(
-        const std::vector<std::string>& symbols,
-        const __time32_t start,
-        const __time32_t end,
-        int nTickMinutes,
-        const const uint32_t limit) const {
-        std::string symbols_string = "";
-        for (size_t i = 0; i < symbols.size(); ++i) {
-            symbols_string += symbols[i];
-            symbols_string += ",";
-        }
-        // remove trailing ','
-        symbols_string.pop_back();
-
-        std::string timeframe = "1Min";
-        if (nTickMinutes >= 5 && nTickMinutes < 15) {
-            timeframe = "5Min";
-        }
-        else if (nTickMinutes >= 15 && nTickMinutes < 1440) {
-            timeframe = "15Min";
-        } 
-        else if (nTickMinutes >= 1440) {
-            timeframe = "1D";
-        }
-
-        std::string sStart;
-        std::string sEnd;
-        {
-            using namespace date;
-            try {
-                if (start) {
-                    sStart = format("%FT%T", date::sys_seconds{ std::chrono::seconds{ start } });
-                    sStart.append("-00:00");    // add UTC timezone offset
-                }
-                
-                if (end) {
-                    sEnd = format("%FT%T", date::sys_seconds{ std::chrono::seconds{ end } });
-                    sEnd.append("-00:00");  // add UTC timezone offset
-                }
-            }
-            catch (const std::exception& e) {
-                assert(false);
-            }
-        }
-
-        std::stringstream url;
-        url << dataUrl_ << "/v1/bars/" << timeframe << "?symbols=" << symbols_string << "&limit=" << limit
-            << (sStart.empty() ? "" : "&start=" + sStart) << (sEnd.empty() ? "" : "&end=" + sEnd);
-
-        logger_.logDebug("--> %s\n", url.str().c_str());
-        return request<Bars>(url.str());
-    }
-
-    Response<LastQuote> Client::getLastQuote(const std::string& symbol) const {
-        return request<LastQuote>(dataUrl_ + "/v1/last_quote/stocks/" + symbol);
-    }
-
     Response<Position> Client::getPosition(const std::string& symbol) const {
-        return request<Position>(baseUrl_ + "/v2/positions/" + symbol);
+        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_);
     }
 } // namespace alpaca

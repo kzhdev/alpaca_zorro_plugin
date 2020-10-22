@@ -46,7 +46,8 @@ namespace alpaca {
 
 	private:
 		template<typename> friend class Response;
-		template<typename T>
+
+		template<typename CallerT, typename T>
 		void fromJSON(const T& parser) {
 			parser.get<std::string>("class", asset_class);
 			parser.get<bool>("easy_to_borrow", easy_to_borrow);
