@@ -99,7 +99,14 @@ namespace alpaca {
                     return;
                 }
             }
-            // TODO: Polygon error
+            else {
+                // Check polygon return
+                if (d.HasMember("error") && d.HasMember("errorcode")) {
+                    message_ = d["error"].GetString();
+                    code_ = atoi(d["errorcode"].GetString());
+                    return;
+                }
+            }
 
             try {
                 Parser<rapidjson::Document> parser(d);

@@ -4,66 +4,86 @@
 
 using namespace alpaca;
 
+#define TWO_DAYS_IN_SEC 172800  // Assume 8 hour an day
+#define DAY_IN_SEC 86400
+
 Response<std::vector<Bar>> Polygon::getBars(
     const std::string& symbol,
     const __time32_t start,
     const __time32_t end,
     const int nTickMinutes,
     const uint32_t limit) const {
-    std::stringstream url;
-    if (!nTickMinutes) {
-        // tick data
-        url << baseUrl_ << "/v2/ticks/stocks/nbbo/" << symbol;
-        logger_.logDebug("get tick data not implemented");
-        return Response<std::vector<Bar>>();
-    }
-    else {
-        url << baseUrl_ << "/v2/aggs/ticker/" << symbol << "/range/" << nTickMinutes << "/minute";
-        {
-            using namespace date;
-            try {
-                url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ start } });
 
-                url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ end } });
+    __time32_t t_start;
+    auto t_end = end;
+    Response<std::vector<Bar>> result;
+    auto& rtBars = result.content();
+    rtBars.reserve(limit);
+    __time32_t upperBound = t_end;
+
+    do {
+        std::stringstream url;
+
+        url << baseUrl_ << "/v2/aggs/ticker/" << symbol << "/range/" << nTickMinutes << "/minute";
+        try {
+            using namespace date;
+            t_start = t_end - TWO_DAYS_IN_SEC;
+            if (t_start < start) {
+                t_start = start;
             }
-            catch (const std::exception& e) {
-                assert(false);
-                return Response<std::vector<Bar>>(1, "invalid time");
-            }
+            url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ t_start } });
+            url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ t_end } });
         }
-        url << "?sort=asc";
+        catch (const std::exception& e) {
+            assert(false);
+            return Response<std::vector<Bar>>(1, "invalid time");
+        }
+        url << "?sort=desc";    // in desending order
         logger_.logDebug("--> %s\n", url.str().c_str());
         url << "&" << apiKey_;
-    }
 
-    auto response = request<std::vector<Bar>, Polygon>(url.str());
+        auto response = request<std::vector<Bar>, Polygon>(url.str());
 
-    auto& bars = response.content();
-    size_t nExclude = 0;
-    logger_.logDebug("%d bars downloaded\n", bars.size());
-    for (auto it = bars.rbegin(); it != bars.rend(); ++it) {
-        if ((*it).time > end) {
-            ++nExclude;
+        auto& bars = response.content();
+        size_t nExclude = 0;
+        logger_.logDebug("%d bars downloaded. %d - %d\n", bars.size(), bars.front().time, bars.back().time);
+
+        // remove record passed end time
+        auto it = bars.begin();
+        for (; it != bars.cend();) {
+            if ((__time32_t)(*it).time <= upperBound) {
+                break;
+            }
+            ++it;
         }
 
-        if ((*it).time < start) {
+        if (it != bars.cbegin()) {
+            bars.erase(bars.cbegin(), it);
+        }
+
+        rtBars.insert(rtBars.end(), bars.begin(), bars.end());
+        upperBound = rtBars.back().time - 1;
+        t_end = t_start - DAY_IN_SEC;
+    } while (rtBars.size() < limit && t_start > start);
+
+    // remove order older than start
+    auto it = rtBars.end();
+    while (it != rtBars.begin()) {
+        --it;
+        if ((*it).time >= start) {
             break;
         }
+
+        it = rtBars.erase(it);
     }
 
-    if (nExclude) {
-        // remove record exceeds the end time
-        logger_.logDebug("Remove %d records at the end\n", nExclude);
-        bars.resize(bars.size() - nExclude);
-        assert(bars.back().time <= end);
-    }
 
-    if (bars.size() > limit) {
-        // make sure only required number bars are given, otherwise zorro will crash
-        auto itEnd = bars.cbegin() + (bars.size() - limit);
-        auto it = bars.cbegin();
-        bars.erase(it, itEnd);
+    // keep number of records up to limit
+    if (rtBars.size() > limit) {
+        rtBars.resize(limit);
     }
-    assert(bars.size() <= limit);
-    return response;
+    logger_.logDebug("return %d bars. %d - %d\n", rtBars.size(), rtBars.front().time, rtBars.back().time);
+    // change to asending order, BrokerHistory2 handles asending order
+    std::reverse(rtBars.begin(), rtBars.end());
+    return result;
 }

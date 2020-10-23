@@ -541,6 +541,7 @@ namespace alpaca
         }
         case SET_PRICETYPE:
             s_priceType = (int)dwParameter;
+            s_logger->logDebug("SET_PRICETYPE: %d\n", s_priceType);
             return dwParameter;
 
         case SET_DIAGNOSTICS:
