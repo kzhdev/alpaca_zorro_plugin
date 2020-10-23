@@ -3,24 +3,19 @@
 #include <string>
 #include <vector>
 
-#include "alpaca/response.h"
+#include "request.h"
+#include "logger.h"
 #include "alpaca/account.h"
 #include "alpaca/asset.h"
-#include "alpaca/bars.h"
-#include "alpaca/quote.h"
+#include "market_data/bars.h"
+#include "market_data/quote.h"
 #include "alpaca/clock.h"
 #include "alpaca/order.h"
-#include "alpaca/logger.h"
 #include "alpaca/position.h"
 
 namespace alpaca {
 
-    extern int(__cdecl* BrokerError)(const char* txt);
-    extern int(__cdecl* BrokerProgress)(const int percent);
-    extern int(__cdecl* http_send)(char* url, char* data, char* header);
-    extern long(__cdecl* http_status)(int id);
-    extern long(__cdecl* http_result)(int id, char* content, long size);
-    extern void(__cdecl* http_free)(int id);
+    class MarketData;
 
     class Client final {
     public:
@@ -29,6 +24,10 @@ namespace alpaca {
         ~Client() = default;
 
         Logger& logger() noexcept { return logger_;  }
+
+        bool isLiveMode() const noexcept { return isLiveMode_;  }
+
+        const std::string& headers() const noexcept { return headers_;  }
 
         Response<Account> getAccount() const;
 
@@ -59,7 +58,7 @@ namespace alpaca {
             const std::string& client_order_id = "",
             const OrderClass order_class = OrderClass::Simple,
             TakeProfitParams* take_profit_params = nullptr,
-            StopLossParams* stop_loss_params = nullptr);
+            StopLossParams* stop_loss_params = nullptr) const;
 
         Response<Order> replaceOrder(
             const std::string& id,
@@ -71,67 +70,16 @@ namespace alpaca {
 
         Response<Order> cancelOrder(const std::string& id) const;
 
-        Response<Bars> getBars(
-            const std::vector<std::string>& symbols,
-            const __time32_t start,
-            const __time32_t end,
-            const int nTickMinutes = 1,
-            const uint32_t limit = 100) const;
-
-        Response<LastQuote> getLastQuote(const std::string& symbol) const;
-
         Response<Position> getPosition(const std::string& symbol) const;
 
     private:
-        template<typename T, bool LogResponse = false>
-        inline Response<T> request(const std::string& path, const char* data = nullptr) const;
-
-    private:
         const std::string baseUrl_;
-        const std::string dataUrl_;
+        const std::string apiKey_;
         const std::string headers_;
         std::unordered_map<std::string, Asset> subscribed_assets_;
         mutable bool is_open_ = false;
+        const bool isLiveMode_;
         mutable Logger logger_;
     };
-
-
-    template<typename T, bool LogResonse>
-    inline Response<T> Client::request(const std::string& url, const char* data) const {
-        // unfortunately need to make a copy of headers for every request. Otherwise only the first request has headers.
-        auto headers = headers_;
-        int id = http_send((char*)url.c_str(), (char*)data, (char*)headers.c_str());
-
-        if (!id) {
-            return Response<T>(1, "Cannot connect to server");
-        }
-
-        long n = 0;
-        std::stringstream ss;
-        while (!(n = http_status(id))) {
-            Sleep(100); // wait for the server to reply
-            if (!BrokerProgress(1)) {
-                http_free(id);
-                return Response<T>(1, "Brokerprogress returned zero. Aborting...");
-            }
-            // print dots, abort if returns zero.
-        }
-
-        if (n > 0) {
-            char* buffer = (char*)malloc(n + 1);
-            auto received = http_result(id, buffer, n);
-            ss << buffer;
-            free(buffer); //free up memory allocation
-        }
-        http_free(id); //always clean up the id!
-
-        if (LogResonse) {
-            logger_.logTrace("<-- %s\n", ss.str().c_str());
-        }
-
-        Response<T> response;
-        response.parseContent(ss.str());
-        return response;
-    }
 
 } // namespace alpaca

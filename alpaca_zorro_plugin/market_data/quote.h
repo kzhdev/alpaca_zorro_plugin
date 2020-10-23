@@ -36,9 +36,9 @@ namespace alpaca {
 
 	private:
 		template<typename> friend class Response;
-
-		template<typename T>
-		void fromJSON(const T& parser) {
+		
+		template<typename CallerT, typename T> 
+		void fromJSON(const T& parser/*, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0*/) {
 			parser.get<std::string>("status", status);
 			parser.get<std::string>("symbol", symbol);
 

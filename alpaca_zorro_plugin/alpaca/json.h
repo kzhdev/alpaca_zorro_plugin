@@ -66,7 +66,7 @@ namespace alpaca {
                     return true;
                 }
                 if (json[name].IsUint64()) {
-                    value = json[name].IsUint64();
+                    value = json[name].GetUint64();
                     return true;
                 }
                 if (json[name].IsString()) {
@@ -81,7 +81,7 @@ namespace alpaca {
         bool get<uint64_t>(const char* name, uint64_t& value) const {
             if (json.HasMember(name)) {
                 if (json[name].IsUint64()) {
-                    value = json[name].IsUint64();
+                    value = json[name].GetUint64();
                     return true;
                 }
                 if (json[name].IsInt64()) {

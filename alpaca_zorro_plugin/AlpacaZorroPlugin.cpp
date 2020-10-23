@@ -14,14 +14,13 @@
 #include <string>
 #include <sstream>
 #include <vector>
-#include <iomanip> // setprecision
-#include <chrono>
-#include <thread>
-#include <algorithm> // transform
+#include <memory>
 
 #include "alpaca/client.h"
-#include "alpaca/logger.h"
+#include "logger.h"
 #include "include/functions.h"
+#include "market_data/alpaca_market_data.h"
+#include "market_data/polygon.h"
 
 #define PLUGIN_VERSION	2
 
@@ -40,6 +39,9 @@ namespace {
 namespace alpaca
 {
     std::unique_ptr<Client> client = nullptr;
+    std::unique_ptr<AlpacaMarketData> alpacaMD = nullptr;
+    std::unique_ptr<Polygon> polygon = nullptr;
+    MarketData* pMarketData = nullptr;
 
     ////////////////////////////////////////////////////////////////
     DLLFUNC_C int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress)
@@ -67,8 +69,36 @@ namespace alpaca
         }
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
-        client = std::make_unique<Client>(User, Pwd, isPaperTrading);
+
+        std::string apiKey(User);
+        std::string polygonApiKey;
+        auto pos = apiKey.find('_');
+        if (pos != std::string::npos) {
+            polygonApiKey = apiKey.substr(pos + 1);
+            apiKey = apiKey.substr(0, pos);
+        }
+
+        client = std::make_unique<Client>(apiKey, Pwd, isPaperTrading);
         s_logger = &client->logger();
+
+        if (!isPaperTrading) {
+            polygon = std::move(std::make_unique<Polygon>(apiKey, client->logger()));
+            pMarketData = polygon.get();
+            BrokerError("Use Polygon market data");
+            s_logger->logInfo("Use Polygon market data\n");
+        }
+        else if (!polygonApiKey.empty()) {
+            polygon = std::move(std::make_unique<Polygon>(polygonApiKey, client->logger()));
+            pMarketData = polygon.get();
+            BrokerError("Use Polygon market data");
+            s_logger->logInfo("Use Polygon market data\n");
+        } 
+        else {
+            alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
+            pMarketData = alpacaMD.get();
+            BrokerError("Use Alpaca market data");
+            s_logger->logInfo("Use Alpaca market data\n");
+        }
 
         //attempt login
         auto response = client->getAccount();
@@ -112,14 +142,15 @@ namespace alpaca
 
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
-        auto response = client->getLastQuote(Asset);
-        if (!response) {
-            return 0;
-        }
-
         if (!pPrice) {
             // this is subscribe
             return 1;
+        }
+
+        auto response = pMarketData->getLastQuote(Asset);
+        if (!response) {
+            BrokerError(("Failed to get assert " + std::string(Asset) + " error: " + response.what()).c_str());
+            return 0;
         }
 
         auto& lastQuote = response.content();
@@ -133,10 +164,10 @@ namespace alpaca
         }
 
         if (pVolume) {
-            auto barResponse = client->getBars({ Asset }, 0, 0, 1, 1);
-            auto& bars = barResponse.content().bars;
-            if (barResponse && !bars.empty() && !bars[Asset].empty()) {
-                *pVolume = bars[Asset][0].volume;
+            auto barResponse = pMarketData->getBars({ Asset }, 0, 0, 1, 1);
+            auto& bars = barResponse.content();
+            if (barResponse && !bars.empty()) {
+                *pVolume = bars.front().volume;
             }
         }
 
@@ -179,24 +210,19 @@ namespace alpaca
         //do {
             //s_logger->logDebug("download bars %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
 
-            auto response = client->getBars({ Asset }, start, end, nTickMinutes, nTicks);
+            auto response = pMarketData->getBars({ Asset }, start, end, nTickMinutes, nTicks);
             if (!response) {
                 BrokerError(response.what().c_str());
                 return barsDownloaded;
             }
 
-            auto& bars = response.content().bars;
-            auto iter = bars.find(Asset);
-            if (iter == bars.end()) {
+            auto& bars = response.content();
+            if (bars.empty()) {
                 return barsDownloaded;
             }
 
-            if (iter->second.empty()) {
-                return barsDownloaded;
-            }
-
-            for (int i = iter->second.size() - 1; i >= 0; --i) {
-                auto& bar = iter->second[i];
+            for (int i = bars.size() - 1; i >= 0; --i) {
+                auto& bar = bars[i];
                 //if (i == iter->second.size() - 1) {
                 //    s_logger->logDebug("first bar %s\n", timeToString(bar.time).c_str());
                 //}
@@ -355,7 +381,7 @@ namespace alpaca
         }
 
         if (pProfit && order.filled_qty) {
-            auto resp = client->getLastQuote(order.symbol);
+            auto resp = pMarketData->getLastQuote(order.symbol);
             if (resp) {
                 auto& quote = resp.content().quote;
                 *pProfit = order.side == OrderSide::Buy ? ((quote.ask_price - order.filled_avg_price) * order.filled_qty) : (order.filled_avg_price - quote.bid_price) * order.filled_qty;
@@ -515,6 +541,7 @@ namespace alpaca
         }
         case SET_PRICETYPE:
             s_priceType = (int)dwParameter;
+            s_logger->logDebug("SET_PRICETYPE: %d\n", s_priceType);
             return dwParameter;
 
         case SET_DIAGNOSTICS:
@@ -527,6 +554,33 @@ namespace alpaca
         case GET_BROKERZONE:
         case SET_HWND:
         case GET_CALLBACK:
+            break;
+
+        case 2000:
+            if ((int)dwParameter != 0) {
+                if (!polygon) {
+                    BrokerError("Polygon ApiKey not provided");
+                    break;
+                }
+
+                if (pMarketData == polygon.get()) {
+                    break;
+                }
+                pMarketData = polygon.get();
+                BrokerError("Change to Polygon market data.");
+                s_logger->logInfo("use Polygon");
+            }
+            else {
+                if (!alpacaMD) {
+                    alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
+                }
+                else if (pMarketData == alpacaMD.get()) {
+                    break;
+                }
+                pMarketData = alpacaMD.get();
+                BrokerError("Change to Polygon market data.");
+                s_logger->logInfo("use Alpaca market data");
+            }
             break;
 
         default:

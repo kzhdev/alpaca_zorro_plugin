@@ -45,7 +45,7 @@ namespace alpaca {
 	private:
 		template<typename> friend class Response;
 
-		template<typename T>
+		template<typename CallerT, typename T>
 		void fromJSON(const T& parser) {
 			parser.get<double>("avg_entry_price", avg_entry_price);
 			parser.get<double>("change_today", change_today);

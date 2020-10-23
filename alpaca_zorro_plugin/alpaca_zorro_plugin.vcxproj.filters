@@ -39,16 +39,7 @@
     <ClInclude Include="alpaca\clock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="alpaca\response.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="alpaca\json.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\bars.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\logger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="alpaca\position.h">
@@ -60,7 +51,25 @@
     <ClInclude Include="alpaca\asset.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="alpaca\quote.h">
+    <ClInclude Include="request.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\bars.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\market_data_base.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\quote.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\polygon.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\alpaca_market_data.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -78,6 +87,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="alpaca\clock.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="market_data\alpaca_market_data.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="market_data\polygon.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -39,7 +39,7 @@ namespace alpaca {
     private:
         template<typename> friend class Response;
 
-        template<typename parserT>
+        template<typename CallerT, typename parserT>
         void fromJSON(const parserT& parser) {
             parser.get<bool>("account_blocked", account_blocked);
             parser.get<std::string>("account_number", account_number);

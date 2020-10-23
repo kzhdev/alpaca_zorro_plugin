@@ -202,7 +202,7 @@ namespace alpaca {
     private:
         template<typename> friend class Response;
 
-        template<typename T>
+        template<typename CallerT, typename T>
         void fromJSON(const T& parser) {
             parser.get<std::string>("id", id);
             parser.get<std::string>("client_order_id", client_order_id);

@@ -46,10 +46,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <TargetName>Alpaca</TargetName>
+    <OutDir>..\..\..\Zorro_2.30\Plugin</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <TargetName>Alpaca</TargetName>
+    <OutDir>..\..\..\Zorro_2.30\Plugin</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -87,16 +89,19 @@
     <ClInclude Include="AlpacaZorroPlugin.h" />
     <ClInclude Include="alpaca\account.h" />
     <ClInclude Include="alpaca\asset.h" />
-    <ClInclude Include="alpaca\bars.h" />
     <ClInclude Include="alpaca\client.h" />
     <ClInclude Include="alpaca\client_order_id_generator.h" />
     <ClInclude Include="alpaca\clock.h" />
     <ClInclude Include="alpaca\json.h" />
-    <ClInclude Include="alpaca\logger.h" />
     <ClInclude Include="alpaca\order.h" />
     <ClInclude Include="alpaca\position.h" />
-    <ClInclude Include="alpaca\quote.h" />
-    <ClInclude Include="alpaca\response.h" />
+    <ClInclude Include="logger.h" />
+    <ClInclude Include="market_data\alpaca_market_data.h" />
+    <ClInclude Include="market_data\bars.h" />
+    <ClInclude Include="market_data\market_data_base.h" />
+    <ClInclude Include="market_data\polygon.h" />
+    <ClInclude Include="market_data\quote.h" />
+    <ClInclude Include="request.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -113,6 +118,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
       </PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="market_data\alpaca_market_data.cpp" />
+    <ClCompile Include="market_data\polygon.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
