@@ -1,4 +1,5 @@
-v0.1.3
+v0.2.0
+[new feature] - Added Polygon market data support.
 [bugfix] - Fix order replacement.
 
 v0.1.2

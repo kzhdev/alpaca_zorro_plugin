@@ -68,6 +68,13 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   brokerCommand(GET_POSITION, "AAPL");
   ```
 
+* Support [Polygon](https://polygon.io) market data (need live account)
+  All Alpaca customers with live brokerage accounts can access various kinds of market data provided by Polygon.
+  * In Real mode, Ploygon market data will be used.
+  * In Demo mode, by default Alpaca market data will be used.
+    **To Use Polygon In Demo Mode:**
+    In User input, put both paper account API Key and live account API Key separated by '_' like following: **\<PaperAccountAPIKey>\_\<LiveAccountAPIKey>**
+  <br/>
 * Following Zorro Broker API functions has been implemented:
 
   * BrokerOpen
@@ -95,8 +102,6 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
 ## TO-DO List
 
 * Add target and stop order support
-* Add Polygon market data support
-* Create unit tests
 * Add streaming support to lower number of API requests. There is an issue where Alpaca currently support only 1 websocket per account. For multiple Zorro-S intances to work, AlpacaProxyAgent needs to be used.
 
 ## [To Contribute](CONTRIBUTING.md)
