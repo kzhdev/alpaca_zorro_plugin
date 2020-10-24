@@ -73,7 +73,8 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   * In Real mode, Ploygon market data will be used.
   * In Demo mode, by default Alpaca market data will be used.
     **To Use Polygon In Demo Mode:**
-    In User input, put both paper account API Key and live account API Key separated by '_' like following: **\<PaperAccountAPIKey>\_\<LiveAccountAPIKey>**
+    In User input, put both paper account API Key and live account API Key separated by '_' like following: **\<PaperAccountAPIKey>\_\<LiveAccountAPIKey>**<br/>
+    **brokerCommand(2000, int usePolygon)** can also be used to switch the data source. When usePolygon = **0**, Alpaca market data will be used. Othersise, Polygon market data will be used. Zorro retrieves historical data right after logged in. User need be aware that after switching market data source, the history data and live data are came frome different source.
   <br/>
 * Following Zorro Broker API functions has been implemented:
 
