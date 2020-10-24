@@ -28,10 +28,11 @@ Response<std::vector<Bar>> Polygon::getBars(
         try {
             using namespace date;
             t_start = t_end - TWO_DAYS_IN_SEC;
+            url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ t_start } });
             if (t_start < start) {
                 t_start = start;
             }
-            url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ t_start } });
+
             url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ t_end } });
         }
         catch (const std::exception& e) {
