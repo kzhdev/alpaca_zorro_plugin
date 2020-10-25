@@ -9,10 +9,14 @@ using namespace alpaca;
 
 Response<std::vector<Bar>> Polygon::getBars(
     const std::string& symbol,
-    const __time32_t start,
-    const __time32_t end,
+    __time32_t start,
+    __time32_t end,
     const int nTickMinutes,
     const uint32_t limit) const {
+
+    if (end == 0) {
+        end = std::time(nullptr);
+    }
 
     __time32_t t_start;
     auto t_end = end;
@@ -47,7 +51,14 @@ Response<std::vector<Bar>> Polygon::getBars(
 
         auto& bars = response.content();
         size_t nExclude = 0;
-        logger_.logDebug("%d bars downloaded. %d - %d\n", bars.size(), bars.front().time, bars.back().time);
+        logger_.logDebug("%d bars downloaded.\n", bars.size());
+        if (!bars.empty()) {
+            using namespace date;
+            auto from = bars.front().time;
+            auto to = bars.back().time;
+            logger_.logDebug("%s(%d) - %s(%d)\n", format("%F %T", date::sys_seconds{ std::chrono::seconds{ from } }).c_str(), from,
+                format("%F %T", date::sys_seconds{ std::chrono::seconds{ to } }).c_str(), to);
+        }
 
         // remove record passed end time
         auto it = bars.begin();
@@ -63,7 +74,12 @@ Response<std::vector<Bar>> Polygon::getBars(
         }
 
         rtBars.insert(rtBars.end(), bars.begin(), bars.end());
-        upperBound = rtBars.back().time - 1;
+        if (!rtBars.empty()) {
+            upperBound = rtBars.back().time - 1;
+        }
+        else {
+            upperBound = t_start;
+        }
         t_end = t_start - DAY_IN_SEC;
     } while (rtBars.size() < limit && t_start > start);
 
@@ -78,12 +94,16 @@ Response<std::vector<Bar>> Polygon::getBars(
         it = rtBars.erase(it);
     }
 
-
     // keep number of records up to limit
     if (rtBars.size() > limit) {
         rtBars.resize(limit);
     }
-    logger_.logDebug("return %d bars. %d - %d\n", rtBars.size(), rtBars.front().time, rtBars.back().time);
+    logger_.logDebug("return %d bars.\n", rtBars.size());
+    if (!rtBars.empty()) {
+        using namespace date;
+        logger_.logDebug("%s(%d) - %s(%d)\n", format("%F %T", date::sys_seconds{ std::chrono::seconds{ rtBars.front().time } }).c_str(), rtBars.front().time,
+            format("%F %T", date::sys_seconds{ std::chrono::seconds{ rtBars.back().time } }).c_str(), rtBars.back().time);
+    }
     // change to asending order, BrokerHistory2 handles asending order
     std::reverse(rtBars.begin(), rtBars.end());
     return result;
