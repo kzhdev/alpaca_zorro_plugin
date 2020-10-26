@@ -75,8 +75,17 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   
     **To Use Polygon In Demo Mode:**
     In the User input, put both paper account API Key and live account API Key separated by '_' like following: **\<PaperAccountAPIKey>\_\<LiveAccountAPIKey>**
-    
-    **brokerCommand(2000, int usePolygon)** can also be used to switch the data source. When usePolygon = **0**, Alpaca market data will be used. Othersise, Polygon market data will be used. Zorro retrieves historical data right after logged in. User need be aware that after switching market data source, the history data and live data are came frome different source.
+
+    **brokerCommand(2000, int usePolygon)** can also be used to switch the data source. When usePolygon = **0**, Alpaca market data will be used. Othersise, Polygon market data will be used. Zorro retrieves historical data right after logged in. User needs aware that after switching market data source, the history data and live data are came from different source.
+
+* Generate AssetList file through custom borkerCommand
+  
+  ``` C++
+  brokerCommand(2001, char *symbols);
+  ```
+
+  **symbols** - One or more symbols separated by comma. If symbols = **0**, all symbols will be included.
+  An AssetAlpaca.csv file will be generated in the Log diredtory.
 
 * Following Zorro Broker API functions has been implemented:
 

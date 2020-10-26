@@ -203,7 +203,7 @@ namespace alpaca {
         template<typename> friend class Response;
 
         template<typename CallerT, typename T>
-        void fromJSON(const T& parser) {
+        std::pair<int, std::string> fromJSON(const T& parser) {
             parser.get<std::string>("id", id);
             parser.get<std::string>("client_order_id", client_order_id);
             parser.get<std::string>("created_at", created_at);
@@ -227,15 +227,15 @@ namespace alpaca {
             parser.get<std::string>("status", status);
             parser.get<bool>("extended_hours", extended_hours);
 
-            if (client_order_id.substr(0, 6) != "ZORRO_") {
-                return;
+            if (client_order_id.substr(0, 6) == "ZORRO_") {
+                auto pos = client_order_id.rfind("_");
+                assert(pos != std::string::npos);
+                auto internalOrderId = client_order_id.substr(pos + 1);
+                if (!internalOrderId.empty() && internalOrderId.find_first_not_of("0123456789") == std::string::npos) {
+                    internal_id = atoi(internalOrderId.c_str());
+                }
             }
-            auto pos = client_order_id.rfind("_");
-            assert(pos != std::string::npos);
-            auto internalOrderId = client_order_id.substr(pos + 1);
-            if (!internalOrderId.empty() && internalOrderId.find_first_not_of("0123456789") == std::string::npos) {
-                internal_id = atoi(internalOrderId.c_str());
-            }
+            return std::make_pair(0, "OK");
         }
     };
 } // namespace alpaca

@@ -40,7 +40,7 @@ namespace alpaca {
         template<typename> friend class Response;
 
         template<typename CallerT, typename parserT>
-        void fromJSON(const parserT& parser) {
+        std::pair<int, std::string> fromJSON(const parserT& parser) {
             parser.get<bool>("account_blocked", account_blocked);
             parser.get<std::string>("account_number", account_number);
             parser.get<double>("buying_power", buying_power);
@@ -67,6 +67,7 @@ namespace alpaca {
             parser.get<bool>("trade_suspended_by_user", trade_suspended_by_user);
             parser.get<bool>("trading_blocked", trading_blocked);
             parser.get<bool>("transfers_blocked", transfers_blocked);
+            return std::make_pair(0, "OK");
         }
     };
 

@@ -17,7 +17,7 @@ namespace alpaca {
             url << baseUrl_ << "/v1/last_quote/stocks/" << symbol;
             logger_.logDebug("--> %s\n", url.str().c_str());
             url << "?" << apiKey_;
-            return request<LastQuote, Polygon>(url.str());
+            return request<LastQuote, Polygon>(url.str(), "", nullptr, &logger_);
         }
 
         Response<std::vector<Bar>> getBars(

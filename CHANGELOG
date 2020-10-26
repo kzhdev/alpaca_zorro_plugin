@@ -1,3 +1,9 @@
+v0.2.1
+[Feature] - Add AssetList download broker command.
+[Improvement] - Handle asset not found.
+[bugfix] - When switching to Alpaca market data, log message still shows Polygon.
+[bugfix] - Empty bars causes crash in diagnostic.
+
 v0.2.0
 [new feature] - Added Polygon market data support.
 [bugfix] - Fix order replacement.

@@ -45,6 +45,11 @@ namespace alpaca {
         return rt;
     }
 
+    Response<std::vector<Asset>> Client::getAssets() const {
+        logger_.logDebug("%s/v2/assets\n", baseUrl_.c_str());
+        return request<std::vector<Asset>, Client>(baseUrl_ + "/v2/assets", headers_);
+    }
+
     Response<Asset> Client::getAsset(const std::string& symbol) const {
         return request<Asset, Client>(baseUrl_ + "/v2/assets/" + symbol, headers_);
     }

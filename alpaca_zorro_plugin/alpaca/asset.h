@@ -48,7 +48,7 @@ namespace alpaca {
 		template<typename> friend class Response;
 
 		template<typename CallerT, typename T>
-		void fromJSON(const T& parser) {
+		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<std::string>("class", asset_class);
 			parser.get<bool>("easy_to_borrow", easy_to_borrow);
 			parser.get<std::string>("exchange", exchange);
@@ -58,6 +58,7 @@ namespace alpaca {
 			parser.get<std::string>("status", status);
 			parser.get<std::string>("symbol", symbol);
 			parser.get<bool>("tradable", tradable);
+			return std::make_pair(0, "OK");
 		}
 	};
 } // namespace alpaca

@@ -467,6 +467,53 @@ namespace alpaca
         return converter[tif];
     }
 
+    void downloadAssets(char* symbols) {
+        FILE* f;
+        if (fopen_s(&f, "./Log/AssetsAlpaca.csv", "w+")) {
+            s_logger->logError("Failed to open ./Log/AssetsAlpaca file\n");
+            return;
+        }
+
+        BrokerError("Generating Asset List...");
+        fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission\n");
+
+        auto getAsset = [f](const std::string& asset) {
+            BrokerError(("Asset " + asset).c_str());
+            BrokerProgress(1);
+            auto quote = pMarketData->getLastQuote(asset);
+            if (quote) {
+                auto& q = quote.content().quote;
+                fprintf(f, "%s,%f,%f,0.0,0.0,0.00010,0.0,0.0,0,1,0.000,%s\n", asset.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.c_str());
+            }
+            else {
+                BrokerError(quote.what().c_str());
+            }
+        };
+
+        if (!symbols) {
+            auto assets = client->getAssets();
+            for (auto& asset : assets.content()) {
+                if (!asset.tradable) {
+                    continue;
+                }
+                getAsset(asset.symbol);
+            }
+        }
+        else {
+            const char* delim = ",";
+            char* next_token;
+            char* token = strtok_s(symbols, delim, &next_token);
+            while (token != nullptr) {
+                getAsset(token);
+                token = strtok_s(nullptr, delim, &next_token);
+            }
+        }
+        
+        fflush(f);
+        fclose(f);
+        s_logger->logDebug("close file\n");
+    }
+    
     DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter)
     {
         static int SetMultiplier;
@@ -568,7 +615,7 @@ namespace alpaca
                 }
                 pMarketData = polygon.get();
                 BrokerError("Change to Polygon market data.");
-                s_logger->logInfo("use Polygon");
+                s_logger->logInfo("Change to Polygon");
             }
             else {
                 if (!alpacaMD) {
@@ -578,10 +625,16 @@ namespace alpaca
                     break;
                 }
                 pMarketData = alpacaMD.get();
-                BrokerError("Change to Polygon market data.");
-                s_logger->logInfo("use Alpaca market data");
+                BrokerError("Change to Alpaca market data.");
+                s_logger->logInfo("Change to Alpaca market data");
             }
             break;
+
+        case 2001: {
+            downloadAssets((char*)dwParameter);
+            break;
+        }
+            
 
         default:
             s_logger->logDebug("Unhandled command: %d %lu\n", Command, dwParameter);

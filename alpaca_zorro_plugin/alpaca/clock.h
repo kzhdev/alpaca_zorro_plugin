@@ -17,11 +17,12 @@ namespace alpaca {
         template<typename> friend class Response;
 
         template<typename CallerT, typename T>
-        void fromJSON(const T& parser) {
+        std::pair<int, std::string> fromJSON(const T& parser) {
             parser.get<bool>("is_open", is_open);
             next_close = parseTimeStamp(parser.get<std::string>("next_close"));
             next_open = parseTimeStamp(parser.get<std::string>("next_open"));
             timestamp = parseTimeStamp(std::move(parser.get<std::string>("timestamp")));
+            return std::make_pair(0, "OK");
         }
     };
 } // namespace alpaca

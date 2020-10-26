@@ -20,17 +20,18 @@ namespace alpaca {
 		friend class Bars;
 
 		template<typename CallerT, typename T>
-		void fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
+		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
 			parser.get<uint32_t>("t", time);
 			parser.get<double>("o", open_price);
 			parser.get<double>("h", high_price);
 			parser.get<double>("l", low_price);
 			parser.get<double>("c", close_price);
 			parser.get<uint32_t>("v", volume);
+			return std::make_pair(0, "OK");
 		}
 
 		template<typename CallerT, typename T>
-		void fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class Polygon>::value>::type* = 0) {
+		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class Polygon>::value>::type* = 0) {
 			uint64_t t;
 			parser.get<uint64_t>("t", t);
 			time = t / 1000;
@@ -39,6 +40,7 @@ namespace alpaca {
 			parser.get<double>("l", low_price);
 			parser.get<double>("c", close_price);
 			parser.get<uint32_t>("v", volume);
+			return std::make_pair(0, "OK");
 		}
 	};
 
@@ -53,7 +55,7 @@ namespace alpaca {
 		template<typename> friend class Response;
 
 		template<typename CallerT, typename T>
-		void fromJSON(const T& parser) {
+		std::pair<int, std::string> fromJSON(const T& parser) {
 			for (auto symbol_bars = parser.json.MemberBegin(); symbol_bars != parser.json.MemberEnd(); symbol_bars++) {
 				bars[symbol_bars->name.GetString()] = std::vector<Bar>{};
 				for (auto& symbol_bar : symbol_bars->value.GetArray()) {
@@ -64,6 +66,7 @@ namespace alpaca {
 					bars[symbol_bars->name.GetString()].emplace_back(std::move(bar));
 				}
 			}
+			return std::make_pair(0, "OK");
 		}
 	};
 } // namespace alpaca

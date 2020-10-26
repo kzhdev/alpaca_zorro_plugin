@@ -33,6 +33,7 @@ namespace alpaca {
 
         Response<Clock> getClock() const;
 
+        Response<std::vector<Asset>> getAssets() const;
         Response<Asset> getAsset(const std::string& symbol) const;
 
         Response<std::vector<Order>> getOrders(
@@ -76,7 +77,6 @@ namespace alpaca {
         const std::string baseUrl_;
         const std::string apiKey_;
         const std::string headers_;
-        std::unordered_map<std::string, Asset> subscribed_assets_;
         mutable bool is_open_ = false;
         const bool isLiveMode_;
         mutable Logger logger_;

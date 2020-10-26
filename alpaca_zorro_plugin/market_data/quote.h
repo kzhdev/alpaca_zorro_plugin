@@ -18,7 +18,7 @@ namespace alpaca {
 		friend struct LastQuote;
 
 		template<typename T>
-		void fromJSON(const T& parser) {
+		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<double>("askprice", ask_price);
 			parser.get<int>("asksize", ask_size);
 			parser.get<int>("askexchange", ask_exchange);
@@ -26,6 +26,7 @@ namespace alpaca {
 			parser.get<int>("bidsize", bid_size);
 			parser.get<int>("bidexchange", bid_exchange);
 			parser.get<uint64_t>("timestamp", timestamp);
+			return std::make_pair(0, "OK");
 		}
 	};
 
@@ -38,15 +39,21 @@ namespace alpaca {
 		template<typename> friend class Response;
 		
 		template<typename CallerT, typename T> 
-		void fromJSON(const T& parser/*, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0*/) {
+		std::pair<int, std::string> fromJSON(const T& parser/*, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0*/) {
 			parser.get<std::string>("status", status);
 			parser.get<std::string>("symbol", symbol);
 
+			if (status != "success") {
+				return std::make_pair(1, symbol + " " + status);
+			}
+
+			
 			if (parser.json.HasMember("last") && parser.json["last"].IsObject()) {
 				auto obj = parser.json["last"].GetObject();
 				Parser<decltype(parser.json["last"].GetObject())> p(obj);
 				quote.fromJSON(p);
 			}
+			return std::make_pair(0, "OK");
 		}
 	};
 } // namespace alpaca

@@ -110,7 +110,9 @@ namespace alpaca {
 
             try {
                 Parser<rapidjson::Document> parser(d);
-                parse<T, CallerT>(parser, content_);
+                auto result = parse<T, CallerT>(parser, content_);
+                code_ = result.first;
+                message_ = result.second;
             }
             catch (std::exception& e) {
                 code_ = 1;
@@ -119,13 +121,13 @@ namespace alpaca {
         }
         
         template<typename U, typename CallerT>
-        void parse(Parser<rapidjson::Document>& parser, U& content, typename std::enable_if<!is_vector<U>::value>::type* = 0) {
-            content.fromJSON<CallerT>(parser);
+        std::pair<int, std::string> parse(Parser<rapidjson::Document>& parser, U& content, typename std::enable_if<!is_vector<U>::value>::type* = 0) {
+            return content.fromJSON<CallerT>(parser);
         }
 
         template<typename U, typename CallerT>
-        void parse(Parser<rapidjson::Document>& parser, U& content, typename std::enable_if<is_vector<U>::value>::type* = 0) {
-            auto parseArray = [&](auto& arrayObj) {
+        std::pair<int, std::string> parse(Parser<rapidjson::Document>& parser, U& content, typename std::enable_if<is_vector<U>::value>::type* = 0) {
+            auto parseArray = [&](auto& arrayObj) -> std::pair<int, std::string> {
                 for (auto& item : arrayObj.GetArray()) {
                     if (!item.IsObject()) {
                         assert(false);
@@ -137,26 +139,27 @@ namespace alpaca {
                     obj.fromJSON<CallerT>(itemParser);
                     content.emplace_back(std::move(obj));
                 }
+                return std::make_pair(0, "OK");
             };
 
             if (parser.json.IsArray()) {
-                parseArray(parser.json);
+                return parseArray(parser.json);
             }
             else if (parser.json.IsObject()) {
                 auto& item = parser.json.MemberBegin()->value;
                 if (item.IsArray()) {
-                    parseArray(item);
+                    return parseArray(item);
                 }
                 else {
                     for (auto iter = parser.json.MemberBegin(); iter != parser.json.MemberEnd(); ++iter) {
                         auto& item = iter->value;
                         if (item.IsArray()) {
-                            parseArray(item);
-                            break;
+                            return parseArray(item);
                         }
                     }
                 }
             }
+            return std::make_pair(0, "OK");
         }
 
     private:
