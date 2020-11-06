@@ -483,7 +483,7 @@ namespace alpaca
             auto quote = pMarketData->getLastQuote(asset);
             if (quote) {
                 auto& q = quote.content().quote;
-                fprintf(f, "%s,%f,%f,0.0,0.0,0.00010,0.0,0.0,0,1,0.000,%s\n", asset.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.c_str());
+                fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,1,0.000,%s\n", asset.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.c_str());
             }
             else {
                 BrokerError(quote.what().c_str());
