@@ -6,7 +6,7 @@
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.2.1/AlpacaZorroPlugin_v0.2.1.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.2.2/AlpacaZorroPlugin_v0.2.2.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
@@ -86,6 +86,14 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
 
   **symbols** - One or more symbols separated by comma. If symbols = **0**, all symbols will be included.
   An AssetAlpaca.csv file will be generated in the Log diredtory.
+
+  ``` C++
+  Exemple:
+  // GenerateAlpacaAssetList.c
+  function main() {
+    brokerCommand(2001, "SPY,AAPL,MSFT,TSLA");  // Generate AssetsAlpaca.csv contains SPY, AAPL, MSFT, TSLA symbols
+  }
+  ```
 
 * Following Zorro Broker API functions has been implemented:
 
