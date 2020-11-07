@@ -49,6 +49,11 @@ Response<std::vector<Bar>> Polygon::getBars(
 
         auto response = request<std::vector<Bar>, Polygon>(url.str());
 
+        if (!response) {
+            BrokerError(response.what().c_str());
+            break;
+        }
+
         auto& bars = response.content();
         size_t nExclude = 0;
         logger_.logDebug("%d bars downloaded.\n", bars.size());
@@ -58,6 +63,10 @@ Response<std::vector<Bar>> Polygon::getBars(
             auto to = bars.back().time;
             logger_.logDebug("%s(%d) - %s(%d)\n", format("%F %T", date::sys_seconds{ std::chrono::seconds{ from } }).c_str(), from,
                 format("%F %T", date::sys_seconds{ std::chrono::seconds{ to } }).c_str(), to);
+        }
+        else {
+            // no more data
+            break;
         }
 
         // remove record passed end time
