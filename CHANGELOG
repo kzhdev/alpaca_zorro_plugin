@@ -1,3 +1,6 @@
+v0.2.3
+[bugfix] - Fix Polygon historical data download stuck when there is no more data to download.
+
 v0.2.2
 - Add PIPCost in generated asset list
 
