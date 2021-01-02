@@ -43,7 +43,7 @@ Response<std::vector<Bar>> Polygon::getBars(
             assert(false);
             return Response<std::vector<Bar>>(1, "invalid time");
         }
-        url << "?sort=desc";    // in desending order
+        url << "?sort=desc&limit="<<limit;    // in desending order
         logger_.logDebug("--> %s\n", url.str().c_str());
         url << "&" << apiKey_;
 
