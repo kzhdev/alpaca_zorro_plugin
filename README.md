@@ -78,14 +78,12 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   ```
 
 * Support [Polygon](https://polygon.io) market data (need live account)
-  All Alpaca customers with live brokerage accounts can access various kinds of market data provided by Polygon.
-  * In Real mode, Ploygon market data will be used.
-  * In Demo mode, by default Alpaca market data will be used.
+  All Alpaca customers with live brokerage accounts can access various kinds of market data provided by Polygon. By default, the plugin uses Alpaca market data.
   
-    **To Use Polygon In Demo Mode:**
-    In the User input, put both paper account API Key and live account API Key separated by '_' like following: **\<PaperAccountAPIKey>\_\<LiveAccountAPIKey>**
+  **To Use Polygon:**
+  In the User input, put both paper account API Key and live account API Key separated by '_' like following: **\<PaperAccountAPIKey or LiveAccountAPIKey>\_\<LiveAccountAPIKey>**
 
-    **brokerCommand(2000, int usePolygon)** can also be used to switch the data source. When usePolygon = **0**, Alpaca market data will be used. Othersise, Polygon market data will be used. Zorro retrieves historical data right after logged in. User needs aware that after switching market data source, the history data and live data are came from different source.
+  **brokerCommand(2000, int usePolygon)** can also be used to switch the data source. When usePolygon = **0**, Alpaca market data will be used. Othersise, Polygon market data will be used. Zorro retrieves historical data right after logged in. User needs aware that after switching market data source, the history data and live data are came from different source.
 
 * Generate AssetList file through custom borkerCommand
   
@@ -123,6 +121,7 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
     * GET_LOCK
     * GET_POSITION
     * GET_PRICETYPE
+    * GET_VOLTYPE
     * SET_ORDERTEXT
     * SET_SYMBOL
     * SET_ORDERTYPE
