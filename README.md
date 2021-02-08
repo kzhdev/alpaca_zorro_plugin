@@ -78,6 +78,7 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   ```
 
 * Support [Polygon](https://polygon.io) market data (need live account)
+
   All Alpaca customers with live brokerage accounts can access various kinds of market data provided by Polygon. By default, the plugin uses Alpaca market data.
   
   **To Use Polygon:**
