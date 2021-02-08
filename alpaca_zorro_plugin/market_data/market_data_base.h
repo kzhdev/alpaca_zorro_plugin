@@ -3,6 +3,7 @@
 #include <string>
 #include "quote.h"
 #include "bars.h"
+#include "trade.h"
 
 namespace alpaca {
 
@@ -11,6 +12,7 @@ namespace alpaca {
         virtual ~MarketData() = default;
 
         virtual Response<LastQuote> getLastQuote(const std::string& symbol) const = 0;
+        virtual Response<LastTrade> getLastTrade(const std::string& symbol) const = 0;
         virtual Response<std::vector<Bar>> getBars(
             const std::string& symbol,
             const __time32_t start,

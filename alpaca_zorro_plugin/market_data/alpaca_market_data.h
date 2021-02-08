@@ -17,6 +17,10 @@ namespace alpaca {
             return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last_quote/stocks/" + symbol, headers_);
         }
 
+        Response<LastTrade> getLastTrade(const std::string& symbol) const override {
+            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last/stocks/" + symbol, headers_);
+        }
+
         Response<std::vector<Bar>> getBars(
             const std::string& symbol,
             const __time32_t start,

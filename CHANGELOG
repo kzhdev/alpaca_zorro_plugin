@@ -1,3 +1,13 @@
+v0.2.4
+- Support both Alpaca market data and Polygon in live mode.
+  * "APIKey" in User input, use Alpaca market data
+  * "APIKey_APIKey" in User input, use Polygon market data.
+- [bug fix] - In live mode, historical market data download might use 60 minutes bar which
+  is not supported by Alpaca.
+- Added LastTrade price type support. 
+- Implement GET_PRICETYPE broker command
+- [bug fix] Not return correct short position
+
 v0.2.3
 [bugfix] - Fix Polygon historical data download stuck when there is no more data to download.
 

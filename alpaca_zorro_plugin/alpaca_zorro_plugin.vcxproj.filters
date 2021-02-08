@@ -72,6 +72,9 @@
     <ClInclude Include="market_data\alpaca_market_data.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="trade.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

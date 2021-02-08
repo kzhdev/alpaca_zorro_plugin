@@ -6,7 +6,7 @@
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.2.3/AlpacaZorroPlugin_v0.2.3.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.2.3/AlpacaZorroPlugin_v0.2.4.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
@@ -51,6 +51,15 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   OrderLimit = 0;   // set order type back to Market
   brokerCommand(SET_ORDERTYPE, 6);  // set TIF to CLS
   enteryLong(5);    // Buy 5 lot MarketOnClose order
+  ```
+
+* Support LastQuote/LastTrade price type
+
+  ```C++
+  // By default, it use ask/bid price mode
+  // Use brokerCommand(SET_PRICETYPE, 2) to change price type to trades
+  brokerCommand(SET_PRICETYPE, 2) // Set price type to trades
+  brokerCommand(SET_PRICETYPE, 1 /*or 0*/) // Set price type to ask/bid quote
   ```
 
 * Support custom order text
@@ -113,6 +122,7 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
     * GET_MAXREQUESTS
     * GET_LOCK
     * GET_POSITION
+    * GET_PRICETYPE
     * SET_ORDERTEXT
     * SET_SYMBOL
     * SET_ORDERTYPE

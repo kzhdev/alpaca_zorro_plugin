@@ -81,13 +81,7 @@ namespace alpaca
         client = std::make_unique<Client>(apiKey, Pwd, isPaperTrading);
         s_logger = &client->logger();
 
-        if (!isPaperTrading) {
-            polygon = std::move(std::make_unique<Polygon>(apiKey, client->logger()));
-            pMarketData = polygon.get();
-            BrokerError("Use Polygon market data");
-            s_logger->logInfo("Use Polygon market data\n");
-        }
-        else if (!polygonApiKey.empty()) {
+        if (!polygonApiKey.empty()) {
             polygon = std::move(std::make_unique<Polygon>(polygonApiKey, client->logger()));
             pMarketData = polygon.get();
             BrokerError("Use Polygon market data");
@@ -147,27 +141,40 @@ namespace alpaca
             return 1;
         }
 
-        auto response = pMarketData->getLastQuote(Asset);
-        if (!response) {
-            BrokerError(("Failed to get assert " + std::string(Asset) + " error: " + response.what()).c_str());
-            return 0;
+        if (s_priceType == 2) {
+            auto response = pMarketData->getLastTrade(Asset);
+            if (!response) {
+                BrokerError(("Failed to get lastTrade " + std::string(Asset) +
+                             " error: " + response.what()).c_str());
+                return 0;
+            }
+
+            auto& lastTrade = response.content();
+
+            if (pPrice) {
+                *pPrice = lastTrade.trade.price;
+            }
+
+            if (pSpread) {
+                *pSpread = 0;
+            }
         }
+        else {
+            auto response = pMarketData->getLastQuote(Asset);
+            if (!response) {
+                BrokerError(("Failed to get lastQuote " + std::string(Asset) +
+                             " error: " + response.what()).c_str());
+                return 0;
+            }
 
-        auto& lastQuote = response.content();
+            auto& lastQuote = response.content();
 
-        if (pPrice) {
-            *pPrice = lastQuote.quote.ask_price;
-        }
+            if (pPrice) {
+                *pPrice = lastQuote.quote.ask_price;
+            }
 
-        if (pSpread) {
-            *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
-        }
-
-        if (pVolume) {
-            auto barResponse = pMarketData->getBars({ Asset }, 0, 0, 1, 1);
-            auto& bars = barResponse.content();
-            if (barResponse && !bars.empty()) {
-                *pVolume = bars.front().volume;
+            if (pSpread) {
+                *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
             }
         }
 
@@ -194,9 +201,6 @@ namespace alpaca
             BrokerError("Tick data download is not supported by Alpaca.");
             return 0;
         }
-
-        // Alpaca only suport 1Min, 5Min, 15Min and 1D bars
-        assert(nTickMinutes == 1 || nTickMinutes == 5 || nTickMinutes == 15 || nTickMinutes == 1440);
 
         auto start = convertTime(tStart);
         auto end = convertTime(tEnd);
@@ -446,7 +450,7 @@ namespace alpaca
         }
     }
 
-    double getPosition(const std::string& asset) {
+    int32_t getPosition(const std::string& asset) {
         auto response = client->getPosition(asset);
         if (!response) {
             if (response.getCode() == 40410000) {
@@ -458,7 +462,7 @@ namespace alpaca
             return 0;
         }
 
-        return response.content().qty * (response.content().side == PositionSide::Long ? 1 : -1);
+        return response.content().qty;
     }
 
     constexpr int tifToZorroOrderType(TimeInForce tif) noexcept {
@@ -586,10 +590,17 @@ namespace alpaca
             s_logger->logDebug("SET_ORDERTYPE: %d s_tif=%s\n", (int)dwParameter, to_string(s_tif));
             return tifToZorroOrderType(s_tif);
         }
+
+        case GET_PRICETYPE:
+            return s_priceType;
+
         case SET_PRICETYPE:
             s_priceType = (int)dwParameter;
             s_logger->logDebug("SET_PRICETYPE: %d\n", s_priceType);
             return dwParameter;
+
+        case GET_VOLTYPE:
+          return 0;
 
         case SET_DIAGNOSTICS:
             if ((int)dwParameter == 1 || (int)dwParameter == 0) {

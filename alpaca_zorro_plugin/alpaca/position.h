@@ -35,7 +35,7 @@ namespace alpaca {
 		double unrealized_intraday_plpc;
 		double unrealized_pl;
 		double unrealized_plpc;
-		uint32_t qty;
+		int32_t qty;
 		AssetClass asset_class;
 		PositionSide side;
 		std::string asset_id;
@@ -57,7 +57,7 @@ namespace alpaca {
 			parser.get<double>("unrealized_intraday_plpc", unrealized_intraday_plpc);
 			parser.get<double>("unrealized_pl", unrealized_pl);
 			parser.get<double>("unrealized_pl", unrealized_plpc);
-			parser.get<uint32_t>("qty", qty);
+			parser.get<int32_t>("qty", qty);
 			asset_class = to_assetClass(parser.get<std::string>("asset_class"));
 			side = to_positionSide(parser.get<std::string>("side"));
 			parser.get<std::string>("asset_id", asset_id);

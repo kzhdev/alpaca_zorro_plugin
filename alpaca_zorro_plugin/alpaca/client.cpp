@@ -311,6 +311,6 @@ namespace alpaca {
     }
 
     Response<Position> Client::getPosition(const std::string& symbol) const {
-        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_);
+        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_, nullptr, &logger_);
     }
 } // namespace alpaca

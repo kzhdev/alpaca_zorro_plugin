@@ -20,6 +20,14 @@ namespace alpaca {
             return request<LastQuote, Polygon>(url.str(), "", nullptr, &logger_);
         }
 
+        Response<LastTrade> getLastTrade(const std::string& symbol) const override {
+            std::stringstream url;
+            url << baseUrl_ << "/v1/last/stocks/" << symbol;
+            logger_.logDebug("--> %s\n", url.str().c_str());
+            url << "?" << apiKey_;
+            return request<LastTrade, Polygon>(url.str(), "", nullptr, &logger_);
+        }
+
         Response<std::vector<Bar>> getBars(
             const std::string& symbol,
             __time32_t start,
