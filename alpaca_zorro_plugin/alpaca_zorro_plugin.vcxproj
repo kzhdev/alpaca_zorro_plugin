@@ -12,7 +12,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{B4E3BA5A-3DA6-4189-9208-F5E0728FF3BB}</ProjectGuid>
+    <ProjectGuid>{805B934B-BD4F-4152-8728-5BB89035D548}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>alpaca_zorro_plugin</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
