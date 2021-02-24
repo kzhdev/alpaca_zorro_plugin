@@ -20,6 +20,7 @@
 #include "logger.h"
 #include "include/functions.h"
 #include "market_data/alpaca_market_data.h"
+#include "market_data/polygon.h"
 
 #define PLUGIN_VERSION	2
 
@@ -39,6 +40,7 @@ namespace alpaca
 {
     std::unique_ptr<Client> client = nullptr;
     std::unique_ptr<AlpacaMarketData> alpacaMD = nullptr;
+    std::unique_ptr<Polygon> polygon = nullptr;
     MarketData* pMarketData = nullptr;
 
     ////////////////////////////////////////////////////////////////
@@ -69,27 +71,28 @@ namespace alpaca
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
 
         std::string apiKey(User);
-        //auto pos = apiKey.find('_');
-        //if (pos != std::string::npos) {
-        //    polygonApiKey = apiKey.substr(pos + 1);
-        //    apiKey = apiKey.substr(0, pos);
-        //}
+        std::string polygonApiKey;
+        auto pos = apiKey.find('_');
+        if (pos != std::string::npos) {
+            polygonApiKey = apiKey.substr(pos + 1);
+            apiKey = apiKey.substr(0, pos);
+        }
 
         client = std::make_unique<Client>(apiKey, Pwd, isPaperTrading);
         s_logger = &client->logger();
 
-        //if (!polygonApiKey.empty()) {
-        //    polygon = std::move(std::make_unique<Polygon>(polygonApiKey, client->logger()));
-        //    pMarketData = polygon.get();
-        //    BrokerError("Use Polygon market data");
-        //    s_logger->logInfo("Use Polygon market data\n");
-        //} 
-        //else {
+        if (!polygonApiKey.empty()) {
+            polygon = std::move(std::make_unique<Polygon>(polygonApiKey, client->logger()));
+            pMarketData = polygon.get();
+            BrokerError("Use Polygon market data");
+            s_logger->logInfo("Use Polygon market data\n");
+        } 
+        else {
             alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
             pMarketData = alpacaMD.get();
             BrokerError("Use Alpaca market data");
             s_logger->logInfo("Use Alpaca market data\n");
-        //}
+        }
 
         //attempt login
         auto response = client->getAccount();
@@ -602,6 +605,33 @@ namespace alpaca
         case GET_BROKERZONE:
         case SET_HWND:
         case GET_CALLBACK:
+            break;
+
+        case 2000:
+            if ((int)dwParameter != 0) {
+                if (!polygon) {
+                    BrokerError("Polygon ApiKey not provided");
+                    break;
+                }
+
+                if (pMarketData == polygon.get()) {
+                    break;
+                }
+                pMarketData = polygon.get();
+                BrokerError("Change to Polygon market data.");
+                s_logger->logInfo("Change to Polygon");
+            }
+            else {
+                if (!alpacaMD) {
+                    alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
+                }
+                else if (pMarketData == alpacaMD.get()) {
+                    break;
+                }
+                pMarketData = alpacaMD.get();
+                BrokerError("Change to Alpaca market data.");
+                s_logger->logInfo("Change to Alpaca market data");
+            }
             break;
 
         case 2001: {
