@@ -75,6 +75,9 @@
     <ClInclude Include="trade.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="throttler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -98,5 +101,9 @@
     <ClCompile Include="market_data\polygon.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\CHANGELOG" />
+    <None Include="..\README.md" />
   </ItemGroup>
 </Project>

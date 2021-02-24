@@ -20,7 +20,6 @@
 #include "logger.h"
 #include "include/functions.h"
 #include "market_data/alpaca_market_data.h"
-#include "market_data/polygon.h"
 
 #define PLUGIN_VERSION	2
 
@@ -40,7 +39,6 @@ namespace alpaca
 {
     std::unique_ptr<Client> client = nullptr;
     std::unique_ptr<AlpacaMarketData> alpacaMD = nullptr;
-    std::unique_ptr<Polygon> polygon = nullptr;
     MarketData* pMarketData = nullptr;
 
     ////////////////////////////////////////////////////////////////
@@ -71,28 +69,27 @@ namespace alpaca
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
 
         std::string apiKey(User);
-        std::string polygonApiKey;
-        auto pos = apiKey.find('_');
-        if (pos != std::string::npos) {
-            polygonApiKey = apiKey.substr(pos + 1);
-            apiKey = apiKey.substr(0, pos);
-        }
+        //auto pos = apiKey.find('_');
+        //if (pos != std::string::npos) {
+        //    polygonApiKey = apiKey.substr(pos + 1);
+        //    apiKey = apiKey.substr(0, pos);
+        //}
 
         client = std::make_unique<Client>(apiKey, Pwd, isPaperTrading);
         s_logger = &client->logger();
 
-        if (!polygonApiKey.empty()) {
-            polygon = std::move(std::make_unique<Polygon>(polygonApiKey, client->logger()));
-            pMarketData = polygon.get();
-            BrokerError("Use Polygon market data");
-            s_logger->logInfo("Use Polygon market data\n");
-        } 
-        else {
+        //if (!polygonApiKey.empty()) {
+        //    polygon = std::move(std::make_unique<Polygon>(polygonApiKey, client->logger()));
+        //    pMarketData = polygon.get();
+        //    BrokerError("Use Polygon market data");
+        //    s_logger->logInfo("Use Polygon market data\n");
+        //} 
+        //else {
             alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
             pMarketData = alpacaMD.get();
             BrokerError("Use Alpaca market data");
             s_logger->logInfo("Use Alpaca market data\n");
-        }
+        //}
 
         //attempt login
         auto response = client->getAccount();
@@ -209,43 +206,36 @@ namespace alpaca
 
         int barsDownloaded = 0;
 
-        // make sure enough bar downloaded logic seems doesn't need. Comment out for now
+        auto response = pMarketData->getBars({ Asset }, start, end, nTickMinutes, nTicks);
+        if (!response) {
+            BrokerError(response.what().c_str());
+            return barsDownloaded;
+        }
 
-        //do {
-            //s_logger->logDebug("download bars %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+        auto& bars = response.content();
+        if (bars.empty()) {
+            return barsDownloaded;
+        }
 
-            auto response = pMarketData->getBars({ Asset }, start, end, nTickMinutes, nTicks);
-            if (!response) {
-                BrokerError(response.what().c_str());
-                return barsDownloaded;
+        s_logger->logDebug("%d bar downloaded\n", bars.size());
+
+        for (int i = bars.size() - 1; i >= 0; --i) {
+            auto& bar = bars[i];
+            // change time to bar close time
+            __time32_t barCloseTime = bar.time + nTickMinutes * 60;
+            if (barCloseTime > end) {
+                // end time cannot exceeds tEnd
+                continue;
             }
-
-            auto& bars = response.content();
-            if (bars.empty()) {
-                return barsDownloaded;
-            }
-
-            for (int i = bars.size() - 1; i >= 0; --i) {
-                auto& bar = bars[i];
-                //if (i == iter->second.size() - 1) {
-                //    s_logger->logDebug("first bar %s\n", timeToString(bar.time).c_str());
-                //}
-                auto& tick = ticks[barsDownloaded++];
-                // change time to bar close time
-                __time32_t barCloseTime = bar.time + nTickMinutes * 60;
-                tick.time = convertTime(barCloseTime);
-                tick.fOpen = bar.open_price;
-                tick.fHigh = bar.high_price;
-                tick.fLow = bar.low_price;
-                tick.fClose = bar.close_price;
-                tick.fVol = bar.volume;
-            }
-        //    s_logger->logDebug("last bar %s\n", timeToString(iter->second.front().time).c_str());
-        //    nTicks -= iter->second.size();
-        //    end = iter->second.front().time - nTickMinutes * 60;
-        //    s_logger->logDebug("next end %s\n", timeToString(end).c_str());
-        //    s_logger->logDebug("%d bars downloaded\n", iter->second.size());
-        //} while (nTicks && end >= start);
+            auto& tick = ticks[barsDownloaded++];
+            tick.time = convertTime(barCloseTime);
+            tick.fOpen = bar.open_price;
+            tick.fHigh = bar.high_price;
+            tick.fLow = bar.low_price;
+            tick.fClose = bar.close_price;
+            tick.fVol = bar.volume;
+        }
+        s_logger->logDebug("%d bar returned\n", bars.size());
         return barsDownloaded;
     }
 
@@ -612,33 +602,6 @@ namespace alpaca
         case GET_BROKERZONE:
         case SET_HWND:
         case GET_CALLBACK:
-            break;
-
-        case 2000:
-            if ((int)dwParameter != 0) {
-                if (!polygon) {
-                    BrokerError("Polygon ApiKey not provided");
-                    break;
-                }
-
-                if (pMarketData == polygon.get()) {
-                    break;
-                }
-                pMarketData = polygon.get();
-                BrokerError("Change to Polygon market data.");
-                s_logger->logInfo("Change to Polygon");
-            }
-            else {
-                if (!alpacaMD) {
-                    alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
-                }
-                else if (pMarketData == alpacaMD.get()) {
-                    break;
-                }
-                pMarketData = alpacaMD.get();
-                BrokerError("Change to Alpaca market data.");
-                s_logger->logInfo("Change to Alpaca market data");
-            }
             break;
 
         case 2001: {

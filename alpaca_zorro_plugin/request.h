@@ -4,8 +4,10 @@
 #include <string>
 #include <cassert>
 #include <type_traits>
+#include <thread>
 #include "alpaca/json.h"
 #include "logger.h"
+#include "throttler.h"
 
 namespace alpaca {
 
@@ -177,6 +179,21 @@ namespace alpaca {
     */
     template<typename T, typename CallerT>
     inline Response<T> request(const std::string& url, std::string headers = "", const char* data = nullptr, Logger* Logger = nullptr) {
+        static Throttler throttler(3);
+
+        if (Logger) {
+            Logger->logDebug("--> %s\n", url.c_str());
+        }
+
+        while (!throttler.canSent()) {
+            // reached throttle limit
+            if (!BrokerProgress(1)) {
+                return Response<T>(1, "Brokerprogress returned zero. Aborting...");
+            }
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(250ms);
+        }
+
         int id = http_send((char*)url.c_str(), (char*)data, (char*)(headers.empty() ? nullptr : headers.c_str()));
 
         if (!id) {

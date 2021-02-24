@@ -1,3 +1,10 @@
+v0.2.5
+- [bug fix] Fix duplicate entry in hitory data download
+- Implemented a throttler to prevent request from exceeding rate limit
+- Remove Ploygon support. 
+  All Polygon.io services through Alpaca will be discontinued after Feb. 26 2021 market close.
+  The plugin will no longer be able to use Polygon.io data feed via Alpaca API key.
+
 v0.2.4
 - Support both Alpaca market data and Polygon in live mode.
   * "APIKey" in User input, use Alpaca market data

@@ -6,7 +6,7 @@
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.2.4/AlpacaZorroPlugin_v0.2.4.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.2.5/AlpacaZorroPlugin_v0.2.5.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
@@ -76,15 +76,6 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   // get position for specific Asset
   brokerCommand(GET_POSITION, "AAPL");
   ```
-
-* Support [Polygon](https://polygon.io) market data (need live account)
-
-  All Alpaca customers with live brokerage accounts can access various kinds of market data provided by Polygon. By default, the plugin uses Alpaca market data.
-  
-  **To Use Polygon:**
-  In the User input, add '_' and live account API Key behined the AlpacaAPI key, like following: **\<PaperAccountAPIKey or LiveAccountAPIKey>\_\<LiveAccountAPIKey>**
-
-  **brokerCommand(2000, int usePolygon)** can also be used to switch the data source. When usePolygon = **0**, Alpaca market data will be used. Othersise, Polygon market data will be used. Zorro retrieves historical data right after logged in. User needs aware that after switching market data source, the history data and live data are came from different source.
 
 * Generate AssetList file through custom borkerCommand
   
