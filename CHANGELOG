@@ -1,3 +1,6 @@
+v0.2.6
+- Get Polygon.io support back
+
 v0.2.5
 - [bug fix] Fix duplicate entry in hitory data download
 - Implemented a throttler to prevent request from exceeding rate limit
