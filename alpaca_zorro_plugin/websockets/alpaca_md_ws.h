@@ -11,7 +11,7 @@
 
 namespace alpaca {
 
-    class AlpacaMdWs : public zorro::websockets::ZorroWebsocketsProxyClient, public zorro::websockets::WebsocketProxyCallback {
+    class AlpacaMdWs : public zorro::websocket::ZorroWebsocketProxyClient, public zorro::websocket::WebsocketProxyCallback {
         enum Status : uint8_t {
             CONNECTING,
             DISCONNECTED,
@@ -47,13 +47,13 @@ namespace alpaca {
 
     public:
         AlpacaMdWs()
-            : ZorroWebsocketsProxyClient(this, "Alpaca", BrokerError, BrokerProgress)
+            : ZorroWebsocketProxyClient(this, "Alpaca", BrokerError, BrokerProgress)
         {}
         ~AlpacaMdWs() override = default;
 
         bool login(Logger* logger, std::string key, std::string secret, const std::string& url) noexcept {
             logger_ = logger;
-            auto log_func = [this](zorro::websockets::LogLevel level, const std::string& msg) { 
+            auto log_func = [this](zorro::websocket::LogLevel level, const std::string& msg) { 
                 logger_->log(static_cast<alpaca::LogLevel>(level), "%s\n", msg.c_str()); 
             };
             // pass logger to WebsocketProxyClient
@@ -188,8 +188,8 @@ namespace alpaca {
     private:
 
         void waitForWsReadyOrError(Status expected_status, uint32_t timeout = 10000) {
-            auto start = zorro::websockets::get_timestamp();
-            while ((zorro::websockets::get_timestamp() - start) < timeout) {
+            auto start = zorro::websocket::get_timestamp();
+            while ((zorro::websocket::get_timestamp() - start) < timeout) {
                 if (status_ == expected_status || status_ == Status::DISCONNECTED) {
                     break;
                 }
