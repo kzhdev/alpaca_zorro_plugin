@@ -29,7 +29,7 @@
 #define PLUGIN_VERSION	2
 
 using namespace alpaca;
-using namespace zorro::websockets;
+using namespace zorro::websocket;
 
 #define ALPACA_BASIC_DATA_WS_URL "wss://stream.data.alpaca.markets/v2/iex"
 #define ALPACA_PRO_DATA_WS_URL "wss://stream.data.alpaca.markets/v2/sip"
