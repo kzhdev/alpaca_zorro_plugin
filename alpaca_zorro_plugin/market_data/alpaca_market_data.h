@@ -10,15 +10,17 @@ namespace alpaca {
         static constexpr const char* baseUrl_ = "https://data.alpaca.markets";
 
     public:
-        AlpacaMarketData(std::string headers, Logger& logger) : headers_(std::move(headers)), logger_(logger) {}
+        AlpacaMarketData(std::string headers, Logger& logger, bool paidPlan) : MarketData(paidPlan), headers_(std::move(headers)), logger_(logger) {}
         ~AlpacaMarketData() override = default;
 
+        const char* name() const noexcept { return "Alpaca"; }
+
         Response<LastQuote> getLastQuote(const std::string& symbol) const override {
-            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last_quote/stocks/" + symbol, headers_);
+            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last_quote/stocks/" + symbol, headers_.c_str(), nullptr, &logger_);
         }
 
         Response<LastTrade> getLastTrade(const std::string& symbol) const override {
-            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last/stocks/" + symbol, headers_);
+            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last/stocks/" + symbol, headers_.c_str(), nullptr, &logger_);
         }
 
         Response<std::vector<Bar>> getBars(

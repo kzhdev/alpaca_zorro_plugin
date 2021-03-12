@@ -15,7 +15,7 @@ Response<std::vector<Bar>> Polygon::getBars(
     const uint32_t limit) const {
 
     if (end == 0) {
-        end = std::time(nullptr);
+        end = static_cast<__time32_t>(std::time(nullptr));
     }
 
     __time32_t t_start;
@@ -41,7 +41,7 @@ Response<std::vector<Bar>> Polygon::getBars(
         }
         catch (const std::exception& e) {
             assert(false);
-            return Response<std::vector<Bar>>(1, "invalid time");
+            return Response<std::vector<Bar>>(1, "invalid time. " + std::string(e.what()));
         }
         url << "?sort=desc&limit="<<limit;    // in desending order
         logger_.logDebug("--> %s\n", url.str().c_str());
@@ -96,7 +96,7 @@ Response<std::vector<Bar>> Polygon::getBars(
     auto it = rtBars.end();
     while (it != rtBars.begin()) {
         --it;
-        if ((*it).time >= start) {
+        if ((*it).time >= (uint32_t)start) {
             break;
         }
 

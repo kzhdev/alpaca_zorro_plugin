@@ -9,7 +9,7 @@
 
    ```cd alpaca_zorro_plugin```
 
-   ```git submodule update --init```
+   ```git submodule update --init --recursive```
 1. Open the project in Visual Studio
 1. Edit alpaca_zorro_plugin.vcxproj.user (**Optional**)
    After opening the soluion in Visual Studio, an alpaca_zorro_plugin.vcxproj.user file should be created in alpaca_zorro_plugin folder. Open the alpaca_zorro_plugin.vcxproj.user file in any editor and add the **\<LocalDebuggerCommand>** and **\<OutDir>** in the file. It should point to the Zorro.exe and plugin folder in your machine. This will put the build AlpacaZorroPlugin.dll directly into Zorro's plugin folder. And launch Zorro automatically when debugging the project in Visual Studio.
