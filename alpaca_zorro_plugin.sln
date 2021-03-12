@@ -3,10 +3,17 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 16.0.30523.141
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "alpaca_zorro_plugin", "alpaca_zorro_plugin\alpaca_zorro_plugin.vcxproj", "{805B934B-BD4F-4152-8728-5BB89035D548}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F339E563-2A1C-4934-BE0C-50D6E52B15AE} = {F339E563-2A1C-4934-BE0C-50D6E52B15AE}
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6} = {FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}
+	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zorro_websockets_proxy_lib", "third_party\zorro_websockets_proxy\zorro_websockets_proxy_lib\zorro_websockets_proxy_lib.vcxproj", "{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zorro_websocket_proxy", "third_party\zorro_websocket_proxy\zorro_websocket_proxy\zorro_websocket_proxy.vcxproj", "{F339E563-2A1C-4934-BE0C-50D6E52B15AE}"
+	ProjectSection(ProjectDependencies) = postProject
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6} = {FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}
+	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zorro_websockets_proxy", "third_party\zorro_websockets_proxy\zorro_websockets_proxy\zorro_websockets_proxy.vcxproj", "{F339E563-2A1C-4934-BE0C-50D6E52B15AE}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zorro_websocket_proxy_client", "third_party\zorro_websocket_proxy\zorro_websocket_proxy_client\zorro_websocket_proxy_client.vcxproj", "{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -34,22 +41,6 @@ Global
 		{805B934B-BD4F-4152-8728-5BB89035D548}.RelWithDebInfo|x64.Build.0 = Release|Win32
 		{805B934B-BD4F-4152-8728-5BB89035D548}.RelWithDebInfo|x86.ActiveCfg = Release|Win32
 		{805B934B-BD4F-4152-8728-5BB89035D548}.RelWithDebInfo|x86.Build.0 = Release|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x64.ActiveCfg = Debug|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x64.Build.0 = Debug|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x86.ActiveCfg = Debug|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x86.Build.0 = Debug|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x64.ActiveCfg = Debug|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x64.Build.0 = Debug|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x86.ActiveCfg = Debug|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x86.Build.0 = Debug|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x64.ActiveCfg = Release|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x64.Build.0 = Release|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x86.ActiveCfg = Release|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x86.Build.0 = Release|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x64.ActiveCfg = Release|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x64.Build.0 = Release|x64
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x86.ActiveCfg = Release|Win32
-		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x86.Build.0 = Release|Win32
 		{F339E563-2A1C-4934-BE0C-50D6E52B15AE}.Debug|x64.ActiveCfg = Debug|x64
 		{F339E563-2A1C-4934-BE0C-50D6E52B15AE}.Debug|x64.Build.0 = Debug|x64
 		{F339E563-2A1C-4934-BE0C-50D6E52B15AE}.Debug|x86.ActiveCfg = Debug|Win32
@@ -66,6 +57,22 @@ Global
 		{F339E563-2A1C-4934-BE0C-50D6E52B15AE}.RelWithDebInfo|x64.Build.0 = Release|x64
 		{F339E563-2A1C-4934-BE0C-50D6E52B15AE}.RelWithDebInfo|x86.ActiveCfg = Release|Win32
 		{F339E563-2A1C-4934-BE0C-50D6E52B15AE}.RelWithDebInfo|x86.Build.0 = Release|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x64.ActiveCfg = Debug|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x64.Build.0 = Debug|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x86.ActiveCfg = Debug|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Debug|x86.Build.0 = Debug|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x64.ActiveCfg = Debug|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x64.Build.0 = Debug|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x86.ActiveCfg = Debug|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.MinSizeRel|x86.Build.0 = Debug|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x64.ActiveCfg = Release|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x64.Build.0 = Release|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x86.ActiveCfg = Release|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.Release|x86.Build.0 = Release|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x64.ActiveCfg = Release|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x64.Build.0 = Release|x64
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x86.ActiveCfg = Release|Win32
+		{FA837CEE-5A09-4AD6-9B4F-DEDE329027B6}.RelWithDebInfo|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

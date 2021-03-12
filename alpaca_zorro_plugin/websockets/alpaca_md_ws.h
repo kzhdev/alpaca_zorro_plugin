@@ -1,6 +1,6 @@
 #pragma once
 
-#include <zorro_websockets_proxy_client.h>
+#include <zorro_websocket_proxy_client.h>
 #include <utils.h>
 #include <unordered_set>
 #include <sstream>
