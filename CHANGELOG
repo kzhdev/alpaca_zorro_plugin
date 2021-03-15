@@ -1,9 +1,9 @@
 V1.0.0
-- Introduced ZorroWebsocketProxy so that mutliple ZorroS instances can share one Websocket connection
+- Introduced ZorroWebsocketProxy so that multiple ZorroS instances can share one Websocket connection
   **NOTE** ZorroWebsocketProxy adopts a lock-free design which spins on one CPU core. High CPU usage is normal and expected.
 
 - Added Alpaca MarketData V2 Websocket support
-  - Las trade and last quote are directely from WebSocket stream. This is dromatically reduced Zorro Api query.
+  - Las trade and last quote are directly from WebSocket stream. This is dramatically reduced Zorro API query.
   - if last trade or last quote update have not received yet, the plugin will pull last trade and quote from V1 endpoint.
 
 - Added Alpaca plugin specific setting to Zorro.ini or ZorroFix.ini file.
