@@ -1,3 +1,23 @@
+V1.0.0
+- Introduced ZorroWebsocketProxy so that mutliple ZorroS instances can share one Websocket connection
+  **NOTE** ZorroWebsocketProxy adopts a lock-free design which spins on one CPU core. High CPU usage is normal and expected.
+
+- Added Alpaca MarketData V2 Websocket support
+  - Las trade and last quote are directely from WebSocket stream. This is dromatically reduced Zorro Api query.
+  - if last trade or last quote update have not received yet, the plugin will pull last trade and quote from V1 endpoint.
+
+- Added Alpaca plugin specific setting to Zorro.ini or ZorroFix.ini file.
+  - AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon
+  - AlpacaPaidDataPlan = 1	              // 0 = False, 1 = True
+  - AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE
+  - PolygonApiKey = "*************"       // Polygon ApiKey
+  please refer to the README.md for details.
+
+- Historical bars are still retrieved from V1 endpoint because V2 Historical Bars are not ready yet. 
+
+- Polygon MarketData is still supported, but the ApiKey has moved into Zorro config file.
+  NOTE: Polygon free plan can't be used as alternative market data source due to lack of last trade and last quote data.
+
 v0.2.6
 - Get Polygon.io support back
 

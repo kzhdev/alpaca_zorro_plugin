@@ -45,7 +45,11 @@ namespace alpaca {
         explicit Response(int c = 0) noexcept : code_(c), message_("OK") {}
         Response(int c, std::string m) noexcept : code_(c), message_(std::move(m)) {}
 
-    public:
+        void onError(int c, std::string m) {
+            code_ = c;
+            message_ = std::move(m);
+        }
+
         int getCode() const noexcept {
             return code_;
         }
@@ -64,7 +68,7 @@ namespace alpaca {
 
     private:
         template<typename T, typename CallerT>
-        friend Response<T> request(const std::string&, std::string, const char*, Logger* Logger);
+        friend Response<T> request(const std::string&, const char*, const char*, Logger* Logger);
 
         template<typename CallerT>
         void parseContent(const std::string& content) {
@@ -95,7 +99,7 @@ namespace alpaca {
                     code_ = d["code"].GetInt();
                     return;
                 }
-                else if (!d.HasMember("code") && d.HasMember("message") && (strcmp(d["message"].GetString(), "too many requests.") == 0)) {
+                else if (!d.HasMember("code") && d.HasMember("message") /*&& (strcmp(d["message"].GetString(), "too many requests.") == 0)*/) {
                     message_ = d["message"].GetString();
                     code_ = 1;
                     return;
@@ -178,8 +182,13 @@ namespace alpaca {
     * 
     */
     template<typename T, typename CallerT>
-    inline Response<T> request(const std::string& url, std::string headers = "", const char* data = nullptr, Logger* Logger = nullptr) {
+    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, Logger* Logger = nullptr) {
         static Throttler throttler(3);
+
+        if (url.empty()) {
+            return  Response<T>(1, "Invalid url - empty");
+        }
+
 
         if (Logger) {
             Logger->logDebug("--> %s\n", url.c_str());
@@ -194,7 +203,7 @@ namespace alpaca {
             std::this_thread::sleep_for(250ms);
         }
 
-        int id = http_send((char*)url.c_str(), (char*)data, (char*)(headers.empty() ? nullptr : headers.c_str()));
+        int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
 
         if (!id) {
             return Response<T>(1, "Cannot connect to server");
@@ -203,11 +212,12 @@ namespace alpaca {
         long n = 0;
         std::stringstream ss;
         while (!(n = http_status(id))) {
-            Sleep(100); // wait for the server to reply
             if (!BrokerProgress(1)) {
                 http_free(id);
                 return Response<T>(1, "Brokerprogress returned zero. Aborting...");
             }
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(250ms);
             // print dots, abort if returns zero.
         }
 
@@ -216,11 +226,24 @@ namespace alpaca {
             auto received = http_result(id, buffer, n);
             ss << buffer;
             free(buffer); //free up memory allocation
+            http_free(id); //always clean up the id!
         }
-        http_free(id); //always clean up the id!
+        else {
+            http_free(id); //always clean up the id!
+            switch (n) {
+            case -2:
+                return Response<T>(n, "Id is invalid");
+            case -3:
+                return Response<T>(n, "Website did not response");
+            case -4:
+                return Response<T>(n, "Host could not be resolved");
+            default:
+                return Response<T>(n, "Transfer Failed");
+            }
+        }
 
         if (Logger) {
-            Logger->logTrace("<-- %s\n", ss.str().c_str());
+            Logger->logTrace2("<-- %s\n", ss.str().c_str());
         }
 
         Response<T> response;

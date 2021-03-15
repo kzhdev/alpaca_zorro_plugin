@@ -15,16 +15,25 @@
 #include <sstream>
 #include <vector>
 #include <memory>
+#include <fstream>
+#include <type_traits>
 
 #include "alpaca/client.h"
 #include "logger.h"
 #include "include/functions.h"
 #include "market_data/alpaca_market_data.h"
 #include "market_data/polygon.h"
+#include "config.h"
+#include "websockets/alpaca_md_ws.h"
 
 #define PLUGIN_VERSION	2
 
 using namespace alpaca;
+using namespace zorro::websocket;
+
+#define ALPACA_BASIC_DATA_WS_URL "wss://stream.data.alpaca.markets/v2/iex"
+#define ALPACA_PRO_DATA_WS_URL "wss://stream.data.alpaca.markets/v2/sip"
+#define ALPACA_STREAM_URL "wss://api.alpaca.markets/stream"
 
 namespace {
     TimeInForce s_tif = TimeInForce::FOK;
@@ -34,6 +43,8 @@ namespace {
     std::string s_nextOrderText;
     int s_priceType = 0;
     std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
+    Configuration config;
+    uint32_t alpaca_md_ws_id = 0;
 }
 
 namespace alpaca
@@ -41,6 +52,7 @@ namespace alpaca
     std::unique_ptr<Client> client = nullptr;
     std::unique_ptr<AlpacaMarketData> alpacaMD = nullptr;
     std::unique_ptr<Polygon> polygon = nullptr;
+    std::unique_ptr<AlpacaMdWs> wsClient = nullptr;
     MarketData* pMarketData = nullptr;
 
     ////////////////////////////////////////////////////////////////
@@ -58,43 +70,61 @@ namespace alpaca
         (FARPROC&)http_status = fpStatus;
         (FARPROC&)http_result = fpResult;
         (FARPROC&)http_free = fpFree;
-        return;
+
+        config.init();
+        wsClient = std::make_unique<AlpacaMdWs>();
     }
 
     DLLFUNC_C int BrokerLogin(char* User, char* Pwd, char* Type, char* Account)
     {
         if (!User) // log out
         {
+            if (wsClient) {
+                wsClient->logout();
+            }
+            alpaca_md_ws_id = 0;
+            pMarketData = nullptr;
             return 0;
         }
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
 
-        std::string apiKey(User);
-        std::string polygonApiKey;
-        auto pos = apiKey.find('_');
-        if (pos != std::string::npos) {
-            polygonApiKey = apiKey.substr(pos + 1);
-            apiKey = apiKey.substr(0, pos);
-        }
-
-        client = std::make_unique<Client>(apiKey, Pwd, isPaperTrading);
+        client = std::make_unique<Client>(User, Pwd, isPaperTrading);
         s_logger = &client->logger();
 
-        if (!polygonApiKey.empty()) {
-            polygon = std::move(std::make_unique<Polygon>(polygonApiKey, client->logger()));
-            pMarketData = polygon.get();
-            BrokerError("Use Polygon market data");
-            s_logger->logInfo("Use Polygon market data\n");
+        alpacaMD = std::make_unique<AlpacaMarketData>(client->headers(), client->logger(), config.alpacaPaidPlan);
+
+        if (!config.polygonApiKey.empty()) {
+            polygon = std::make_unique<Polygon>(config.polygonApiKey, client->logger(), true);
         } 
-        else {
-            alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
+
+        if (config.dataSource == 1) {
+            if (polygon) {
+                pMarketData = polygon.get();
+                BrokerError("Use Polygon market data");
+                s_logger->logInfo("Use Polygon market data\n");
+            }
+        }
+
+        if (!pMarketData) {
             pMarketData = alpacaMD.get();
+            config.dataSource = 0;
             BrokerError("Use Alpaca market data");
             s_logger->logInfo("Use Alpaca market data\n");
         }
 
         //attempt login
+
+        if (!config.dataSource) {
+            if (!wsClient) {
+                wsClient = std::make_unique<AlpacaMdWs>();
+            }
+            if (!wsClient->login(s_logger, User, Pwd, config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
+                BrokerError("Unable to open Alpaca websocket.");
+                return 0;
+            }
+        }
+
         auto response = client->getAccount();
         if (!response) {
             BrokerError("Login failed.");
@@ -104,6 +134,7 @@ namespace alpaca
 
         auto& account = response.content().account_number;
         BrokerError(("Account " + account).c_str());
+        memcpy(Account, account.c_str(), 1024);
         sprintf_s(Account, 1024, account.c_str());
         return 1;
     }
@@ -136,23 +167,42 @@ namespace alpaca
 
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
-        if (!pPrice) {
-            // this is subscribe
-            return 1;
+        if (!pPrice) { // this is subscribe
+            if (config.dataSource) {
+                // Polygon
+                return 1;
+            }
+
+            if (wsClient->subscribe(Asset)) {
+                s_logger->logDebug("%s subscribed\n", Asset);
+                return 1;
+            }
+            return 0;
         }
 
         if (s_priceType == 2) {
-            auto response = pMarketData->getLastTrade(Asset);
-            if (!response) {
-                BrokerError(("Failed to get lastTrade " + std::string(Asset) +
-                             " error: " + response.what()).c_str());
-                return 0;
+            Trade* trade = nullptr;
+            if (!config.dataSource) {
+                trade = wsClient->getLastTrade(Asset);
             }
+            if (trade) {
+                if (pPrice) {
+                    *pPrice = trade->price;
+                }
+            }
+            else {
+                auto response = pMarketData->getLastTrade(Asset);
+                if (!response) {
+                    BrokerError(("Failed to get lastTrade " + std::string(Asset) +
+                        " error: " + response.what()).c_str());
+                    return 0;
+                }
 
-            auto& lastTrade = response.content();
+                auto& lastTrade = response.content();
 
-            if (pPrice) {
-                *pPrice = lastTrade.trade.price;
+                if (pPrice) {
+                    *pPrice = lastTrade.trade.price;
+                }
             }
 
             if (pSpread) {
@@ -160,21 +210,36 @@ namespace alpaca
             }
         }
         else {
-            auto response = pMarketData->getLastQuote(Asset);
-            if (!response) {
-                BrokerError(("Failed to get lastQuote " + std::string(Asset) +
-                             " error: " + response.what()).c_str());
-                return 0;
+            Quote* quote = nullptr;
+            if (!config.dataSource) {
+                quote = wsClient->getLastQuote(Asset);
             }
+            if (quote) {
+                if (pPrice) {
+                    *pPrice = quote->ask_price;
+                }
 
-            auto& lastQuote = response.content();
-
-            if (pPrice) {
-                *pPrice = lastQuote.quote.ask_price;
+                if (pSpread) {
+                    *pSpread = quote->ask_price - quote->bid_price;
+                }
             }
+            else {
+                auto response = pMarketData->getLastQuote(Asset);
+                if (!response) {
+                    BrokerError(("Failed to get lastQuote " + std::string(Asset) +
+                        " error: " + response.what()).c_str());
+                    return 0;
+                }
 
-            if (pSpread) {
-                *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
+                auto& lastQuote = response.content();
+
+                if (pPrice) {
+                    *pPrice = lastQuote.quote.ask_price;
+                }
+
+                if (pSpread) {
+                    *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
+                }
             }
         }
 
@@ -205,40 +270,80 @@ namespace alpaca
         auto start = convertTime(tStart);
         auto end = convertTime(tEnd);
 
-        s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
-
         int barsDownloaded = 0;
 
-        auto response = pMarketData->getBars({ Asset }, start, end, nTickMinutes, nTicks);
-        if (!response) {
-            BrokerError(response.what().c_str());
-            return barsDownloaded;
-        }
-
-        auto& bars = response.content();
-        if (bars.empty()) {
-            return barsDownloaded;
-        }
-
-        s_logger->logDebug("%d bar downloaded\n", bars.size());
-
-        for (int i = bars.size() - 1; i >= 0; --i) {
-            auto& bar = bars[i];
-            // change time to bar close time
-            __time32_t barCloseTime = bar.time + nTickMinutes * 60;
-            if (barCloseTime > end) {
-                // end time cannot exceeds tEnd
-                continue;
+        auto populateTicks = [&barsDownloaded, nTickMinutes, &end, &ticks, nTicks](std::vector<Bar>& bars) {
+            for (int i = bars.size() - 1; i >= 0 && barsDownloaded < nTicks; --i) {
+                auto& bar = bars[i];
+                // change time to bar close time
+                __time32_t barCloseTime = bar.time + nTickMinutes * 60;
+                if (barCloseTime > end) {
+                    // end time cannot exceeds tEnd
+                    continue;
+                }
+                auto& tick = ticks[barsDownloaded++];
+                tick.time = convertTime(barCloseTime);
+                tick.fOpen = static_cast<float>(bar.open_price);
+                tick.fHigh = static_cast<float>(bar.high_price);
+                tick.fLow = static_cast<float>(bar.low_price);
+                tick.fClose = static_cast<float>(bar.close_price);
+                tick.fVol = static_cast<float>(bar.volume);
             }
-            auto& tick = ticks[barsDownloaded++];
-            tick.time = convertTime(barCloseTime);
-            tick.fOpen = bar.open_price;
-            tick.fHigh = bar.high_price;
-            tick.fLow = bar.low_price;
-            tick.fClose = bar.close_price;
-            tick.fVol = bar.volume;
+        };
+
+        if (config.dataSource == 0 && !config.alpacaPaidPlan) {
+            s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+            auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            if ((now - end) <= 900) {
+                if (config.fillDelayedDataWithPolygon && polygon) {
+                    // Fill missed delay data from Polygon
+                    s_logger->logInfo("Fill 15 minutes delay data with polygon\n", Asset, start, end, nTickMinutes, std::max<int>((30 / nTickMinutes), 1));
+                    auto response = polygon->getBars(Asset, start, end, nTickMinutes, nTicks);
+                    if (response) {
+                        populateTicks(response.content());
+                        if (!response.content().empty()) {
+                            end = response.content()[0].time - 30;
+                        }
+                        else {
+                            end = static_cast<__time32_t>(now) - 900;
+                        }
+                    }
+                }
+                else {
+                    end = static_cast<__time32_t>(now) - 900;
+                    s_logger->logInfo("Adjust end to %d\n", end);
+                }
+            }
         }
-        s_logger->logDebug("%d bar returned\n", bars.size());
+
+        while(true) {
+            s_logger->logDebug("BorkerHisotry %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
+
+            auto response = pMarketData->getBars(Asset, start, end, nTickMinutes, nTicks, s_priceType);
+            if (!response) {
+                if (response.getCode() == 40010001 && response.what() == "end is too late for subscription" &&
+                    pMarketData->name() == "Alpaca") {
+                    // Alpaca V2 Basic Plan has 15 min delay. Retry to find the last data allowed.
+                    end = (end - end % 60) - 60;
+                    continue;
+                }
+                else {
+                    BrokerError(response.what().c_str());
+                    return barsDownloaded;
+                }
+            }
+
+            auto& bars = response.content();
+            if (bars.empty()) {
+                return barsDownloaded;
+            }
+
+            s_logger->logDiag("%d bar downloaded\n", bars.size());
+
+            populateTicks(bars);
+            s_logger->logDiag("%d bar returned\n", barsDownloaded);
+            break;
+        }
         return barsDownloaded;
     }
 
@@ -523,11 +628,11 @@ namespace alpaca
         case GET_COMPLIANCE:
             return 15; // full NFA compliant
 
-        //case GET_BROKERZONE:
-            //return ET; // for now since Alpaca only support US
+        case GET_BROKERZONE:
+            return 0;   // historical data in UTC time
 
         case GET_MAXTICKS:
-            return 1000;
+            return pMarketData && pMarketData->name() == "Polygon" ? 5000 : 1000;
 
         case GET_MAXREQUESTS:
             return 3;   // Alpaca rate limit is 200 requests per minutes
@@ -602,36 +707,8 @@ namespace alpaca
             }
             break;
 
-        case GET_BROKERZONE:
         case SET_HWND:
         case GET_CALLBACK:
-            break;
-
-        case 2000:
-            if ((int)dwParameter != 0) {
-                if (!polygon) {
-                    BrokerError("Polygon ApiKey not provided");
-                    break;
-                }
-
-                if (pMarketData == polygon.get()) {
-                    break;
-                }
-                pMarketData = polygon.get();
-                BrokerError("Change to Polygon market data.");
-                s_logger->logInfo("Change to Polygon");
-            }
-            else {
-                if (!alpacaMD) {
-                    alpacaMD = std::move(std::make_unique<AlpacaMarketData>(client->headers(), client->logger()));
-                }
-                else if (pMarketData == alpacaMD.get()) {
-                    break;
-                }
-                pMarketData = alpacaMD.get();
-                BrokerError("Change to Alpaca market data.");
-                s_logger->logInfo("Change to Alpaca market data");
-            }
             break;
 
         case 2001: {

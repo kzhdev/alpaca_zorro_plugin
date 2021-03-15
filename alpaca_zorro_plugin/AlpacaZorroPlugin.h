@@ -34,4 +34,10 @@ namespace alpaca
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double* pProfit);
     DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill);
     DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter);
+
+    //// WebsocketsProxyClient functions
+    //DLLFUNC_C void onWebsocketConnected();
+    //DLLFUNC_C void onWebsocketDisconnected();
+    //DLLFUNC_C void onWebsocketError(const char* msg, int len);
+    //DLLFUNC_C void onWebsocketData(const char* msg, int len, int remainging);
 }

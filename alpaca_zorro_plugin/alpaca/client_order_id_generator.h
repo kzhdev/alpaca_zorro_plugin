@@ -18,7 +18,7 @@ namespace alpaca {
     * 
     *     ZORRO_TTTTT_YYDDDCNNNN
     *     |     |     | |  | |________ A incremental order counter [0 - 8191]
-    *     |     |     | |  |__________ A conflict count from [0 - 9]. See onConflit function for detailed information          
+    *     |     |     | |  |__________ A conflict count from [0 - 9]. See onIdConflit function for detailed information          
     *     |     |     | |_____________ Today's days of year (days since Jan 1 [0 - 365])
     *     |     |     |_______________ Years Since 2020
     *     |     |_____________________ A user specified order text, up to 31 charactors
@@ -55,10 +55,6 @@ namespace alpaca {
 
             if (GetLastError() != ERROR_ALREADY_EXISTS) {
                 own = true;
-                client.logger().logInfo("shm created\n");
-            }
-            else {
-                client.logger().logInfo("shm opened\n");
             }
 
             lpvMem_ = MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, BF_SZ);
@@ -110,7 +106,6 @@ namespace alpaca {
             else {
                 next_order_id_ = reinterpret_cast<std::atomic<NextId>*>(lpvMem_);
             }
-            //conflict_count_ = new (ptr + 64) std::atomic_uint32_t(0);
             auto next = next_order_id_->load(std::memory_order_relaxed);
             client.logger().logInfo("last_order_id_: conflit_cout=%d, id=%d\n", next.conflict_count, next.next_id);
         }
@@ -156,8 +151,9 @@ namespace alpaca {
         int32_t getBase() const noexcept {
             constexpr const uint32_t baseYear = 120;
             auto t = std::time(nullptr);
-            auto now = std::localtime(&t);
-            return (now->tm_year - baseYear) * 100000000 + now->tm_yday * 100000;
+            struct tm now;
+            localtime_s(&now, &t);
+            return (now.tm_year - baseYear) * 100000000 + now.tm_yday * 100000;
         }
 
     private:
@@ -170,7 +166,5 @@ namespace alpaca {
             NextId(int32_t id, uint32_t conflictCount) : next_id(id), conflict_count(conflictCount) {}
         };
         std::atomic<NextId>* next_order_id_ = nullptr;
-        //std::atomic_uint32_t* conflict_count_ = nullptr;
-        //std::atomic_int32_t* next_order_id_ = nullptr;
     };
 }

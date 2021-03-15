@@ -72,10 +72,25 @@
     <ClInclude Include="market_data\alpaca_market_data.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="trade.h">
+    <ClInclude Include="throttler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="throttler.h">
+    <ClInclude Include="config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\alpaca_websockets.h\Header.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="websockets\alpaca_md_ws.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="websockets\websockets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\trade.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource1.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -105,5 +120,11 @@
   <ItemGroup>
     <None Include="..\CHANGELOG" />
     <None Include="..\README.md" />
+    <None Include="..\CONTRIBUTING.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="alpaca_zorro_plugin.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

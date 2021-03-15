@@ -10,7 +10,9 @@ namespace alpaca {
         static constexpr const char* baseUrl_ = "https://api.polygon.io";
 
     public:
-        Polygon(const std::string& apiKey, Logger& logger) : apiKey_("apiKey=" + apiKey), logger_(logger) {}
+        Polygon(const std::string& apiKey, Logger& logger, bool paidPlan) : MarketData(paidPlan), apiKey_("apiKey=" + apiKey), logger_(logger) {}
+
+        const char* name() const noexcept { return "Polygon"; }
 
         Response<LastQuote> getLastQuote(const std::string& symbol) const override {
             std::stringstream url;
@@ -33,7 +35,8 @@ namespace alpaca {
             __time32_t start,
             __time32_t end,
             const int nTickMinutes = 1,
-            const uint32_t limit = 100) const override;
+            const uint32_t limit = 100,
+            int32_t price_type = 0) const override;
 
     private:
         std::string apiKey_;

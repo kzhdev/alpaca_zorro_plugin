@@ -34,7 +34,7 @@ namespace alpaca {
 		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class Polygon>::value>::type* = 0) {
 			uint64_t t;
 			parser.get<uint64_t>("t", t);
-			time = t / 1000;
+			time = static_cast<uint32_t>(t / 1000);
 			parser.get<double>("o", open_price);
 			parser.get<double>("h", high_price);
 			parser.get<double>("l", low_price);
@@ -49,21 +49,22 @@ namespace alpaca {
 		*/
 	class Bars {
 	public:
-		std::map<std::string, std::vector<Bar>> bars;
+		std::string next_page_token;
+		std::vector<Bar> bars;
 
 	private:
 		template<typename> friend class Response;
 
 		template<typename CallerT, typename T>
 		std::pair<int, std::string> fromJSON(const T& parser) {
-			for (auto symbol_bars = parser.json.MemberBegin(); symbol_bars != parser.json.MemberEnd(); symbol_bars++) {
-				bars[symbol_bars->name.GetString()] = std::vector<Bar>{};
-				for (auto& symbol_bar : symbol_bars->value.GetArray()) {
+			parser.get<std::string>("next_page_token", next_page_token);
+			if (parser.json.HasMember("bars")) {
+				for (auto& symbol_bar : parser.json["bars"].GetArray()) {
 					auto barJson = symbol_bar.GetObject();
-					Parser<decltype(symbol_bar.GetObject())> parser(barJson);
+					Parser<decltype(symbol_bar.GetObject())> p(barJson);
 					Bar bar;
-					bar.fromJSON(parser);
-					bars[symbol_bars->name.GetString()].emplace_back(std::move(bar));
+					bar.fromJSON<CallerT>(p);
+					bars.emplace_back(std::move(bar));
 				}
 			}
 			return std::make_pair(0, "OK");

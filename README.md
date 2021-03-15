@@ -6,7 +6,7 @@
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v0.2.6/AlpacaZorroPlugin_v0.2.6.zip) and place the Alpaca.dll file into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.0/AlpacaZorroPlugin_v1.0.0.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
@@ -15,7 +15,32 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
 * Enter the **API Key** in the **User ID** input box
 * Enter the **Secret Key** in the **Password** input box.
 
+## AlpacaPlugin Specific Config
+Following optional Alpaca specific configurations are added since V1.0.0. These configurations can be added in Zorro.ini or ZorroFix.ini (preferred) file.
+
+  ```text
+  AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon
+  AlpacaPaidDataPlan = 1	            // 0 = False, 1 = True
+  AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE
+  PolygonApiKey = "*************"       // Polygon ApiKey
+  ```
+
+  **AlpacaDataSource**
+  Specify to use Alpaca MaketData or Polygon MarketData. By default, Alpaca MarketData will be used.
+
+  **AlpacaPaidDataPlan**
+  Specify which Alpaca Websocket enpoint will be used.
+
+  **AlpacaLogLevel**
+  By default, ApacaPlugin log is turned off unless "diag" mode is enabled. AlpacaPlugin logging can be enabled through this config.
+
+  **PolygonApiKey**
+  The Polygon ApiKey. If AlpacaDataSource set to 1, the PolygonApiKey must be provided through this config, otherwise Alpaca MarketData will be used.
+
 ## Features
+
+* Support Alpaca MarketData V2 Websocket Real-Time Data. Multiple ZorroS instances can share one WebSocket connection through ZorroWebsocketProxy.
+**NTOE:** ZorroWebsocketProxy has a lock-free design, it spins on one CPU core. High CPU usage is normal and expected.
 
 * Support **Limit**, **Market** order types
 
@@ -77,14 +102,11 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
   brokerCommand(GET_POSITION, "AAPL");
   ```
 
-* Support [Polygon](https://polygon.io) market data (need live account)
+* Support [Polygon](https://polygon.io) market data
 
-  All Alpaca customers with live brokerage accounts can access various kinds of market data provided by Polygon. By default, the plugin uses Alpaca market data.
-  
-  **To Use Polygon:**
-  In the User input, add '_' and live account API Key behined the AlpacaAPI key, like following: **\<PaperAccountAPIKey or LiveAccountAPIKey>\_\<LiveAccountAPIKey>**
-
-  **brokerCommand(2000, int usePolygon)** can also be used to switch the data source. When usePolygon = **0**, Alpaca market data will be used. Othersise, Polygon market data will be used. Zorro retrieves historical data right after logged in. User needs aware that after switching market data source, the history data and live data are came from different source.
+  After Alpaca departured from Polygon, Alpaca ApiKey no longer works for Polygon. AlpacaZorroPlugin keeped the Polygon market data support. 
+  **NOTE:** The Polygon ApiKey is movied into Zorro config file.
+  **NOTE:** Polygon free plan can't be used as alternative market data source due to lack of last trade and last quote data.
 
 * Generate AssetList file through custom borkerCommand
   
@@ -132,6 +154,5 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
 ## TO-DO List
 
 * Add target and stop order support
-* Add streaming support to lower number of API requests. There is an issue where Alpaca currently support only 1 websocket per account. For multiple Zorro-S intances to work, AlpacaProxyAgent needs to be used.
 
 ## [To Contribute](CONTRIBUTING.md)

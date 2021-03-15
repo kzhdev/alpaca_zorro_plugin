@@ -4,21 +4,18 @@
 
 using namespace alpaca;
 
-#define TWO_DAYS_IN_SEC 172800  // Assume 8 hour an day
-#define DAY_IN_SEC 86400
-
 Response<std::vector<Bar>> Polygon::getBars(
     const std::string& symbol,
     __time32_t start,
     __time32_t end,
-    const int nTickMinutes,
-    const uint32_t limit) const {
+    int nTickMinutes,
+    uint32_t limit,
+    int32_t price_type) const {
 
     if (end == 0) {
-        end = std::time(nullptr);
+        end = static_cast<__time32_t>(std::time(nullptr));
     }
 
-    __time32_t t_start;
     auto t_end = end;
     Response<std::vector<Bar>> result;
     auto& rtBars = result.content();
@@ -31,23 +28,18 @@ Response<std::vector<Bar>> Polygon::getBars(
         url << baseUrl_ << "/v2/aggs/ticker/" << symbol << "/range/" << nTickMinutes << "/minute";
         try {
             using namespace date;
-            t_start = t_end - TWO_DAYS_IN_SEC;
-            url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ t_start } });
-            if (t_start < start) {
-                t_start = start;
-            }
-
+            url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ start } });
             url << "/" << format("%F", date::sys_seconds{ std::chrono::seconds{ t_end } });
         }
         catch (const std::exception& e) {
             assert(false);
-            return Response<std::vector<Bar>>(1, "invalid time");
+            return Response<std::vector<Bar>>(1, "invalid time. " + std::string(e.what()));
         }
         url << "?sort=desc&limit="<<limit;    // in desending order
         logger_.logDebug("--> %s\n", url.str().c_str());
         url << "&" << apiKey_;
 
-        auto response = request<std::vector<Bar>, Polygon>(url.str());
+        auto response = request<std::vector<Bar>, Polygon>(url.str(), nullptr, nullptr);
 
         if (!response) {
             BrokerError(response.what().c_str());
@@ -70,7 +62,7 @@ Response<std::vector<Bar>> Polygon::getBars(
         }
 
         // remove record passed end time
-        auto it = bars.begin();
+        auto it = bars.cbegin();
         for (; it != bars.cend();) {
             if ((__time32_t)(*it).time <= upperBound) {
                 break;
@@ -82,21 +74,21 @@ Response<std::vector<Bar>> Polygon::getBars(
             bars.erase(bars.cbegin(), it);
         }
 
+        if (bars.empty()) {
+            break;
+        }
+
         rtBars.insert(rtBars.end(), bars.begin(), bars.end());
         if (!rtBars.empty()) {
             upperBound = rtBars.back().time - 1;
         }
-        else {
-            upperBound = t_start;
-        }
-        t_end = t_start - DAY_IN_SEC;
-    } while (rtBars.size() < limit && t_start > start);
+    } while (rtBars.size() < limit);
 
     // remove order older than start
     auto it = rtBars.end();
     while (it != rtBars.begin()) {
         --it;
-        if ((*it).time >= start) {
+        if ((*it).time >= (uint32_t)start) {
             break;
         }
 

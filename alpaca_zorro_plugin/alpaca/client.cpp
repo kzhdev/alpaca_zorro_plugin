@@ -31,27 +31,28 @@ namespace alpaca {
         , apiKey_(std::move(key))
         , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + apiKey_ + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
         , isLiveMode_(!isPaperTrading)
+        , logger_("alpaca")
     {
         s_orderIdGen = std::make_unique<ClientOrderIdGenerator>(*this);
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account, Client>(baseUrl_ + "/v2/account", headers_);
+        return request<Account, Client>(baseUrl_ + "/v2/account", headers_.c_str());
     }
 
     Response<Clock> Client::getClock() const {
-        auto rt = request<Clock, Client>(baseUrl_ + "/v2/clock", headers_);
+        auto rt = request<Clock, Client>(baseUrl_ + "/v2/clock", headers_.c_str());
         is_open_ = rt.content().is_open;
         return rt;
     }
 
     Response<std::vector<Asset>> Client::getAssets() const {
         logger_.logDebug("%s/v2/assets\n", baseUrl_.c_str());
-        return request<std::vector<Asset>, Client>(baseUrl_ + "/v2/assets", headers_);
+        return request<std::vector<Asset>, Client>(baseUrl_ + "/v2/assets", headers_.c_str());
     }
 
     Response<Asset> Client::getAsset(const std::string& symbol) const {
-        return request<Asset, Client>(baseUrl_ + "/v2/assets/" + symbol, headers_);
+        return request<Asset, Client>(baseUrl_ + "/v2/assets/" + symbol, headers_.c_str());
     }
 
     Response<std::vector<Order>> Client::getOrders(
@@ -92,7 +93,7 @@ namespace alpaca {
             url << queries[i];
         }
         logger_.logDebug("--> %s\n", url.str().c_str());
-        return request<std::vector<Order>, Client>(url.str(), headers_);
+        return request<std::vector<Order>, Client>(url.str(), headers_.c_str());
     }
 
     Response<Order> Client::getOrder(const std::string& id, const bool nested, const bool logResponse) const {
@@ -103,13 +104,13 @@ namespace alpaca {
 
         Response<Order> response;
         if (logResponse) {
-            return request<Order, Client>(url, headers_, nullptr, &logger_);
+            return request<Order, Client>(url, headers_.c_str(), nullptr, &logger_);
         }
-        return request<Order, Client>(url, headers_);
+        return request<Order, Client>(url, headers_.c_str());
     }
 
     Response<Order> Client::getOrderByClientOrderId(const std::string& clientOrderId) const {
-        return request<Order, Client>(baseUrl_ + "/v2/orders:by_client_order_id?client_order_id=" + clientOrderId, headers_);
+        return request<Order, Client>(baseUrl_ + "/v2/orders:by_client_order_id?client_order_id=" + clientOrderId, headers_.c_str());
     }
 
     Response<Order> Client::submitOrder(
@@ -222,7 +223,7 @@ namespace alpaca {
             if (data) {
                 logger_.logTrace("Data:\n%s\n", data);
             }
-            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_, data, &logger_);
+            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_.c_str(), data, &logger_);
             if (!response && response.what() == "client_order_id must be unique") {
                 // clinet order id has been used.
                 // increment conflict count and try again.
@@ -286,12 +287,12 @@ namespace alpaca {
 
         logger_.logDebug("--> %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
         logger_.logTrace("Data:\n%s\n", body.c_str());
-        return request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_, body.c_str(), &logger_);
+        return request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), body.c_str(), &logger_);
     }
 
     Response<Order> Client::cancelOrder(const std::string& id) const {
         logger_.logDebug("--> DELETE %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
-        auto response = request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_, "#DELETE", &logger_);
+        auto response = request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), "#DELETE", &logger_);
         if (!response) {
             // Alpaca cancelOrder not return a object
             Order* order;
@@ -311,6 +312,6 @@ namespace alpaca {
     }
 
     Response<Position> Client::getPosition(const std::string& symbol) const {
-        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_, nullptr, &logger_);
+        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_.c_str(), nullptr, &logger_);
     }
 } // namespace alpaca

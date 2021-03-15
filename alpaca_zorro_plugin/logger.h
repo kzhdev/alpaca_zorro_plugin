@@ -19,9 +19,16 @@ namespace alpaca {
         L_TRACE2,
     };
 
+    static constexpr char* to_string(LogLevel level) {
+        constexpr char* s_levels[] = {
+            "OFF", "ERROR", "WARNING", "INFO", "DEBUG", "TRACE", "TRACE2"
+        };
+        return s_levels[level];
+    }
+
     class Logger {
     public:
-        Logger() {
+        Logger(std::string&& name) : name_(std::move(name)) {
 #ifdef _DEBUG
             setLevel(LogLevel::L_TRACE);
 #endif
@@ -48,52 +55,65 @@ namespace alpaca {
 
         template<typename ... Args>
         void logInfo(const char* format, Args... args) {
-            if (level_ >= LogLevel::L_INFO) {
-                log("INFO", format, std::forward<Args>(args)...);
-            }
+            log(LogLevel::L_INFO, format, std::forward<Args>(args)...);
         }
 
         template<typename ... Args>
         void logDebug(const char* format, Args... args) {
-            if (level_ >= LogLevel::L_DEBUG) {
-                log("DEBUG", format, std::forward<Args>(args)...);
-            }
+            log(LogLevel::L_DEBUG, format, std::forward<Args>(args)...);
         }
 
         template<typename ... Args>
         void logWarning(const char* format, Args... args) {
-            if (level_ >= LogLevel::L_WARNING) {
-                log("WARN", format, std::forward<Args>(args)...);
-            }
+            log(LogLevel::L_DEBUG, format, std::forward<Args>(args)...);
         }
 
         template<typename ... Args>
         void logError(const char* format, Args... args) {
-            if (level_ >= LogLevel::L_ERROR) {
-                log("ERROR", format, std::forward<Args>(args)...);
-            }
+            log(LogLevel::L_ERROR, format, std::forward<Args>(args)...);
         }
 
         template<typename ... Args>
         void logTrace(const char* format, Args... args) {
-            if (level_ >= LogLevel::L_TRACE) {
-                log("TRACE", format, std::forward<Args>(args)...);
-            }
+            log(LogLevel::L_TRACE, format, std::forward<Args>(args)...);
         }
 
         template<typename ... Args>
         void logTrace2(const char* format, Args... args) {
-            if (level_ >= LogLevel::L_TRACE2) {
-                log("TRACE2", format, std::forward<Args>(args)...);
+            log(LogLevel::L_TRACE2, format, std::forward<Args>(args)...);
+        }
+
+        template<typename ... Args>
+        void logDiag(const char* format, Args... args) {
+#ifdef  _DEBUG
+            log(LogLevel::L_DEBUG, format, std::forward<Args>(args)...);
+#endif //  _DEBUG
+        }
+
+
+        template<typename ... Args>
+        inline void log(LogLevel level, const char* format, Args... args) {
+            if (level_ >= level) {
+                std::time_t t = std::time(nullptr);
+                struct tm _tm;
+                localtime_s(&_tm, &t);
+                char buf[25];
+                std::strftime(buf, sizeof(buf), "%F %T", &_tm);
+
+                fprintf(log_, "%s | %s | ", buf, to_string(level));
+                fprintf(log_, format, std::forward<Args>(args)...);
+                fflush(log_);
             }
         }
 
     private:
         void open_log() {
             std::time_t t = std::time(nullptr);
+            struct tm _tm;
+            localtime_s(&_tm, &t);
             char buf[25];
-            std::strftime(buf, sizeof(buf), "%F_%H%M%S", std::localtime(&t));
-            std::string log_file = "./Log/alpaca_" + std::string(buf) + ".log";
+            std::strftime(buf, sizeof(buf), "%F_%H%M%S", &_tm);
+            std::string log_file = "./Log/" + name_ + "_" + std::string(buf) + ".log";
             log_ = fopen(log_file.c_str(), "w");
 
             if (!log_) {
@@ -102,18 +122,8 @@ namespace alpaca {
             }
         }
 
-        template<typename ... Args>
-        void log(const char* level, const char* format, Args... args) {
-            std::time_t t = std::time(nullptr);
-            char buf[25];
-            std::strftime(buf, sizeof(buf), "%F %T", std::localtime(&t));
-
-            fprintf(log_, "%s | %s | ", buf, level);
-            fprintf(log_, format, std::forward<Args>(args)...);
-            fflush(log_);
-        }
-
     private:
+        std::string name_;
         FILE* log_  = nullptr;
 #ifdef _DEBUG
         LogLevel level_ = LogLevel::L_DEBUG;
