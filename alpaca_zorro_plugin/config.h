@@ -46,7 +46,7 @@ namespace alpaca {
             while (getline(config, line)) {
                 getConfig(line, ConfigFound::DataSource, "AlpacaDataSource", dataSource);
                 getConfig(line, ConfigFound::PaidPlan,  "AlpacaPaidDataPlan", alpacaPaidPlan);
-                getConfig(line, ConfigFound::LogLevel, "AlpacaLevelLevel", logLevel);
+                getConfig(line, ConfigFound::LogLevel, "AlpacaLogLevel", logLevel);
                 getConfig(line, ConfigFound::PolygonApiKey, "PolygonApiKey", polygonApiKey);
                 getConfig(line, ConfigFound::FillDelayedDataWithPolygon, "AlpacaFillDelayedDataWithPolygon", fillDelayedDataWithPolygon);
             }
