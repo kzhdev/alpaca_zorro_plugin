@@ -156,7 +156,3 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 * Add target and stop order support
 
 ## [To Contribute](CONTRIBUTING.md)
-
----
-
-Thanks to [JetBrains](https://www.jetbrains.com/?from=spdlog) for donating product licenses to help develop **AlpacaZorroPlugin** <a href="https://www.jetbrains.com/?from=alpaca_zorro_plugin"><img src="logos/jetbrains-variant-4.svg" width="94" align="center" /></a>
