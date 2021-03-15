@@ -91,6 +91,7 @@ namespace alpaca
 
         client = std::make_unique<Client>(User, Pwd, isPaperTrading);
         s_logger = &client->logger();
+        s_logger->setLevel(static_cast<LogLevel>(config.logLevel));
 
         alpacaMD = std::make_unique<AlpacaMarketData>(client->headers(), client->logger(), config.alpacaPaidPlan);
 
