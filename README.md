@@ -156,3 +156,7 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 * Add target and stop order support
 
 ## [Build From Source](BUILD.md)
+
+---
+
+Thanks to [JetBrains](https://jb.gg/OpenSource/?from=alpaca_zorro_plugin) for donating product licenses to help develop **AlpacaZorroPlugin**
