@@ -67,7 +67,7 @@ namespace alpaca {
         bool open() {
             status_ = Status::CONNECTING;
             logger_->logInfo("Open Alpaca MD Websocket...\n");
-            auto result = openWs(url_);
+            auto result = openWebSocket(url_);
             if (result.first) {
                 if (!result.second) {
                     // WS already openeda
@@ -88,7 +88,7 @@ namespace alpaca {
                     return;
                 }
 
-                BrokerError("Websocket proxy reopened.");
+                BrokerError("Websocket reopened.");
                 for (auto& kvp : subscriptions_reader_) {
                     subscribe(kvp.first, true);
                 }
@@ -98,7 +98,7 @@ namespace alpaca {
         void logout() {
             logger_->logInfo("Logout\n");
             unsubscribe();
-            closeWs(id_.load(std::memory_order_relaxed));
+            closeWebSocket(id_.load(std::memory_order_relaxed));
             status_ = Status::LOGOUT;
         }
 
@@ -146,6 +146,7 @@ namespace alpaca {
         Trade* getLastTrade(const std::string& asset) {
             if (status_ == Status::DISCONNECTED) {
                 reopen();
+                return nullptr;
             }
 
             auto it = subscriptions_reader_.find(asset);
@@ -167,6 +168,7 @@ namespace alpaca {
         Quote* getLastQuote(const std::string& asset) {
             if (status_ == Status::DISCONNECTED) {
                 reopen();
+                return nullptr;
             }
 
             auto it = subscriptions_reader_.find(asset);
@@ -276,7 +278,7 @@ namespace alpaca {
             }
             ++error_count_;
             if (error_count_ > 10) {
-                closeWs(id);
+                closeWebSocket(id);
                 status_ = Status::DISCONNECTED;
             }
         }
@@ -320,7 +322,7 @@ namespace alpaca {
 
                                 ++error_count_;
                                 if (error_count_ > 10) {
-                                    closeWs(id);
+                                    closeWebSocket(id);
                                     MemoryBarrier();
                                     status_ = Status::DISCONNECTED;
                                 }
@@ -380,9 +382,9 @@ namespace alpaca {
                     }
                 }
 
-                if (logger_) {
-                    logger_->logTrace("%s\n", ss_.str().c_str());
-                }
+                //if (logger_) {
+                //    logger_->logTrace("%s\n", ss_.str().c_str());
+                //}
 
                 // reset message
                 ss_.str("");

@@ -29,7 +29,7 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
   Specify to use Alpaca MaketData or Polygon MarketData. By default, Alpaca MarketData will be used.
 
   **AlpacaPaidDataPlan**
-  Specify which Alpaca Websocket enpoint will be used.
+  Specify which Alpaca Websocket enpoint will be used. By default, paid data plan will be used.
 
   **AlpacaLogLevel**
   By default, ApacaPlugin log is turned off unless "diag" mode is enabled. AlpacaPlugin logging can be enabled through this config.

@@ -25,8 +25,7 @@ namespace alpaca {
         std::string polygonApiKey;
         uint8_t dataSource = 0;
         uint8_t logLevel = 0;
-        bool alpacaPaidPlan = false;
-        bool fillDelayedDataWithPolygon = 0;
+        bool alpacaPaidPlan = true;
 
         void init() {
             if (!readConfig("./ZorroFix.ini")) {
@@ -48,7 +47,6 @@ namespace alpaca {
                 getConfig(line, ConfigFound::PaidPlan,  "AlpacaPaidDataPlan", alpacaPaidPlan);
                 getConfig(line, ConfigFound::LogLevel, "AlpacaLogLevel", logLevel);
                 getConfig(line, ConfigFound::PolygonApiKey, "PolygonApiKey", polygonApiKey);
-                getConfig(line, ConfigFound::FillDelayedDataWithPolygon, "AlpacaFillDelayedDataWithPolygon", fillDelayedDataWithPolygon);
             }
 
             return configFound_.all();
@@ -58,10 +56,6 @@ namespace alpaca {
         inline void getConfig(std::string& line, uint8_t foundFlag, const char* configName, T& value) {
             ltrim(line);
             if (line.find("//") == 0) {
-                return;
-            }
-
-            if (configFound_.test(foundFlag)) {
                 return;
             }
 
@@ -91,8 +85,6 @@ namespace alpaca {
             value = v;
             // remove ""
             value.erase(std::remove(value.begin(), value.end(), '"'), value.end());
-            //value = value.substr(1);
-            //value = value.substr(0, value.size() - 1);
         }
 
         template<typename T>
@@ -103,9 +95,8 @@ namespace alpaca {
             DataSource,
             PaidPlan,
             PolygonApiKey,
-            FillDelayedDataWithPolygon,
             LogLevel,
         };
-        std::bitset<8> configFound_ = 0;
+        std::bitset<4> configFound_ = 0;
     };
 }

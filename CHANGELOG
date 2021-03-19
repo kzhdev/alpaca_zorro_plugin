@@ -1,4 +1,10 @@
-V1.0.0
+v1.0.1
+- Fix sometimes server heartbeat timeout after the first strategy launching proxy server
+- Shutdown proxy server 10 seconds after last strategy logout.
+- Start client worker thread on strategy login. Stop client worker thread on strategy logout.
+- GET_LOCK broker command returns 1 now.
+
+v1.0.0
 - Introduced ZorroWebsocketProxy so that multiple ZorroS instances can share one Websocket connection
   **NOTE** ZorroWebsocketProxy adopts a lock-free design which spins on one CPU core. High CPU usage is normal and expected.
 

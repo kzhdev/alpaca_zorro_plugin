@@ -54,7 +54,7 @@ namespace alpaca
     std::unique_ptr<Polygon> polygon = nullptr;
     std::unique_ptr<AlpacaMdWs> wsClient = nullptr;
     MarketData* pMarketData = nullptr;
-
+    
     ////////////////////////////////////////////////////////////////
     DLLFUNC_C int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress)
     {
@@ -72,7 +72,6 @@ namespace alpaca
         (FARPROC&)http_free = fpFree;
 
         config.init();
-        wsClient = std::make_unique<AlpacaMdWs>();
     }
 
     DLLFUNC_C int BrokerLogin(char* User, char* Pwd, char* Type, char* Account)
@@ -81,6 +80,7 @@ namespace alpaca
         {
             if (wsClient) {
                 wsClient->logout();
+                wsClient.reset();
             }
             alpaca_md_ws_id = 0;
             pMarketData = nullptr;
@@ -117,12 +117,10 @@ namespace alpaca
         //attempt login
 
         if (!config.dataSource) {
-            if (!wsClient) {
-                wsClient = std::make_unique<AlpacaMdWs>();
-            }
+            wsClient = std::make_unique<AlpacaMdWs>();
             if (!wsClient->login(s_logger, User, Pwd, config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
-                BrokerError("Unable to open Alpaca websocket.");
-                return 0;
+                BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
+                //return 0;
             }
         }
 
@@ -296,24 +294,24 @@ namespace alpaca
             s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
             auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             if ((now - end) <= 900) {
-                if (config.fillDelayedDataWithPolygon && polygon) {
-                    // Fill missed delay data from Polygon
-                    s_logger->logInfo("Fill 15 minutes delay data with polygon\n", Asset, start, end, nTickMinutes, std::max<int>((30 / nTickMinutes), 1));
-                    auto response = polygon->getBars(Asset, start, end, nTickMinutes, nTicks);
-                    if (response) {
-                        populateTicks(response.content());
-                        if (!response.content().empty()) {
-                            end = response.content()[0].time - 30;
-                        }
-                        else {
-                            end = static_cast<__time32_t>(now) - 900;
-                        }
-                    }
-                }
-                else {
+                //if (config.fillDelayedDataWithPolygon && polygon) {
+                //    // Fill missed delay data from Polygon
+                //    s_logger->logInfo("Fill 15 minutes delay data with polygon\n", Asset, start, end, nTickMinutes, std::max<int>((30 / nTickMinutes), 1));
+                //    auto response = polygon->getBars(Asset, start, end, nTickMinutes, nTicks);
+                //    if (response) {
+                //        populateTicks(response.content());
+                //        if (!response.content().empty()) {
+                //            end = response.content()[0].time - 30;
+                //        }
+                //        else {
+                //            end = static_cast<__time32_t>(now) - 900;
+                //        }
+                //    }
+                //}
+                //else {
                     end = static_cast<__time32_t>(now) - 900;
-                    s_logger->logInfo("Adjust end to %d\n", end);
-                }
+                    s_logger->logInfo("Alpaca Basic Plan. Adjust end to %d\n", end);
+                //}
             }
         }
 
@@ -639,7 +637,7 @@ namespace alpaca
             return 3;   // Alpaca rate limit is 200 requests per minutes
 
         case GET_LOCK:
-            return -1;
+            return 1;
 
         case GET_POSITION:
             return getPosition((char*)dwParameter);
