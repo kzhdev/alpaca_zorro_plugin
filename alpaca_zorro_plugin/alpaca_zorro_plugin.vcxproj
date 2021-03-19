@@ -136,7 +136,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\CHANGELOG" />
-    <None Include="..\CONTRIBUTING.md" />
+    <None Include="..\BUILD.md" />
     <None Include="..\README.md" />
   </ItemGroup>
   <ItemGroup>

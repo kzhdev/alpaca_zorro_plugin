@@ -155,4 +155,4 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 
 * Add target and stop order support
 
-## [To Contribute](CONTRIBUTING.md)
+## [Build From Source](BUILD.md)

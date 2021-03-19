@@ -120,7 +120,7 @@
   <ItemGroup>
     <None Include="..\CHANGELOG" />
     <None Include="..\README.md" />
-    <None Include="..\CONTRIBUTING.md" />
+    <None Include="..\BUILD.md" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="alpaca_zorro_plugin.rc">
