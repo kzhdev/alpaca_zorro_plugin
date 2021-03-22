@@ -157,6 +157,11 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 
 ## [Build From Source](BUILD.md)
 
+## Bug Report
+
+If you find any issue or have any suggestion, please report in GitHub [issues](https://github.com/kzhdev/alpaca_zorro_plugin/issues).
+
+
 ---
 
 Thanks to [JetBrains](https://jb.gg/OpenSource/?from=alpaca_zorro_plugin) for donating product licenses to help develop **AlpacaZorroPlugin**
