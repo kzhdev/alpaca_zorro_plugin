@@ -20,7 +20,7 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 
   ```text
   AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon
-  AlpacaPaidDataPlan = 1	            // 0 = False, 1 = True
+  AlpacaPaidDataPlan = 1	              // 0 = False, 1 = True
   AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE
   PolygonApiKey = "*************"       // Polygon ApiKey
   ```
