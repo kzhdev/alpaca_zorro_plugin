@@ -87,6 +87,10 @@ namespace alpaca
             return 0;
         }
 
+        s_tif = TimeInForce::FOK;
+        s_nextOrderText = "";
+        s_priceType = 0;
+
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
 
         client = std::make_unique<Client>(User, Pwd, isPaperTrading);
@@ -172,7 +176,7 @@ namespace alpaca
                 return 1;
             }
 
-            if (wsClient->subscribe(Asset)) {
+            if (wsClient->subscribeAsset(Asset)) {
                 s_logger->logDebug("%s subscribed\n", Asset);
                 return 1;
             }

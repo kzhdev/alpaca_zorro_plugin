@@ -90,19 +90,19 @@ namespace alpaca {
 
                 BrokerError("Websocket reopened.");
                 for (auto& kvp : subscriptions_reader_) {
-                    subscribe(kvp.first, true);
+                    subscribeAsset(kvp.first, true);
                 }
             }
         }
 
         void logout() {
             logger_->logInfo("Logout\n");
-            unsubscribe();
+            unsubscribeAll();
             closeWebSocket(id_.load(std::memory_order_relaxed));
             status_ = Status::LOGOUT;
         }
 
-        bool subscribe(const std::string& asset, bool force = false) {
+        bool subscribeAsset(const std::string& asset, bool force = false) {
             if (status_ < Status::AUTHENTICATED) {
                 return false;
             }
@@ -132,7 +132,17 @@ namespace alpaca {
             status_ = Status::SUBSCRIBING;
             auto id = id_.load(std::memory_order_relaxed);
             logger_->logInfo("Subscribe %s, id=%d\n", asset.c_str(), id);
-            send(id, data, s.GetSize());
+
+            bool existing = false;
+            if (!subscribe(id, asset, data, s.GetSize(), existing)) {
+                return false;
+            }
+            if (existing) {
+                status_ = Status::SUBSCRIBED;
+                subscriptions_reader_.emplace(asset, std::make_shared<Subscription>());
+                pending_subscription_ = "";
+                return true;
+            }
             waitForWsReadyOrError(Status::SUBSCRIBED);
             auto b = status_ == Status::SUBSCRIBED;
             if (b) {
@@ -200,44 +210,35 @@ namespace alpaca {
             }
         }
 
-        void unsubscribe() {
-            // Other Zorro instances might still need the instrument
-            // can't unsubscribe the instrument blindly
+        void unsubscribeAll() {
             if (status_ < Status::AUTHENTICATED) {
                 return;
             }
 
+            logger_->logInfo("Unsubscribe all Assets\n");
+            status_ = Status::UNSUBSCRIBING;
+            for (auto& kvp : subscriptions_reader_) {
+                rapidjson::StringBuffer s;
+                rapidjson::Writer<rapidjson::StringBuffer> writer(s);
+                writer.StartObject();
+                writer.Key("action");
+                writer.String("unsubscribe");
+
+                writer.Key("trades");
+                writer.StartArray();
+                writer.String(kvp.first.c_str());
+                writer.EndArray();
+                writer.Key("quotes");
+                writer.StartArray();
+                writer.String(kvp.first.c_str());
+                writer.EndArray();
+                writer.EndObject();
+                auto data = s.GetString();
+
+                unsubscribe(id_.load(std::memory_order_relaxed), kvp.first, data, s.GetSize());
+            }
+            status_ = Status::UNSUBSCRIBED;
             subscriptions_reader_.clear();
-            return;
-
-            //TODO: Need to unsubscribe properly
-
-            //rapidjson::StringBuffer s;
-            //rapidjson::Writer<rapidjson::StringBuffer> writer(s);
-            //writer.StartObject();
-            //writer.Key("action");
-            //writer.String("unsubscribe");
-
-            //writer.Key("trades");
-            //writer.StartArray();
-            //for (auto& kvp : subscriptions_reader_) {
-            //    writer.String(kvp.first.c_str());
-            //}
-            //writer.EndArray();
-            //writer.Key("quotes");
-            //writer.StartArray();
-            //for (auto& kvp : subscriptions_reader_) {
-            //    writer.String(kvp.first.c_str());
-            //}
-            //writer.EndArray();
-            //writer.EndObject();
-            //auto data = s.GetString();
-
-            //status_ = Status::UNSUBSCRIBING;
-            //logger_->logInfo("Unsubscribe all Assets\n");
-            //send(id_, data, s.GetSize());
-            //waitForWsReadyOrError(Status::UNSUBSCRIBED);
-            //subscriptions_reader_.clear();
         }
 
 
@@ -360,11 +361,12 @@ namespace alpaca {
                                         status_ = Status::NOT_SUBSCRIBED;
                                     }
                                 }
-                                else if (status_ == Status::UNSUBSCRIBING &&
-                                         ss_.str() == "[{\"T\":\"subscription\",\"trades\":[],\"quotes\":[],\"bars\":[]}]") {
-                                    status_ = Status::UNSUBSCRIBED;
+                                else /*if (status_ == Status::UNSUBSCRIBING &&
+                                         ss_.str() == "[{\"T\":\"subscription\",\"trades\":[],\"quotes\":[],\"bars\":[]}]")*/ {
+                                    //status_ = Status::UNSUBSCRIBED;
                                     if (logger_) {
-                                        logger_->logInfo("Unsubscribed.\n");
+                                        //logger_->logInfo("Unsubscribed.\n");
+                                        logger_->logTrace("%s\n", ss_.str().c_str());
                                     }
                                 }
                             }
@@ -382,9 +384,9 @@ namespace alpaca {
                     }
                 }
 
-                //if (logger_) {
-                //    logger_->logTrace("%s\n", ss_.str().c_str());
-                //}
+                if (logger_) {
+                    logger_->logTrace("%s\n", ss_.str().c_str());
+                }
 
                 // reset message
                 ss_.str("");
