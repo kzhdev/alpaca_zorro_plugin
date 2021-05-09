@@ -39,7 +39,6 @@ namespace {
     TimeInForce s_tif = TimeInForce::FOK;
     std::string s_asset;
     int s_multiplier = 1;
-    Logger* s_logger = nullptr;
     std::string s_nextOrderText;
     int s_priceType = 0;
     std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
@@ -72,6 +71,7 @@ namespace alpaca
         (FARPROC&)http_free = fpFree;
 
         config.init();
+        wsClient = std::make_unique<AlpacaMdWs>();
     }
 
     DLLFUNC_C int BrokerLogin(char* User, char* Pwd, char* Type, char* Account)
@@ -80,7 +80,7 @@ namespace alpaca
         {
             if (wsClient) {
                 wsClient->logout();
-                wsClient.reset();
+                //wsClient.reset();
             }
             alpaca_md_ws_id = 0;
             pMarketData = nullptr;
@@ -90,24 +90,24 @@ namespace alpaca
         s_tif = TimeInForce::FOK;
         s_nextOrderText = "";
         s_priceType = 0;
+        Logger::instance().init("Alpaca");
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
 
         client = std::make_unique<Client>(User, Pwd, isPaperTrading);
-        s_logger = &client->logger();
-        s_logger->setLevel(static_cast<LogLevel>(config.logLevel));
+        Logger::instance().setLevel(static_cast<LogLevel>(config.logLevel));
 
-        alpacaMD = std::make_unique<AlpacaMarketData>(client->headers(), client->logger(), config.alpacaPaidPlan);
+        alpacaMD = std::make_unique<AlpacaMarketData>(client->headers(), config.alpacaPaidPlan);
 
         if (!config.polygonApiKey.empty()) {
-            polygon = std::make_unique<Polygon>(config.polygonApiKey, client->logger(), true);
+            polygon = std::make_unique<Polygon>(config.polygonApiKey, true);
         } 
 
         if (config.dataSource == 1) {
             if (polygon) {
                 pMarketData = polygon.get();
                 BrokerError("Use Polygon market data");
-                s_logger->logInfo("Use Polygon market data\n");
+                LOG_INFO("Use Polygon market data\n");
             }
         }
 
@@ -115,14 +115,14 @@ namespace alpaca
             pMarketData = alpacaMD.get();
             config.dataSource = 0;
             BrokerError("Use Alpaca market data");
-            s_logger->logInfo("Use Alpaca market data\n");
+            LOG_INFO("Use Alpaca market data\n");
         }
 
         //attempt login
 
         if (!config.dataSource) {
-            wsClient = std::make_unique<AlpacaMdWs>();
-            if (!wsClient->login(s_logger, User, Pwd, config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
+            /*wsClient = std::make_unique<AlpacaMdWs>();*/
+            if (!wsClient->login(User, Pwd, config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
                 BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
                 //return 0;
             }
@@ -177,7 +177,7 @@ namespace alpaca
             }
 
             if (wsClient->subscribeAsset(Asset)) {
-                s_logger->logDebug("%s subscribed\n", Asset);
+                LOG_DEBUG("%s subscribed\n", Asset);
                 return 1;
             }
             return 0;
@@ -295,7 +295,7 @@ namespace alpaca
         };
 
         if (config.dataSource == 0 && !config.alpacaPaidPlan) {
-            s_logger->logDebug("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+            LOG_DEBUG("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
             auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             if ((now - end) <= 900) {
                 //if (config.fillDelayedDataWithPolygon && polygon) {
@@ -314,13 +314,13 @@ namespace alpaca
                 //}
                 //else {
                     end = static_cast<__time32_t>(now) - 900;
-                    s_logger->logInfo("Alpaca Basic Plan. Adjust end to %d\n", end);
+                    LOG_INFO("Alpaca Basic Plan. Adjust end to %d\n", end);
                 //}
             }
         }
 
         while(true) {
-            s_logger->logDebug("BorkerHisotry %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
+            LOG_DEBUG("BorkerHisotry %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
 
             auto response = pMarketData->getBars(Asset, start, end, nTickMinutes, nTicks, s_priceType);
             if (!response) {
@@ -341,10 +341,10 @@ namespace alpaca
                 return barsDownloaded;
             }
 
-            s_logger->logDiag("%d bar downloaded\n", bars.size());
+            LOG_DIAG("%d bar downloaded. %s-%s\n", bars.size(), (bars.size() > 0 ? bars[0].time_string.c_str() : ""), (bars.size() > 0 ? (*bars.rbegin()).time_string.c_str() : ""));
 
             populateTicks(bars);
-            s_logger->logDiag("%d bar returned\n", barsDownloaded);
+            LOG_DIAG("%d bar returned\n", barsDownloaded);
             break;
         }
         return barsDownloaded;
@@ -385,7 +385,7 @@ namespace alpaca
 
         }
 
-        s_logger->logDebug("BrokerBuy2 %s orderText=%s nAmount=%d dStopDist=%f limit=%f\n", Asset, s_nextOrderText.c_str(), nAmount, dStopDist, dLimit);
+        LOG_DEBUG("BrokerBuy2 %s orderText=%s nAmount=%d dStopDist=%f limit=%f\n", Asset, s_nextOrderText.c_str(), nAmount, dStopDist, dLimit);
 
         auto response = client->submitOrder(Asset, std::abs(nAmount), side, type, s_tif, limit, stop, false, s_nextOrderText);
         if (!response) {
@@ -447,7 +447,7 @@ namespace alpaca
     }
 
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
-        s_logger->logInfo("BrokerTrade: %d\n", nTradeID);
+        LOG_INFO("BrokerTrade: %d\n", nTradeID);
        /* if (nTradeID != -1) {
             BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
             return NAY;
@@ -496,7 +496,7 @@ namespace alpaca
     }
 
     DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
-        s_logger->logDebug("BrokerSell2 nTradeID=%d nAmount=%d limit=%f\n", nTradeID,nAmount, Limit);
+        LOG_DEBUG("BrokerSell2 nTradeID=%d nAmount=%d limit=%f\n", nTradeID,nAmount, Limit);
 
         auto iter = s_mapOrderByClientOrderId.find(nTradeID);
         if (iter == s_mapOrderByClientOrderId.end()) {
@@ -575,7 +575,7 @@ namespace alpaca
     void downloadAssets(char* symbols) {
         FILE* f;
         if (fopen_s(&f, "./Log/AssetsAlpaca.csv", "w+")) {
-            s_logger->logError("Failed to open ./Log/AssetsAlpaca file\n");
+            LOG_ERROR("Failed to open ./Log/AssetsAlpaca file\n");
             return;
         }
 
@@ -616,7 +616,7 @@ namespace alpaca
         
         fflush(f);
         fclose(f);
-        s_logger->logDebug("close file\n");
+        LOG_DEBUG("close file\n");
     }
     
     DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter)
@@ -648,7 +648,7 @@ namespace alpaca
 
         case SET_ORDERTEXT:
             s_nextOrderText = (char*)dwParameter;
-            client->logger().logDebug("SET_ORDERTEXT: %s\n", s_nextOrderText.c_str());
+            LOG_DEBUG("SET_ORDERTEXT: %s\n", s_nextOrderText.c_str());
             return dwParameter;
 
         case SET_SYMBOL:
@@ -688,7 +688,7 @@ namespace alpaca
                 return (int)dwParameter;
             }
 
-            s_logger->logDebug("SET_ORDERTYPE: %d s_tif=%s\n", (int)dwParameter, to_string(s_tif));
+            LOG_DEBUG("SET_ORDERTYPE: %d s_tif=%s\n", (int)dwParameter, to_string(s_tif));
             return tifToZorroOrderType(s_tif);
         }
 
@@ -697,7 +697,7 @@ namespace alpaca
 
         case SET_PRICETYPE:
             s_priceType = (int)dwParameter;
-            s_logger->logDebug("SET_PRICETYPE: %d\n", s_priceType);
+            LOG_DEBUG("SET_PRICETYPE: %d\n", s_priceType);
             return dwParameter;
 
         case GET_VOLTYPE:
@@ -705,7 +705,7 @@ namespace alpaca
 
         case SET_DIAGNOSTICS:
             if ((int)dwParameter == 1 || (int)dwParameter == 0) {
-                client->logger().setLevel((int)dwParameter ? LogLevel::L_DEBUG : LogLevel::L_OFF);
+                Logger::instance().setLevel((int)dwParameter ? LogLevel::L_DEBUG : LogLevel::L_OFF);
                 return dwParameter;
             }
             break;
@@ -721,7 +721,7 @@ namespace alpaca
             
 
         default:
-            s_logger->logDebug("Unhandled command: %d %lu\n", Command, dwParameter);
+            LOG_DEBUG("Unhandled command: %d %lu\n", Command, dwParameter);
             break;
         }
         return 0;

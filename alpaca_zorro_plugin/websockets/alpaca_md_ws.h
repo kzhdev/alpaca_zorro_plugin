@@ -24,7 +24,6 @@ namespace alpaca {
             UNSUBSCRIBED,
             LOGOUT,
         };
-        Logger* logger_ = nullptr;
         std::atomic_uint_fast32_t id_{ 0 };
         volatile Status status_{ Status::DISCONNECTED };
         std::stringstream ss_;
@@ -51,10 +50,9 @@ namespace alpaca {
         {}
         ~AlpacaMdWs() override = default;
 
-        bool login(Logger* logger, std::string key, std::string secret, const std::string& url) noexcept {
-            logger_ = logger;
+        bool login(std::string key, std::string secret, const std::string& url) noexcept {
             auto log_func = [this](zorro::websocket::LogLevel level, const std::string& msg) { 
-                logger_->log(static_cast<alpaca::LogLevel>(level), "%s\n", msg.c_str()); 
+                _LOG(static_cast<alpaca::LogLevel>(level), "%s\n", msg.c_str()); 
             };
             // pass logger to WebsocketProxyClient
             setLogger(log_func);
@@ -66,7 +64,7 @@ namespace alpaca {
 
         bool open() {
             status_ = Status::CONNECTING;
-            logger_->logInfo("Open Alpaca MD Websocket...\n");
+            LOG_INFO("Open Alpaca MD Websocket...\n");
             auto result = openWebSocket(url_);
             if (result.first) {
                 if (!result.second) {
@@ -96,7 +94,7 @@ namespace alpaca {
         }
 
         void logout() {
-            logger_->logInfo("Logout\n");
+            LOG_INFO("Logout\n");
             unsubscribeAll();
             closeWebSocket(id_.load(std::memory_order_relaxed));
             status_ = Status::LOGOUT;
@@ -131,7 +129,7 @@ namespace alpaca {
             subscribed_.reset();
             status_ = Status::SUBSCRIBING;
             auto id = id_.load(std::memory_order_relaxed);
-            logger_->logInfo("Subscribe %s, id=%d\n", asset.c_str(), id);
+            LOG_INFO("Subscribe %s, id=%d\n", asset.c_str(), id);
 
             bool existing = false;
             if (!subscribe(id, asset, data, s.GetSize(), existing)) {
@@ -215,7 +213,7 @@ namespace alpaca {
                 return;
             }
 
-            logger_->logInfo("Unsubscribe all Assets\n");
+            LOG_INFO("Unsubscribe all Assets\n");
             status_ = Status::UNSUBSCRIBING;
             for (auto& kvp : subscriptions_reader_) {
                 rapidjson::StringBuffer s;
@@ -253,9 +251,7 @@ namespace alpaca {
         }
 
         void onWebsocketOpened(uint32_t id) override {
-            if (logger_) {
-                logger_->logInfo("Websocket opened. id=%d\n", id);
-            }
+            LOG_INFO("Websocket opened. id=%d\n", id);
             id_.store(id, std::memory_order_release);
             ss_.str("");
             BrokerProgress(1);
@@ -271,11 +267,11 @@ namespace alpaca {
         }
 
         void onWebsocketError(uint32_t id, const char* err, size_t len) override {
-            if (err && len && logger_) {
-                logger_->logError("WS error: %.*s\n", len, err);
+            if (err && len) {
+                LOG_ERROR("WS error: %.*s\n", len, err);
             }
             else {
-                logger_->logError("WS error\n");
+                LOG_ERROR("WS error\n");
             }
             ++error_count_;
             if (error_count_ > 10) {
@@ -316,9 +312,7 @@ namespace alpaca {
                                 int32_t code;
                                 parser.get<int32_t>("code", code);
                                 
-                                if (logger_) {
-                                    logger_->logError("On Ws error %s(%d).\n", msg.c_str(), code);
-                                }
+                                LOG_ERROR("On Ws error %s(%d).\n", msg.c_str(), code);
                                 BrokerError((msg + " (" + std::to_string(code) + ")").c_str());
 
                                 ++error_count_;
@@ -335,15 +329,11 @@ namespace alpaca {
                                 std::string msg;
                                 parser.get<std::string>("msg", msg);
                                 if (msg == "connected") {
-                                    if (logger_) {
-                                        logger_->logInfo("Alpaca MarketData Websocket Opened.\n");
-                                    }
+                                    LOG_INFO("Alpaca MarketData Websocket Opened.\n");
                                     authenticate();
                                 }
                                 else if (msg == "authenticated") {
-                                    if (logger_) {
-                                        logger_->logInfo("Authenticated.\n");
-                                    }
+                                    LOG_INFO("Authenticated.\n");
                                     status_ = Status::AUTHENTICATED;
                                 }
                             }
@@ -364,10 +354,8 @@ namespace alpaca {
                                 else /*if (status_ == Status::UNSUBSCRIBING &&
                                          ss_.str() == "[{\"T\":\"subscription\",\"trades\":[],\"quotes\":[],\"bars\":[]}]")*/ {
                                     //status_ = Status::UNSUBSCRIBED;
-                                    if (logger_) {
-                                        //logger_->logInfo("Unsubscribed.\n");
-                                        logger_->logTrace("%s\n", ss_.str().c_str());
-                                    }
+                                        //LOG_INFO("Unsubscribed.\n");
+                                    LOG_TRACE("%s\n", ss_.str().c_str());
                                 }
                             }
                             else if (t == "t") {
@@ -376,17 +364,15 @@ namespace alpaca {
                             else if (t == "q") {
                                 onQuote(objJson);
                             }
-                            else if (logger_) {
-                                logger_->logTrace("%s\n", ss_.str().c_str());
-                                logger_->logWarning("Unhandled %s\n", t.GetString());
+                            else {
+                                LOG_TRACE("%s\n", ss_.str().c_str());
+                                LOG_WARNING("Unhandled %s\n", t.GetString());
                             }
                         }
                     }
                 }
 
-                if (logger_) {
-                    logger_->logTrace("%s\n", ss_.str().c_str());
-                }
+                LOG_TRACE("%s\n", ss_.str().c_str());
 
                 // reset message
                 ss_.str("");
@@ -409,9 +395,7 @@ namespace alpaca {
 
             writer.EndObject();
             auto data = s.GetString();
-            if (logger_) {
-                logger_->logInfo("Authenticating...\n");
-            }
+            LOG_INFO("Authenticating...\n");
             send(id_.load(std::memory_order_relaxed), data, s.GetSize());
         }
 

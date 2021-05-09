@@ -4,6 +4,7 @@
 #include <functional>
 #include "request.h"
 #include "market_data/market_data_base.h"
+#include "market_data/snapshot.h"
 
 namespace alpaca {
 
@@ -11,7 +12,7 @@ namespace alpaca {
         static constexpr const char* baseUrl_ = "https://data.alpaca.markets";
 
     public:
-        AlpacaMarketData(std::string headers, Logger& logger, bool paidPlan) : MarketData(paidPlan), headers_(std::move(headers)), logger_(logger) {
+        AlpacaMarketData(std::string headers, bool paidPlan) : MarketData(paidPlan), headers_(std::move(headers)) {
             downloaded_bars_.reserve(10000);
             leftover_bars_.reserve(1000);
         }
@@ -78,7 +79,6 @@ namespace alpaca {
 
     private:
         std::string headers_;
-        Logger& logger_;
 
         // to facilitate historical data download 
         mutable std::vector<Bar> downloaded_bars_;
@@ -138,11 +138,11 @@ namespace alpaca {
                 if (retrieved.getCode() == 40010001 && retrieved.what() == "end is too late for subscription") {
                     // Basic Plan has 15min delay
                     // TODO: switch to Polygon?
-                    logger_.logError("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
+                    LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
                     response.onError(retrieved.getCode(), retrieved.what());
                 }
                 else if (retrieved.getCode() == 50010000 && retrieved.what() == "internal server error occurred") {
-                    logger_.logError("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
+                    LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
                     BrokerProgress(1);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                     forceRetry = page_token.empty();
@@ -164,7 +164,7 @@ namespace alpaca {
 
             page_token = retrieved.content().next_page_token;
             BrokerProgress(1);
-            logger_.logDiag("%d bars built. last bar at %s\n", downloaded_bars_.size(), downloaded_bars_.empty() ? "" : timeToString(downloaded_bars_.back().time).c_str());
+            LOG_DIAG("%d bars built. last bar at %s\n", downloaded_bars_.size(), downloaded_bars_.empty() ? "" : timeToString(downloaded_bars_.back().time).c_str());
         } while (!page_token.empty() || (forceRetry && nForceRetry));
 
         if (!leftover_bars_.empty()) {
@@ -188,9 +188,9 @@ namespace alpaca {
         //}
         leftover_bars_.clear();
 
-        logger_.logDiag("returned_index_=%d, downloaded size=%d\n", returned_index_, ds);
+        LOG_DIAG("returned_index_=%d, downloaded size=%d\n", returned_index_, ds);
         if (!bars.empty()) {
-            logger_.logDiag("first bar returned %s, last bar %s\n", timeToString(bars[0].time).c_str(), timeToString(bars.back().time).c_str());
+            LOG_DIAG("first bar returned %s, last bar %s\n", timeToString(bars[0].time).c_str(), timeToString(bars.back().time).c_str());
         }
         return response;
     }
@@ -199,7 +199,7 @@ namespace alpaca {
     inline bool AlpacaMarketData::buildBar(Trades& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes, uint32_t limit) const {
         auto& trades = retrieved.trades;
         if (trades.size() < 10000) {
-            logger_.logDiag("%d trades downloaded\n", trades.size());
+            LOG_DIAG("%d trades downloaded\n", trades.size());
         }
         if (trades.empty()) {
             return false;
@@ -218,7 +218,7 @@ namespace alpaca {
 
             if (rtBar.time && (trade.timestamp - rtBar.time) > timeFrame) {
                 if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.rbegin()->time) {
-                    logger_.logWarning("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
+                    LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
                     rtBar.time = 0;
                     continue;
                 }
@@ -247,7 +247,7 @@ namespace alpaca {
     inline bool AlpacaMarketData::buildBar(Quotes& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes, uint32_t limit) const {
         auto& quotes = retrieved.quotes;
         if (quotes.size() < 1000) {
-            logger_.logDiag("%d quotes downloaded\n", quotes.size());
+            LOG_DIAG("%d quotes downloaded\n", quotes.size());
         }
         if (quotes.empty()) {
             return false;
@@ -266,7 +266,7 @@ namespace alpaca {
 
             if (rtBar.time && (quote.timestamp - rtBar.time) > timeFrame) {
                 if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.rbegin()->time) {
-                    logger_.logWarning("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
+                    LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
                     rtBar.time = 0;
                     continue;
                 }

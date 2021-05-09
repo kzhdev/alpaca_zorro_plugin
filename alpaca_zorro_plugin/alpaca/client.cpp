@@ -31,7 +31,6 @@ namespace alpaca {
         , apiKey_(std::move(key))
         , headers_("Content-Type:application/json\nAPCA-API-KEY-ID:" + apiKey_ + "\n" + "APCA-API-SECRET-KEY:" + std::move(secret))
         , isLiveMode_(!isPaperTrading)
-        , logger_("alpaca")
     {
         s_orderIdGen = std::make_unique<ClientOrderIdGenerator>(*this);
     }
@@ -47,7 +46,7 @@ namespace alpaca {
     }
 
     Response<std::vector<Asset>> Client::getAssets() const {
-        logger_.logDebug("%s/v2/assets\n", baseUrl_.c_str());
+        LOG_DEBUG("%s/v2/assets\n", baseUrl_.c_str());
         return request<std::vector<Asset>, Client>(baseUrl_ + "/v2/assets", headers_.c_str());
     }
 
@@ -92,7 +91,6 @@ namespace alpaca {
             }
             url << queries[i];
         }
-        logger_.logDebug("--> %s\n", url.str().c_str());
         return request<std::vector<Order>, Client>(url.str(), headers_.c_str());
     }
 
@@ -104,9 +102,9 @@ namespace alpaca {
 
         Response<Order> response;
         if (logResponse) {
-            return request<Order, Client>(url, headers_.c_str(), nullptr, &logger_);
+            return request<Order, Client>(url, headers_.c_str());
         }
-        return request<Order, Client>(url, headers_.c_str());
+        return request<Order, Client>(url, headers_.c_str(), nullptr, LogLevel::L_TRACE);
     }
 
     Response<Order> Client::getOrderByClientOrderId(const std::string& clientOrderId) const {
@@ -219,11 +217,11 @@ namespace alpaca {
             writer.EndObject();
             auto data = s.GetString();
 
-            logger_.logDebug("--> POST %s/v2/orders\n", baseUrl_.c_str());
+            LOG_DEBUG("--> POST %s/v2/orders\n", baseUrl_.c_str());
             if (data) {
-                logger_.logTrace("Data:\n%s\n", data);
+                LOG_TRACE("Data:\n%s\n", data);
             }
-            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_.c_str(), data, &logger_);
+            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_.c_str(), nullptr, LogLevel::L_TRACE);
             if (!response && response.what() == "client_order_id must be unique") {
                 // clinet order id has been used.
                 // increment conflict count and try again.
@@ -285,14 +283,12 @@ namespace alpaca {
         std::string body("#PATCH ");
         body.append(s.GetString());
 
-        logger_.logDebug("--> %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
-        logger_.logTrace("Data:\n%s\n", body.c_str());
-        return request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), body.c_str(), &logger_);
+        return request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), body.c_str(), LogLevel::L_TRACE);
     }
 
     Response<Order> Client::cancelOrder(const std::string& id) const {
-        logger_.logDebug("--> DELETE %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
-        auto response = request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), "#DELETE", &logger_);
+        LOG_DEBUG("--> DELETE %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
+        auto response = request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), "#DELETE", LogLevel::L_TRACE);
         if (!response) {
             // Alpaca cancelOrder not return a object
             Order* order;
@@ -305,13 +301,13 @@ namespace alpaca {
                     }
                 }
             } while (order->status == "pending_cancel");
-            logger_.logWarning("failed to cancel order %s. order status=%s", id.c_str(), order->status.c_str());
+            LOG_WARNING("failed to cancel order %s. order status=%s", id.c_str(), order->status.c_str());
             return Response<Order>(1, "Failed to cancel order");
         }
         return response;
     }
 
     Response<Position> Client::getPosition(const std::string& symbol) const {
-        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_.c_str(), nullptr, &logger_);
+        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_.c_str());
     }
 } // namespace alpaca

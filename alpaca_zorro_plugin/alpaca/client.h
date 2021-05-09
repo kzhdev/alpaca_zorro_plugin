@@ -23,8 +23,6 @@ namespace alpaca {
         explicit Client(std::string key, std::string secret, bool isPaperTrading);
         ~Client() = default;
 
-        Logger& logger() noexcept { return logger_;  }
-
         bool isLiveMode() const noexcept { return isLiveMode_;  }
 
         const std::string& headers() const noexcept { return headers_;  }
@@ -79,7 +77,6 @@ namespace alpaca {
         const std::string headers_;
         mutable bool is_open_ = false;
         const bool isLiveMode_;
-        mutable Logger logger_;
     };
 
 } // namespace alpaca
