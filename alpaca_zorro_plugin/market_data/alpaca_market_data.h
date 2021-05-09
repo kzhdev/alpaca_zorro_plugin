@@ -21,11 +21,11 @@ namespace alpaca {
         const char* name() const noexcept { return "Alpaca"; }
 
         Response<LastQuote> getLastQuote(const std::string& symbol) const override {
-            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last_quote/stocks/" + symbol, headers_.c_str(), nullptr, &logger_);
+            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last_quote/stocks/" + symbol, headers_.c_str(), nullptr, LogLevel::L_TRACE);
         }
 
         Response<LastTrade> getLastTrade(const std::string& symbol) const override {
-            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last/stocks/" + symbol, headers_.c_str(), nullptr, &logger_);
+            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last/stocks/" + symbol, headers_.c_str(), nullptr,LogLevel::L_TRACE);
         }
 
         Response<std::vector<Bar>> getBars(
