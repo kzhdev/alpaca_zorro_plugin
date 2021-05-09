@@ -28,7 +28,14 @@ namespace alpaca {
 
     class Logger {
     public:
-        Logger(std::string&& name) : name_(std::move(name)) {
+        static Logger& instance() {
+            static Logger inst;
+            return inst;
+        }
+
+        void init(std::string&& name) {
+            finit();
+            name_ = std::move(name);
 #ifdef _DEBUG
             setLevel(LogLevel::L_TRACE);
 #endif
@@ -37,15 +44,8 @@ namespace alpaca {
             }
         }
 
-        ~Logger() {
-            if (log_) {
-                fflush(log_);
-                fclose(log_);
-                log_ = nullptr;
-            }
-        }
-
         LogLevel getLevel() const noexcept { return level_; }
+
         void setLevel(LogLevel level) noexcept {
             level_ = level;
             if (level != LogLevel::L_OFF && !log_) {
@@ -54,59 +54,33 @@ namespace alpaca {
         }
 
         template<typename ... Args>
-        void logInfo(const char* format, Args... args) {
-            log(LogLevel::L_INFO, format, std::forward<Args>(args)...);
-        }
-
-        template<typename ... Args>
-        void logDebug(const char* format, Args... args) {
-            log(LogLevel::L_DEBUG, format, std::forward<Args>(args)...);
-        }
-
-        template<typename ... Args>
-        void logWarning(const char* format, Args... args) {
-            log(LogLevel::L_DEBUG, format, std::forward<Args>(args)...);
-        }
-
-        template<typename ... Args>
-        void logError(const char* format, Args... args) {
-            log(LogLevel::L_ERROR, format, std::forward<Args>(args)...);
-        }
-
-        template<typename ... Args>
-        void logTrace(const char* format, Args... args) {
-            log(LogLevel::L_TRACE, format, std::forward<Args>(args)...);
-        }
-
-        template<typename ... Args>
-        void logTrace2(const char* format, Args... args) {
-            log(LogLevel::L_TRACE2, format, std::forward<Args>(args)...);
-        }
-
-        template<typename ... Args>
-        void logDiag(const char* format, Args... args) {
-#ifdef  _DEBUG
-            log(LogLevel::L_DEBUG, format, std::forward<Args>(args)...);
-#endif //  _DEBUG
-        }
-
-
-        template<typename ... Args>
         inline void log(LogLevel level, const char* format, Args... args) {
-            if (level_ >= level) {
-                std::time_t t = std::time(nullptr);
-                struct tm _tm;
-                localtime_s(&_tm, &t);
-                char buf[25];
-                std::strftime(buf, sizeof(buf), "%F %T", &_tm);
+            std::time_t t = std::time(nullptr);
+            struct tm _tm;
+            localtime_s(&_tm, &t);
+            char buf[25];
+            std::strftime(buf, sizeof(buf), "%F %T", &_tm);
 
-                fprintf(log_, "%s | %s | ", buf, to_string(level));
-                fprintf(log_, format, std::forward<Args>(args)...);
-                fflush(log_);
-            }
+            fprintf(log_, "%s | %s | ", buf, to_string(level));
+            fprintf(log_, format, std::forward<Args>(args)...);
+            fflush(log_);
         }
 
     private:
+        Logger() = default;
+
+        ~Logger() {
+            finit();
+        }
+
+        void finit() {
+            if (log_) {
+                fflush(log_);
+                fclose(log_);
+                log_ = nullptr;
+            }
+        }
+
         void open_log() {
             std::time_t t = std::time(nullptr);
             struct tm _tm;
@@ -125,10 +99,30 @@ namespace alpaca {
     private:
         std::string name_;
         FILE* log_  = nullptr;
-#ifdef _DEBUG
-        LogLevel level_ = LogLevel::L_DEBUG;
-#else
         LogLevel level_ = LogLevel::L_OFF;
-#endif
     };
+
+
+#ifndef _LOG
+#define _LOG(level, format, ...)           \
+{\
+    auto& logger = Logger::instance();              \
+    auto lvl = logger.getLevel();                 \
+    if (lvl >= level) {   \
+        logger.log(level, format, __VA_ARGS__);      \
+    }\
+}
+
+#define LOG_DEBUG(format, ...) _LOG(L_DEBUG, format, __VA_ARGS__);
+#define LOG_INFO(format, ...) _LOG(L_INFO, format, __VA_ARGS__);
+#define LOG_WARNING(format, ...) _LOG(L_WARNING, format, __VA_ARGS__);
+#define LOG_ERROR(format, ...) _LOG(L_ERROR, format, __VA_ARGS__);
+#define LOG_TRACE(format, ...) _LOG(L_TRACE, format, __VA_ARGS__);
+#define LOG_TRACE2(format, ...) _LOG(L_TRACE, format, __VA_ARGS__);
+#ifdef _DEBUG
+#define LOG_DIAG(format, ...) _LOG(L_DEBUG, format, __VA_ARGS__);
+#else
+#define LOG_DIAG(format, ...)
+#endif
+#endif
 }

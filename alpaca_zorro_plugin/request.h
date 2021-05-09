@@ -68,10 +68,10 @@ namespace alpaca {
 
     private:
         template<typename T, typename CallerT>
-        friend Response<T> request(const std::string&, const char*, const char*, Logger* Logger);
+        friend Response<T> request(const std::string&, const char*, const char*, LogLevel logLevel);
 
         template<typename CallerT>
-        void parseContent(const std::string& content) {
+        void parseContent(const std::string& content, const std::string& url) {
             rapidjson::Document d;
             if (d.Parse(content.c_str()).HasParseError()) {
                 message_ = "Received parse error when deserializing asset JSON. err=" + std::to_string(d.GetParseError()) + "\n" + content;
@@ -109,6 +109,7 @@ namespace alpaca {
                 // Check polygon return
                 if (d.HasMember("error") && d.HasMember("errorcode")) {
                     message_ = d["error"].GetString();
+                    message_.append(" ").append(url);
                     code_ = atoi(d["errorcode"].GetString());
                     return;
                 }
@@ -182,7 +183,7 @@ namespace alpaca {
     * 
     */
     template<typename T, typename CallerT>
-    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, Logger* Logger = nullptr) {
+    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, LogLevel logLevel = LogLevel::L_TRACE2) {
         static Throttler throttler(3);
 
         if (url.empty()) {
@@ -190,9 +191,7 @@ namespace alpaca {
         }
 
 
-        if (Logger) {
-            Logger->logDebug("--> %s\n", url.c_str());
-        }
+        LOG_DEBUG("--> %s\n", url.c_str());
 
         while (!throttler.canSent()) {
             // reached throttle limit
@@ -242,12 +241,10 @@ namespace alpaca {
             }
         }
 
-        if (Logger) {
-            Logger->logTrace2("<-- %s\n", ss.str().c_str());
-        }
+        _LOG(logLevel, "<-- %s\n", ss.str().c_str());
 
         Response<T> response;
-        response.parseContent<CallerT>(ss.str());
+        response.parseContent<CallerT>(ss.str(), url);
         return response;
     }
 

@@ -10,24 +10,24 @@ namespace alpaca {
         static constexpr const char* baseUrl_ = "https://api.polygon.io";
 
     public:
-        Polygon(const std::string& apiKey, Logger& logger, bool paidPlan) : MarketData(paidPlan), apiKey_("apiKey=" + apiKey), logger_(logger) {}
+        Polygon(const std::string& apiKey, bool paidPlan) : MarketData(paidPlan), apiKey_("apiKey=" + apiKey) {}
 
         const char* name() const noexcept { return "Polygon"; }
 
         Response<LastQuote> getLastQuote(const std::string& symbol) const override {
             std::stringstream url;
             url << baseUrl_ << "/v1/last_quote/stocks/" << symbol;
-            logger_.logDebug("--> %s\n", url.str().c_str());
+            LOG_DEBUG("--> %s\n", url.str().c_str());
             url << "?" << apiKey_;
-            return request<LastQuote, Polygon>(url.str(), "", nullptr, &logger_);
+            return request<LastQuote, Polygon>(url.str(), "");
         }
 
         Response<LastTrade> getLastTrade(const std::string& symbol) const override {
             std::stringstream url;
             url << baseUrl_ << "/v1/last/stocks/" << symbol;
-            logger_.logDebug("--> %s\n", url.str().c_str());
+            LOG_DEBUG("--> %s\n", url.str().c_str());
             url << "?" << apiKey_;
-            return request<LastTrade, Polygon>(url.str(), "", nullptr, &logger_);
+            return request<LastTrade, Polygon>(url.str(), "");
         }
 
         Response<std::vector<Bar>> getBars(
@@ -40,6 +40,5 @@ namespace alpaca {
 
     private:
         std::string apiKey_;
-        Logger& logger_;
     };
 }

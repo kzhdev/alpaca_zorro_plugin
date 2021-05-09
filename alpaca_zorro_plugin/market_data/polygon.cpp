@@ -36,7 +36,7 @@ Response<std::vector<Bar>> Polygon::getBars(
             return Response<std::vector<Bar>>(1, "invalid time. " + std::string(e.what()));
         }
         url << "?sort=desc&limit="<<limit;    // in desending order
-        logger_.logDebug("--> %s\n", url.str().c_str());
+        LOG_DEBUG("--> %s\n", url.str().c_str());
         url << "&" << apiKey_;
 
         auto response = request<std::vector<Bar>, Polygon>(url.str(), nullptr, nullptr);
@@ -48,12 +48,12 @@ Response<std::vector<Bar>> Polygon::getBars(
 
         auto& bars = response.content();
         size_t nExclude = 0;
-        logger_.logDebug("%d bars downloaded.\n", bars.size());
+        LOG_DEBUG("%d bars downloaded.\n", bars.size());
         if (!bars.empty()) {
             using namespace date;
             auto from = bars.front().time;
             auto to = bars.back().time;
-            logger_.logDebug("%s(%d) - %s(%d)\n", format("%F %T", date::sys_seconds{ std::chrono::seconds{ from } }).c_str(), from,
+            LOG_DEBUG("%s(%d) - %s(%d)\n", format("%F %T", date::sys_seconds{ std::chrono::seconds{ from } }).c_str(), from,
                 format("%F %T", date::sys_seconds{ std::chrono::seconds{ to } }).c_str(), to);
         }
         else {
@@ -99,10 +99,10 @@ Response<std::vector<Bar>> Polygon::getBars(
     if (rtBars.size() > limit) {
         rtBars.resize(limit);
     }
-    logger_.logDebug("return %d bars.\n", rtBars.size());
+    LOG_DEBUG("return %d bars.\n", rtBars.size());
     if (!rtBars.empty()) {
         using namespace date;
-        logger_.logDebug("%s(%d) - %s(%d)\n", format("%F %T", date::sys_seconds{ std::chrono::seconds{ rtBars.front().time } }).c_str(), rtBars.front().time,
+        LOG_DEBUG("%s(%d) - %s(%d)\n", format("%F %T", date::sys_seconds{ std::chrono::seconds{ rtBars.front().time } }).c_str(), rtBars.front().time,
             format("%F %T", date::sys_seconds{ std::chrono::seconds{ rtBars.back().time } }).c_str(), rtBars.back().time);
     }
     // change to asending order, BrokerHistory2 handles asending order
