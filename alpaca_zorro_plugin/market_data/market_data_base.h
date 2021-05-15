@@ -2,8 +2,8 @@
 
 #include <string>
 #include "quote.h"
-#include "bars.h"
-#include "trade.h"
+#include "market_data/bars.h"
+#include "market_data/trade.h"
 
 namespace alpaca {
 

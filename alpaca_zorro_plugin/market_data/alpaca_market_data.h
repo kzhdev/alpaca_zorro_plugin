@@ -21,11 +21,29 @@ namespace alpaca {
         const char* name() const noexcept { return "Alpaca"; }
 
         Response<LastQuote> getLastQuote(const std::string& symbol) const override {
-            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last_quote/stocks/" + symbol, headers_.c_str(), nullptr, LogLevel::L_TRACE);
+            auto snapshot = getSnapshot(symbol);
+            if (!snapshot) {
+                return Response<LastQuote>(snapshot.getCode(), snapshot.what());
+            }
+            auto rt = Response<LastQuote>();
+            LastQuote& lastQuote = rt.content();
+            lastQuote.symbol = snapshot.content().symbol;
+            lastQuote.status = "success";
+            lastQuote.quote = snapshot.content().last_quote;
+            return rt;
         }
 
         Response<LastTrade> getLastTrade(const std::string& symbol) const override {
-            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v1/last/stocks/" + symbol, headers_.c_str(), nullptr,LogLevel::L_TRACE);
+            auto snapshot = getSnapshot(symbol);
+            if (!snapshot) {
+                return Response<LastTrade>(snapshot.getCode(), snapshot.what());
+            }
+            auto rt = Response<LastTrade>();
+            LastTrade& lastTrade = rt.content();
+            lastTrade.symbol = snapshot.content().symbol;
+            lastTrade.status = "success";
+            lastTrade.trade = snapshot.content().last_trade;
+            return rt;
         }
 
         Response<std::vector<Bar>> getBars(
@@ -37,6 +55,10 @@ namespace alpaca {
             int32_t price_type = 0) const override;
 
     private:
+        Response<Snapshot> getSnapshot(const std::string& symbol) const {
+            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot", headers_.c_str());
+        }
+
         Response<std::vector<Bar>> getBarsV1(
             const std::string& symbol,
             __time32_t start,
@@ -75,7 +97,7 @@ namespace alpaca {
         inline Response<std::vector<Bar>> buildBarsFromTickData(int price_type, const std::string& symbol, __time32_t start, __time32_t end, uint32_t nTickMinutes, uint32_t limit, const std::string& tickType) const;
 
         template<typename TickTypeT>
-        inline bool buildBar(TickTypeT& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes, uint32_t limit) const;
+        inline bool buildBar(TickTypeT& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes) const;
 
     private:
         std::string headers_;
@@ -117,12 +139,16 @@ namespace alpaca {
         Bar rtBar;
         rtBar.time = 0;
 
-        std::string sEnd = timeToString(end);
-        std::string sStart = timeToString(std::max<__time32_t>(start, end - 345600));
+       
+        __time32_t e = end;
+        __time32_t s;
+       
         std::string page_token;
-        bool forceRetry = false;
         uint32_t nForceRetry = 6;
         do {
+            std::string sEnd = timeToString(e);
+            __time32_t s = std::max<__time32_t>(start, e - 14400);
+            std::string sStart = timeToString(s);
             std::stringstream url;
             url << baseUrl_ << "/v2/stocks/" << symbol << "/" << tickType << "?start=" << sStart
                 << "&end=" << sEnd << "&limit=" << 10000;
@@ -130,8 +156,6 @@ namespace alpaca {
             if (!page_token.empty()) {
                 url << "&page_token=" << page_token;
             }
-
-            forceRetry = false;
 
             auto retrieved = request<TickTypeT, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr/*, &logger_*/);
             if (!retrieved) {
@@ -145,8 +169,9 @@ namespace alpaca {
                     LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
                     BrokerProgress(1);
                     std::this_thread::sleep_for(std::chrono::seconds(1));
-                    forceRetry = page_token.empty();
-                    --nForceRetry;
+                    if (--nForceRetry == 0) {
+                        break;
+                    }
                     continue;
                 }
                 else {
@@ -157,15 +182,23 @@ namespace alpaca {
 
             nForceRetry = 6;
 
-
-            if (!buildBar(retrieved.content(), response, rtBar, start, end, nTickMinutes, limit)) {
-                return response;
+            if (!buildBar(retrieved.content(), response, rtBar, start, e, nTickMinutes)) {
+                if (e < start) {
+                    break;
+                }
+                page_token = "";
+                e = s - 30;
+                continue;
             }
 
             page_token = retrieved.content().next_page_token;
             BrokerProgress(1);
             LOG_DIAG("%d bars built. last bar at %s\n", downloaded_bars_.size(), downloaded_bars_.empty() ? "" : timeToString(downloaded_bars_.back().time).c_str());
-        } while (!page_token.empty() || (forceRetry && nForceRetry));
+
+            if (page_token.empty()) {
+                e = s - 30;
+            }
+        } while (e >= start);
 
         if (!leftover_bars_.empty()) {
             limit -= leftover_bars_.size();
@@ -196,17 +229,15 @@ namespace alpaca {
     }
 
     template<>
-    inline bool AlpacaMarketData::buildBar(Trades& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes, uint32_t limit) const {
+    inline bool AlpacaMarketData::buildBar(Trades& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes) const {
         auto& trades = retrieved.trades;
-        if (trades.size() < 10000) {
-            LOG_DIAG("%d trades downloaded\n", trades.size());
-        }
+        LOG_DIAG("%d trades downloaded\n", trades.size());
         if (trades.empty()) {
             return false;
         }
 
         auto timeFrame = nTickMinutes * 60;
-        for (size_t i = 0; limit && i < trades.size(); ++i) {
+        for (size_t i = 0; i < trades.size(); ++i) {
             const auto& trade = trades[i];
             if (trade.timestamp < (uint32_t)start) {
                 continue;
@@ -216,35 +247,40 @@ namespace alpaca {
                 break;
             }
 
-            if (rtBar.time && (trade.timestamp - rtBar.time) > timeFrame) {
-                if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.rbegin()->time) {
-                    LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
-                    rtBar.time = 0;
-                    continue;
-                }
-                downloaded_bars_.push_back(rtBar);
-                rtBar.time = 0;
-            }
-
-            if (rtBar.time == 0) {
-                rtBar.time = (uint32_t(trade.timestamp / timeFrame)) * timeFrame;
-                rtBar.open_price = trade.price;
-                rtBar.high_price = trade.price;
-                rtBar.low_price = trade.price;
-                rtBar.volume = trade.size;
+            if (!timeFrame) {
+                downloaded_bars_.push_back({trade.sTime, static_cast<uint32_t>(trade.timestamp), trade.price, trade.price, trade.price, trade.price, static_cast<uint32_t>(trade.size)});
             }
             else {
-                rtBar.high_price = std::max<double>(rtBar.high_price, trade.price);
-                rtBar.low_price = std::min<double>(rtBar.low_price, trade.price);
-                rtBar.volume += trade.size;
+                if (rtBar.time && (trade.timestamp - rtBar.time) > timeFrame) {
+                    if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.rbegin()->time) {
+                        LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
+                        rtBar.time = 0;
+                        continue;
+                    }
+                    downloaded_bars_.push_back(rtBar);
+                    rtBar.time = 0;
+                }
+
+                if (rtBar.time == 0) {
+                    rtBar.time = (uint32_t(trade.timestamp / timeFrame)) * timeFrame;
+                    rtBar.open_price = trade.price;
+                    rtBar.high_price = trade.price;
+                    rtBar.low_price = trade.price;
+                    rtBar.volume = trade.size;
+                }
+                else {
+                    rtBar.high_price = std::max<double>(rtBar.high_price, trade.price);
+                    rtBar.low_price = std::min<double>(rtBar.low_price, trade.price);
+                    rtBar.volume += trade.size;
+                }
+                rtBar.close_price = trade.price;
             }
-            rtBar.close_price = trade.price;
         }
         return true;
     }
 
     template<>
-    inline bool AlpacaMarketData::buildBar(Quotes& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes, uint32_t limit) const {
+    inline bool AlpacaMarketData::buildBar(Quotes& retrieved, Response<std::vector<Bar>>& response, Bar& rtBar, __time32_t start, __time32_t end, uint32_t nTickMinutes) const {
         auto& quotes = retrieved.quotes;
         if (quotes.size() < 1000) {
             LOG_DIAG("%d quotes downloaded\n", quotes.size());
@@ -254,7 +290,7 @@ namespace alpaca {
         }
 
         auto timeFrame = nTickMinutes * 60;
-        for (size_t i = 0; limit && i < quotes.size(); ++i) {
+        for (size_t i = 0; i < quotes.size(); ++i) {
             const auto& quote = quotes[i];
             if (quote.timestamp < (uint32_t)start) {
                 continue;
@@ -264,29 +300,34 @@ namespace alpaca {
                 break;
             }
 
-            if (rtBar.time && (quote.timestamp - rtBar.time) > timeFrame) {
-                if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.rbegin()->time) {
-                    LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
-                    rtBar.time = 0;
-                    continue;
-                }
-                downloaded_bars_.push_back(rtBar);
-                rtBar.time = 0;
-            }
-
-            if (rtBar.time == 0) {
-                rtBar.time = (uint32_t(quote.timestamp / timeFrame)) * timeFrame;
-                rtBar.open_price = quote.ask_price;
-                rtBar.high_price = quote.ask_price;
-                rtBar.low_price = quote.ask_price;
-                rtBar.volume = quote.ask_size;
+            if (!timeFrame) {
+                downloaded_bars_.push_back({ quote.sTime, static_cast<uint32_t>(quote.timestamp), quote.ask_price, quote.ask_price, quote.ask_price, quote.ask_price, static_cast<uint32_t>(quote.ask_size) });
             }
             else {
-                rtBar.high_price = std::max<double>(rtBar.high_price, quote.ask_price);
-                rtBar.low_price = std::min<double>(rtBar.low_price, quote.ask_price);
-                rtBar.volume += quote.ask_size;
+                if (rtBar.time && (quote.timestamp - rtBar.time) > timeFrame) {
+                    if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.rbegin()->time) {
+                        LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", timeToString(rtBar.time).c_str(), timeToString(downloaded_bars_.rbegin()->time).c_str());
+                        rtBar.time = 0;
+                        continue;
+                    }
+                    downloaded_bars_.push_back(rtBar);
+                    rtBar.time = 0;
+                }
+
+                if (rtBar.time == 0) {
+                    rtBar.time = (uint32_t(quote.timestamp / timeFrame)) * timeFrame;
+                    rtBar.open_price = quote.ask_price;
+                    rtBar.high_price = quote.ask_price;
+                    rtBar.low_price = quote.ask_price;
+                    rtBar.volume = quote.ask_size;
+                }
+                else {
+                    rtBar.high_price = std::max<double>(rtBar.high_price, quote.ask_price);
+                    rtBar.low_price = std::min<double>(rtBar.low_price, quote.ask_price);
+                    rtBar.volume += quote.ask_size;
+                }
+                rtBar.close_price = quote.ask_price;
             }
-            rtBar.close_price = quote.ask_price;
         }
         return true;
     }

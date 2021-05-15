@@ -84,13 +84,10 @@
     <ClInclude Include="websockets\alpaca_md_ws.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="websockets\websockets.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="market_data\trade.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="resource1.h">
+    <ClInclude Include="market_data\snapshot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

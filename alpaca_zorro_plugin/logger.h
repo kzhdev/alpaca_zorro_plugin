@@ -118,7 +118,7 @@ namespace alpaca {
 #define LOG_WARNING(format, ...) _LOG(L_WARNING, format, __VA_ARGS__);
 #define LOG_ERROR(format, ...) _LOG(L_ERROR, format, __VA_ARGS__);
 #define LOG_TRACE(format, ...) _LOG(L_TRACE, format, __VA_ARGS__);
-#define LOG_TRACE2(format, ...) _LOG(L_TRACE, format, __VA_ARGS__);
+#define LOG_TRACE2(format, ...) _LOG(L_TRACE2, format, __VA_ARGS__);
 #ifdef _DEBUG
 #define LOG_DIAG(format, ...) _LOG(L_DEBUG, format, __VA_ARGS__);
 #else

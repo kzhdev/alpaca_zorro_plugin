@@ -8,6 +8,7 @@ namespace alpaca {
 	std::string timeToString(__time32_t time);
 
 	struct Bar {
+		std::string time_string;
 		uint32_t time;
 		double open_price;
 		double high_price;
@@ -21,7 +22,8 @@ namespace alpaca {
 
 		template<typename CallerT, typename T>
 		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
-			parser.get<uint32_t>("t", time);
+			parser.get<std::string>("t", time_string);
+			time = parseTimeStamp2(time_string);
 			parser.get<double>("o", open_price);
 			parser.get<double>("h", high_price);
 			parser.get<double>("l", low_price);

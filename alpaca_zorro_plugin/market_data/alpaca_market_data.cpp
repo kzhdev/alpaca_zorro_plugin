@@ -177,22 +177,17 @@ Response<std::vector<Bar>> AlpacaMarketData::getBars(
     uint32_t limit,
     int32_t price_type) const {
 
-    return getBarsV1(symbol, start, end, nTickMinutes, limit);
-
-    //switch (price_type) {
-    //    // V2 bars not ready yet, for now use trade instead
-    ////case 0:
-    ////    return downloadBars(symbol, start, end, nTickMinutes, limit);
-    ////    break;
-    //case 0:
-    //case 1:
-    //    return downloadQuotes(symbol, start, end, nTickMinutes, limit);
-    //case 2:
-    //    return downloadTrades(symbol, start, end, nTickMinutes, limit);
-
-    //default:
-    //    return downloadBars(symbol, start, end, nTickMinutes, limit);
+    // TODO: fix tick data download when start is not mendatory or desendent data supported
+    //if (!nTickMinutes) {
+    //    // Tick data
+    //    if (price_type == 1) {
+    //        return downloadQuotes(symbol, start, end, nTickMinutes, limit);
+    //    }
+    //    else {
+    //        return downloadTrades(symbol, start, end, nTickMinutes, limit);
+    //    }
     //}
+    return downloadBars(symbol, start, end, nTickMinutes, limit);
 }
 
 Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
@@ -203,7 +198,7 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
     uint32_t limit) const {
 
     // Alpaca only suport 1Min, 1Hour, 1D bars
-    static std::vector<uint32_t> supported_fimeframe = { 1, 60, 1440 };
+    static std::vector<std::pair<uint32_t, const char*>> supported_timeframe = { {1, "1Min"}, {60, "1Hour"}, {1440, "1D"} };
 
     std::string timeframe;
     uint32_t n = 1;
@@ -214,7 +209,6 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
         break;
     case 60:
         timeframe = "1Hour";
-        granularity = 60;
         break;
     case 1440:
         timeframe = "1D";
@@ -224,342 +218,148 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
     }
 
     if (timeframe.empty()) {
-        for (auto it = supported_fimeframe.rbegin(); it != supported_fimeframe.rend(); ++it) {
-            if ((nTickMinutes % *it) == 0) {
-                granularity = *it;
-                n = (uint32_t)(nTickMinutes / *it);
+        for (auto it = supported_timeframe.rbegin(); it != supported_timeframe.rend(); ++it) {
+            if ((nTickMinutes % it->first) == 0) {
+                granularity = it->first;
+                n = (uint32_t)(nTickMinutes / it->first);
+                timeframe = it->second;
+                break;
             }
         }
     }
 
-    uint32_t nLimit = limit * n;
     uint32_t i = 0;
     Response<std::vector<Bar>> response;
     auto& bars = response.content();
-    bars.reserve(400000);
+    bars.reserve(limit);
+    std::vector<Bar> cached;
     Bar rtBar;
     __time32_t e = end;
-    __time32_t s = start;
+    __time32_t s;
+    std::string page_token;
+    bool bFirstBar = true;
+    uint32_t bar_end_time;
 
-    auto _downloadBars = [this, &i, &response, &bars, &rtBar, &e, &nLimit, &timeframe, start, &symbol, n, granularity]() {
-        std::string page_token;
-        do {
-            std::string sStart = timeToString(std::max<__time32_t>(start, e - nLimit * n * granularity * 60));
-            std::string sEnd = timeToString(e);
-            std::stringstream url;
-            url << baseUrl_ << "/v2/stocks/" << symbol << "/bars?start=" << sStart
-                << "&end=" << sEnd << "&limit=" << 10000 << "&timeframe=" << timeframe;
-
-            if (!page_token.empty()) {
-                url << "&page_token=" << page_token;
+    auto buildBar = [&limit, start, &rtBar, &bFirstBar, n, &i, nTickMinutes, &bars, &bar_end_time, granularity](std::vector<Bar>& dowloadedBars) {
+        int residual = 0;
+        while (!dowloadedBars.empty() && limit) {
+            const auto& bar = dowloadedBars.back();
+            if (bar.time < (uint32_t)start) {
+                break;
             }
 
-            auto retrieved = request<Bars, AlpacaMarketData>(url.str(), headers_.c_str());
-            if (!retrieved) {
-                if (retrieved.getCode() == 40010001 && retrieved.what() == "end is too late for subscription") {
-                    // Basic Plan has 15min delay
-                    // TODO: switch to Polygon?
-                    LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
-                    response.onError(retrieved.getCode(), retrieved.what());
+            if (bar.time_string == "2021-05-11T23:59:00Z" || bar.time_string == "2021-05-12T08:01:00Z") {
+                printf("\n");
+            }
+
+            if (n == 1) {
+                bars.emplace_back(std::move(bar));
+                --limit;
+            }
+            else {
+                if (i == 0) {
+                    if (bFirstBar) {
+                        if ((bar.time + granularity * 60) % (nTickMinutes * 60) != 0) {
+                            // drop incompleted bar data
+                            LOG_DIAG("Drop bar at %s\n", bar.time_string.c_str());
+                            dowloadedBars.pop_back();
+                            continue;
+                        }
+                        bFirstBar = false;
+                    }
+                    rtBar = bar;
+                    bar_end_time = rtBar.time;
+                    LOG_DIAG("Bar end at %s\n", rtBar.time_string.c_str());
                 }
                 else {
-                    BrokerError(("Failed to get bars. " + retrieved.what()).c_str());
-                }
-                return;
-            }
-
-            auto& retrvievedBars = retrieved.content().bars;
-            LOG_DEBUG("%d bars downloaded\n", retrvievedBars.size());
-            if (retrvievedBars.empty()) {
-                return;
-            }
-
-            e = retrvievedBars.back().time - 30;
-            while (!retrvievedBars.empty() && nLimit) {
-                const auto& bar = retrvievedBars.back();
-                if (bar.time < (uint32_t)start) {
-                    break;
-                }
-
-                if (n == 1) {
-                    bars.emplace_back(std::move(bar));
-                }
-                else {
-                    if (i == 0) {
+                    if ((bar_end_time - bar.time) > ((nTickMinutes - 1) * 60))  { 
+                        LOG_DIAG("Some data is missing, the data at %s belongs to different bar.\n", bar.time_string.c_str());
+                        bars.emplace_back(std::move(rtBar));
                         rtBar = bar;
+                        bar_end_time = bar.time;
+                        i = 0;
+                        --limit;
                     }
                     else {
+                        LOG_DIAG("Bar at %s\n", bar.time_string.c_str());
                         rtBar.high_price = std::max<double>(rtBar.high_price, bar.high_price);
                         rtBar.low_price = std::min<double>(rtBar.low_price, bar.low_price);
-                        rtBar.close_price = bar.close_price;
+                        rtBar.open_price = bar.open_price;
+                        rtBar.time = bar.time;
+                        rtBar.time_string = bar.time_string;
                         rtBar.volume += bar.volume;
                     }
-
-                    if (++i == n) {
-                        bars.emplace_back(std::move(rtBar));
-                        i = 0;
-                    }
                 }
-                --nLimit;
-                retrvievedBars.pop_back();
+
+                if ((bar.time % (nTickMinutes * 60)) == 0) {
+                    bars.emplace_back(std::move(rtBar));
+                    i = 0;
+                    --limit;
+                }
+                else {
+                    ++i;
+                    assert(i < n);
+                }
             }
-            page_token = retrieved.content().next_page_token;
-        } while (nLimit && !page_token.empty());
+            dowloadedBars.pop_back();
+        }
     };
 
-    //if (nLimit <= 10000) {
-    //    _downloadBars(nLimit);
-    //}
-    //else {
-    //    // limit exceeds 10000, need to download multiple times
-    //    while (nLimit) {
-    //        _downloadBars(10000);
-    //    }
-    //}
+    auto lmt = 5000 * granularity;
 
-    _downloadBars();
+    do {
+        s = std::max<__time32_t>(start, e - lmt * 60);
+        std::string sStart = timeToString(s);
+        std::string sEnd = timeToString(e);
+        std::stringstream url;
+        url << baseUrl_ << "/v2/stocks/" << symbol << "/bars?start=" << sStart
+            << "&end=" << sEnd << "&limit=" << 5000 << "&timeframe=" << timeframe;
 
+        if (!page_token.empty()) {
+            url << "&page_token=" << page_token;
+        }
+
+        auto retrieved = request<Bars, AlpacaMarketData>(url.str(), headers_.c_str());
+        if (!retrieved) {
+            if (retrieved.getCode() == 40010001 && retrieved.what() == "end is too late for subscription") {
+                // Basic Plan has 15min delay
+                LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
+                response.onError(retrieved.getCode(), retrieved.what());
+            }
+            else {
+                BrokerError(("Failed to get bars. " + retrieved.what()).c_str());
+            }
+            break;
+        }
+
+        auto& retrvievedBars = retrieved.content().bars;
+        if (retrvievedBars.empty()) {
+            LOG_DEBUG("0 bars downloaded.\n");
+            break;
+        }
+        LOG_DEBUG("%d bars downloaded. %s-%s\n", retrvievedBars.size(), retrvievedBars.front().time_string.c_str(), retrvievedBars.back().time_string.c_str());
+
+        if (!retrieved.content().next_page_token.empty()) {
+            LOG_DIAG("data pagenated\n");
+            // need to get more data entil reach the end;
+            cached.insert(cached.end(), retrvievedBars.begin(), retrvievedBars.end());
+            page_token = retrieved.content().next_page_token;
+            continue;
+        }
+        else {
+            page_token = "";
+        }
+
+        e = cached.empty() ? retrvievedBars.front().time - 30 : cached[0].time - 30;
+        buildBar(retrvievedBars);
+        if (!cached.empty()) {
+            buildBar(cached);
+        }
+    } while (limit && ((s > start) || !page_token.empty()));
+
+    std::reverse(bars.begin(), bars.end());
     return response;
 }
-
-//Response<std::vector<Bar>> AlpacaMarketData::downloadTrades(
-//    const std::string& symbol,
-//    __time32_t start,
-//    __time32_t end,
-//    int nTickMinutes,
-//    uint32_t limit) const {
-//
-//    if (symbol != previous_symbol_ || (last_price_type_ != -1 && last_price_type_ != 2)) {
-//        if (!previous_symbol_.empty()) {
-//            downloaded_bars_.clear();
-//        }
-//        previous_symbol_ = symbol;
-//    }
-//
-//    last_price_type_ = 2;
-//
-//    Response<std::vector<Bar>> response;
-//    auto& bars = response.content();
-//    bars.reserve(limit);
-//
-//    getFromDownloadedBars(bars, end, limit);
-//
-//    if (!limit) {
-//        return response;
-//    }
-//
-//
-//    Bar rtBar;
-//    rtBar.time = 0;
-//
-//    std::string sEnd = toTimeString(end);
-//    std::string sStart = toTimeString(std::max<__time32_t>(start, end - 345600));
-//    std::string page_token;
-//    do {
-//        std::stringstream url;
-//        url << baseUrl_ << "/v2/stocks/" << symbol << "/trades?start=" << sStart
-//            << "&end=" << sEnd << "&limit=" << 10000;
-//
-//        if (!page_token.empty()) {
-//            url << "&page_token=" << page_token;
-//        }
-//
-//        auto retrieved = request<Trades, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr, &logger_);
-//        if (!retrieved) {
-//            if (retrieved.getCode() == 40010001 && retrieved.what() == "end is too late for subscription") {
-//                // Basic Plan has 15min delay
-//                // TODO: switch to Polygon?
-//                LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
-//                response.onError(retrieved.getCode(), retrieved.what());
-//            }
-//            else if (retrieved.getCode() == 50010000 && retrieved.what() == "internal server error occurred") {
-//                LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
-//                BrokerProgress(1);
-//                std::this_thread::sleep_for(std::chrono::seconds(1));
-//                continue;
-//            }
-//            else {
-//                BrokerError(("Failed to get bars. " + retrieved.what()).c_str());
-//            }
-//            break;
-//        }
-//
-//        auto& trades = retrieved.content().trades;
-//        LOG_DEBUG("%d trades downloaded\n", trades.size());
-//        if (trades.empty()) {
-//            return response;
-//        }
-//
-//        for (size_t i = 0; limit && i < trades.size(); ++i) {
-//            const auto& trade = trades[i];
-//            if (trade.timestamp < (uint32_t)start) {
-//                continue;
-//            }
-//
-//            if (trade.timestamp > end) {
-//                break;
-//            }
-//
-//            if (rtBar.time && (trade.timestamp - rtBar.time) > 60) {
-//                if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.back().time) {
-//                    LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", toTimeString(rtBar.time).c_str(), toTimeString(downloaded_bars_.back().time).c_str());
-//                    rtBar.time = 0;
-//                    continue;
-//                }
-//                downloaded_bars_.push_back(rtBar);
-//                rtBar.time = 0;
-//            }
-//
-//            if (rtBar.time == 0) {
-//                rtBar.time = (uint32_t(trade.timestamp / 60)) * 60;
-//                rtBar.open_price = trade.price;
-//                rtBar.high_price = trade.price;
-//                rtBar.low_price = trade.price;
-//                rtBar.volume = trade.size;
-//            }
-//            else {
-//                rtBar.high_price = std::max<double>(rtBar.high_price, trade.price);
-//                rtBar.low_price = std::min<double>(rtBar.low_price, trade.price);
-//                rtBar.volume += trade.size;
-//            }
-//            rtBar.close_price = trade.price;
-//        }
-//        page_token = retrieved.content().next_page_token;
-//        BrokerProgress(1);
-//        LOG_DEBUG("%d bars built. last bar at %s\n", downloaded_bars_.size(), downloaded_bars_.empty() ? "" : toTimeString(downloaded_bars_.back().time).c_str());
-//    } while (!page_token.empty());
-//
-//    returned_index_ = std::max<int>(downloaded_bars_.size() - limit - 1, 0);
-//    for (size_t i = returned_index_ + 1; i < downloaded_bars_.size(); i++) {
-//        bars.push_back(downloaded_bars_[i]);
-//    }
-//
-//    LOG_DEBUG("returned_index_=%d\n", returned_index_);
-//    if (!bars.empty()) {
-//        LOG_DEBUG("first bar returned %s\n", toTimeString(bars[0].time).c_str());
-//    }
-//    return response;
-//}
-
-//Response<std::vector<Bar>> AlpacaMarketData::downloadQuotes(
-//    const std::string& symbol,
-//    __time32_t start,
-//    __time32_t end,
-//    int nTickMinutes,
-//    uint32_t limit) const {
-//
-//    if (symbol != previous_symbol_ || (last_price_type_ != -1 && last_price_type_ != 1)) {
-//        if (!previous_symbol_.empty()) {
-//            downloaded_bars_.clear();
-//        }
-//        previous_symbol_ = symbol;
-//    }
-//
-//    last_price_type_ = 1;
-//
-//    Response<std::vector<Bar>> response;
-//    auto& bars = response.content();
-//    bars.reserve(limit);
-//
-//    getFromDownloadedBars(bars, end, limit);
-//
-//
-//    if (!limit) {
-//        return response;
-//    }
-//
-//
-//    Bar rtBar;
-//    rtBar.time = 0;
-//
-//    std::string sEnd = toTimeString(end);
-//    std::string sStart = toTimeString(std::max<__time32_t>(start, end - 345600));
-//    std::string page_token;
-//    do {
-//        std::stringstream url;
-//        url << baseUrl_ << "/v2/stocks/" << symbol << "/quotes?start=" << sStart
-//            << "&end=" << sEnd << "&limit=" << 10000;
-//
-//        if (!page_token.empty()) {
-//            url << "&page_token=" << page_token;
-//        }
-//
-//        auto retrieved = request<Quotes, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr, &logger_);
-//        if (!retrieved) {
-//            if (retrieved.getCode() == 40010001 && retrieved.what() == "end is too late for subscription") {
-//                // Basic Plan has 15min delay
-//                // TODO: switch to Polygon?
-//                LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
-//                response.onError(retrieved.getCode(), retrieved.what());
-//            }
-//            else if (retrieved.getCode() == 50010000 && retrieved.what() == "internal server error occurred") {
-//                LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
-//                BrokerProgress(1);
-//                std::this_thread::sleep_for(std::chrono::seconds(1));
-//                continue;
-//            }
-//            else {
-//                BrokerError(("Failed to get bars. " + retrieved.what()).c_str());
-//            }
-//            break;
-//        }
-//
-//        auto& quotes = retrieved.content().quotes;
-//        LOG_DEBUG("%d quotes downloaded\n", quotes.size());
-//        if (quotes.empty()) {
-//            return response;
-//        }
-//
-//        for (size_t i = 0; limit && i < quotes.size(); ++i) {
-//            const auto& quote = quotes[i];
-//            if (quote.timestamp < (uint32_t)start) {
-//                continue;
-//            }
-//
-//            if (quote.timestamp > end) {
-//                break;
-//            }
-//
-//            if (rtBar.time && (quote.timestamp - rtBar.time) > 60) {
-//                if (!downloaded_bars_.empty() && rtBar.time <= downloaded_bars_.back().time) {
-//                    LOG_WARNING("Drop invalid bar time=%s, lastKnowBar time=%s\n", toTimeString(rtBar.time).c_str(), toTimeString(downloaded_bars_.back().time).c_str());
-//                    rtBar.time = 0;
-//                    continue;
-//                }
-//                downloaded_bars_.push_back(rtBar);
-//                rtBar.time = 0;
-//            }
-//
-//            if (rtBar.time == 0) {
-//                rtBar.time = (uint32_t(quote.timestamp / 60)) * 60;
-//                rtBar.open_price = quote.ask_price;
-//                rtBar.high_price = quote.ask_price;
-//                rtBar.low_price = quote.ask_price;
-//                rtBar.volume = quote.ask_size;
-//            }
-//            else {
-//                rtBar.high_price = std::max<double>(rtBar.high_price, quote.ask_price);
-//                rtBar.low_price = std::min<double>(rtBar.low_price, quote.ask_price);
-//                rtBar.volume += quote.ask_size;
-//            }
-//            rtBar.close_price = quote.ask_price;
-//        }
-//        page_token = retrieved.content().next_page_token;
-//        BrokerProgress(1);
-//        LOG_DEBUG("%d bars built. last bar at %s\n", downloaded_bars_.size(), downloaded_bars_.empty() ? "" : toTimeString(downloaded_bars_.back().time).c_str());
-//    } while (!page_token.empty());
-//
-//    returned_index_ = std::max<int>(downloaded_bars_.size() - limit - 1, 0);
-//    for (size_t i = returned_index_ + 1; i < downloaded_bars_.size(); i++) {
-//        bars.push_back(downloaded_bars_[i]);
-//    }
-//
-//    LOG_DEBUG("returned_index_=%d\n", returned_index_);
-//    if (!bars.empty()) {
-//        LOG_DEBUG("first bar returned %s\n", toTimeString(bars[0].time).c_str());
-//    }
-//    return response;
-//}
 
 void AlpacaMarketData::getFromDownloadedBars(std::vector<Bar>& bars, __time32_t& end, uint32_t& limit) const {
     if (!downloaded_bars_.empty()) {

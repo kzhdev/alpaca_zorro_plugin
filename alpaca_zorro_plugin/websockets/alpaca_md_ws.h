@@ -365,14 +365,14 @@ namespace alpaca {
                                 onQuote(objJson);
                             }
                             else {
-                                LOG_TRACE("%s\n", ss_.str().c_str());
+                                LOG_DEBUG("%s\n", ss_.str().c_str());
                                 LOG_WARNING("Unhandled %s\n", t.GetString());
                             }
                         }
                     }
                 }
 
-                LOG_TRACE("%s\n", ss_.str().c_str());
+                LOG_TRACE2("%s\n", ss_.str().c_str());
 
                 // reset message
                 ss_.str("");

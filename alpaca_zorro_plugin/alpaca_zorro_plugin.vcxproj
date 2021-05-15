@@ -105,15 +105,14 @@
     <ClInclude Include="market_data\market_data_base.h" />
     <ClInclude Include="market_data\polygon.h" />
     <ClInclude Include="market_data\quote.h" />
+    <ClInclude Include="market_data\snapshot.h" />
     <ClInclude Include="market_data\trade.h" />
     <ClInclude Include="request.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="resource1.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="throttler.h" />
     <ClInclude Include="websockets\alpaca_md_ws.h" />
-    <ClInclude Include="websockets\websockets.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AlpacaZorroPlugin.cpp" />
