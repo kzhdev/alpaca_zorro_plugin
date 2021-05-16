@@ -71,7 +71,10 @@ namespace alpaca
         (FARPROC&)http_free = fpFree;
 
         config.init();
-        wsClient = std::make_unique<AlpacaMdWs>();
+
+        if (config.useWebsocket) {
+            wsClient = std::make_unique<AlpacaMdWs>();
+        }
     }
 
     DLLFUNC_C int BrokerLogin(char* User, char* Pwd, char* Type, char* Account)
@@ -80,7 +83,6 @@ namespace alpaca
         {
             if (wsClient) {
                 wsClient->logout();
-                //wsClient.reset();
             }
             alpaca_md_ws_id = 0;
             pMarketData = nullptr;
@@ -121,10 +123,8 @@ namespace alpaca
         //attempt login
 
         if (!config.dataSource) {
-            /*wsClient = std::make_unique<AlpacaMdWs>();*/
-            if (!wsClient->login(User, Pwd, config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
+            if (wsClient && !wsClient->login(User, Pwd, config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
                 BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
-                //return 0;
             }
         }
 
@@ -171,8 +171,8 @@ namespace alpaca
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
         if (!pPrice) { // this is subscribe
-            if (config.dataSource) {
-                // Polygon
+            if (config.dataSource || !wsClient) {
+                // Polygon or not using websocket
                 return 1;
             }
 
@@ -185,7 +185,7 @@ namespace alpaca
 
         if (s_priceType == 2) {
             Trade* trade = nullptr;
-            if (!config.dataSource) {
+            if (!config.dataSource && wsClient) {
                 trade = wsClient->getLastTrade(Asset);
             }
             if (trade) {
@@ -214,7 +214,7 @@ namespace alpaca
         }
         else {
             Quote* quote = nullptr;
-            if (!config.dataSource) {
+            if (!config.dataSource && wsClient) {
                 quote = wsClient->getLastQuote(Asset);
             }
             if (quote) {

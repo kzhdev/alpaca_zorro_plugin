@@ -6,7 +6,7 @@
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.1/AlpacaZorroPlugin_v1.0.1.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.2/AlpacaZorroPlugin_v1.0.2.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
@@ -19,9 +19,10 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
 Following optional Alpaca specific configurations are added since V1.0.0. These configurations can be added in Zorro.ini or ZorroFix.ini (preferred) file.
 
   ```text
-  AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon
-  AlpacaPaidDataPlan = 1	              // 0 = False, 1 = True
-  AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE
+  AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon. Default to 0.
+  AlpacaPaidDataPlan = 1	            // 0 = False (Use Basic Data Plan), 1 = True (Use Pro Data Plan). Default to 1.
+  AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE. Default to 0.
+  AlpacaUseWebsocket = 0                // 0 = Not use Websocket, 1 = Use Websocket. Default to 1.
   PolygonApiKey = "*************"       // Polygon ApiKey
   ```
 
@@ -34,6 +35,9 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
   **AlpacaLogLevel**
   By default, ApacaPlugin log is turned off unless "diag" mode is enabled. AlpacaPlugin logging can be enabled through this config.
 
+  **AlpacaUseWebsocket**
+  Specify receiving price update from Websocket or REST API.
+
   **PolygonApiKey**
   The Polygon ApiKey. If AlpacaDataSource set to 1, the PolygonApiKey must be provided through this config, otherwise Alpaca MarketData will be used.
 
@@ -41,6 +45,7 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 
 * Support Alpaca MarketData V2 Websocket Real-Time Data. Multiple ZorroS instances can share one WebSocket connection through ZorroWebsocketProxy.
 **NTOE:** ZorroWebsocketProxy has a lock-free design, it spins on one CPU core. High CPU usage is normal and expected.
+Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket set to 0, last price will be polled from Snapshot REST endpoint.
 
 * Support **Limit**, **Market** order types
 

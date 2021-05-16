@@ -26,6 +26,7 @@ namespace alpaca {
         uint8_t dataSource = 0;
         uint8_t logLevel = 0;
         bool alpacaPaidPlan = true;
+        bool useWebsocket = true;
 
         void init() {
             if (!readConfig("./ZorroFix.ini")) {
@@ -47,6 +48,7 @@ namespace alpaca {
                 getConfig(line, ConfigFound::PaidPlan,  "AlpacaPaidDataPlan", alpacaPaidPlan);
                 getConfig(line, ConfigFound::LogLevel, "AlpacaLogLevel", logLevel);
                 getConfig(line, ConfigFound::PolygonApiKey, "PolygonApiKey", polygonApiKey);
+                getConfig(line, ConfigFound::UseWebsocket, "AlpacaUseWebsocket", useWebsocket);
             }
 
             return configFound_.all();
@@ -96,7 +98,8 @@ namespace alpaca {
             PaidPlan,
             PolygonApiKey,
             LogLevel,
+            UseWebsocket,
         };
-        std::bitset<4> configFound_ = 0;
+        std::bitset<5> configFound_ = 0;
     };
 }

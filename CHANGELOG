@@ -1,3 +1,10 @@
+v1.0.2
+- Improved logger performance.
+- Retrieve LastTrade/LastQuote from the new V2 snapshot endpoint.
+- Download historical data from V2 Bars endpoint.
+- Unsubscribe Websocket properly when logout.
+- Added AlpacaUseWebsocket config to turn off Websocket.
+
 v1.0.1
 - Fix sometimes server heartbeat timeout after the first strategy launching proxy server
 - Shutdown proxy server 10 seconds after last strategy logout.
