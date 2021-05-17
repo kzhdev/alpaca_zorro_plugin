@@ -1,3 +1,6 @@
+v1.0.2.1
+- Fix server_queue_ not ready on administrator account
+
 v1.0.2
 - Improved logger performance.
 - Retrieve LastTrade/LastQuote from the new V2 snapshot endpoint.
