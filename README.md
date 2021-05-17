@@ -43,8 +43,8 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 
 ## Features
 
-* Support Alpaca MarketData V2 Websocket Real-Time Data. Multiple ZorroS instances can share one WebSocket connection through ZorroWebsocketProxy.
-**NTOE:** ZorroWebsocketProxy has a lock-free design, it spins on one CPU core. High CPU usage is normal and expected.
+* Support Alpaca MarketData V2 Websocket Real-Time Data. Multiple ZorroS instances can share one WebSocket connection through ZorroWebsocketProxy.<br/>
+**NTOE:** ZorroWebsocketProxy has a lock-free design, it spins on one CPU core. High CPU usage is normal and expected.<br/>
 Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket set to 0, last price will be polled from Snapshot REST endpoint.
 
 * Support **Limit**, **Market** order types
