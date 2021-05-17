@@ -6,7 +6,7 @@
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.2/AlpacaZorroPlugin_v1.0.2.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.2.1/AlpacaZorroPlugin_v1.0.2.1.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
