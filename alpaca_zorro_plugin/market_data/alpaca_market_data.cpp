@@ -240,7 +240,7 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
     bool bFirstBar = true;
     uint32_t bar_end_time;
 
-    auto buildBar = [&limit, start, &rtBar, &bFirstBar, n, &i, nTickMinutes, &bars, &bar_end_time, granularity](std::vector<Bar>& dowloadedBars) {
+    auto buildBar = [&limit, start, e, &rtBar, &bFirstBar, n, &i, nTickMinutes, &bars, &bar_end_time, granularity](std::vector<Bar>& dowloadedBars) {
         int residual = 0;
         while (!dowloadedBars.empty() && limit) {
             const auto& bar = dowloadedBars.back();
@@ -259,7 +259,8 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
             else {
                 if (i == 0) {
                     if (bFirstBar) {
-                        if ((bar.time + granularity * 60) % (nTickMinutes * 60) != 0) {
+                        auto duration = nTickMinutes * 60;
+                        if (((e - bar.time) < duration) && ((e % duration) > (bar.time % duration))) {
                             // drop incompleted bar data
                             LOG_DIAG("Drop bar at %s\n", bar.time_string.c_str());
                             dowloadedBars.pop_back();
@@ -274,6 +275,7 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
                 else {
                     if ((bar_end_time - bar.time) > ((nTickMinutes - 1) * 60))  { 
                         LOG_DIAG("Some data is missing, the data at %s belongs to different bar.\n", bar.time_string.c_str());
+                        LOG_DIAG("Bar end at %s\n", bar.time_string.c_str());
                         bars.emplace_back(std::move(rtBar));
                         rtBar = bar;
                         bar_end_time = bar.time;
@@ -334,10 +336,10 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
 
         auto& retrvievedBars = retrieved.content().bars;
         if (retrvievedBars.empty()) {
-            LOG_DEBUG("0 bars downloaded.\n");
+            LOG_TRACE("0 bars downloaded.\n");
             break;
         }
-        LOG_DEBUG("%d bars downloaded. %s-%s\n", retrvievedBars.size(), retrvievedBars.front().time_string.c_str(), retrvievedBars.back().time_string.c_str());
+        LOG_TRACE("%d bars downloaded. %s-%s\n", retrvievedBars.size(), retrvievedBars.front().time_string.c_str(), retrvievedBars.back().time_string.c_str());
 
         if (!retrieved.content().next_page_token.empty()) {
             LOG_DIAG("data pagenated\n");
@@ -356,7 +358,7 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
             buildBar(cached);
         }
     } while (limit && ((s > start) || !page_token.empty()));
-
+    LOG_DIAG("limit: %d, s: %d\n", limit, s);
     std::reverse(bars.begin(), bars.end());
     return response;
 }
