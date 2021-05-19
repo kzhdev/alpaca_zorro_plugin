@@ -4,6 +4,9 @@
 
 **AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool fro financial research and automatic traiding system.
 
+## Windows Definder
+After Windows Definder Updated to 1.339.981.0, zorro_websocket_proxy.exe detected as a **Trojan:Win32/Sabsik.FT.A!ml** incorrectly by Windows Definder on Windows Server 2019. zorro_websocket_proxy.exe has been send to Microsoft for analysis. It is totaly safe to use. To restore zorro_websocket_proxy.exe from quarantin, go to **Windows Security**, click **Virus & Thread Protection** -> **Thread history** ->  **Trojan:Win32/Sabsik.FT.A!ml** then click the **Restore** button.
+
 ## Install
 
 To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.3/AlpacaZorroPlugin_v1.0.3.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
