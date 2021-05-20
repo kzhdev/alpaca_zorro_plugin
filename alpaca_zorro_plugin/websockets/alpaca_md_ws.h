@@ -36,8 +36,6 @@ namespace alpaca {
         struct Subscription {
             slick::SlickQueue<Trade> tradeQueue{ 8 };
             slick::SlickQueue<Quote> quoteQueue{ 8 };
-            uint64_t tradeIndex{ 0 };
-            uint64_t quoteIndex{ 0 };
         };
 
         std::shared_ptr<Subscription> subscribed_;
@@ -163,14 +161,7 @@ namespace alpaca {
             }
 
             auto& sub = it->second;
-            auto result = sub->tradeQueue.read(sub->tradeIndex);
-            if (result.first) {
-                return result.first;
-            }
-            else if (sub->tradeIndex > 0) {
-                return sub->tradeQueue[sub->tradeIndex - 1];
-            }
-            return nullptr;
+            return sub->tradeQueue.read_last();
         }
 
         Quote* getLastQuote(const std::string& asset) {
@@ -185,14 +176,7 @@ namespace alpaca {
             }
 
             auto& sub = it->second;
-            auto result = sub->quoteQueue.read(sub->quoteIndex);
-            if (result.first) {
-                return result.first;
-            }
-            else if (sub->quoteIndex > 0) {
-                return sub->quoteQueue[sub->quoteIndex - 1];
-            }
-            return nullptr;
+            return sub->quoteQueue.read_last();
         }
 
     private:
