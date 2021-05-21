@@ -1,3 +1,6 @@
+v1.0.4
+- Fix when historical  data taking too long, the plugin stopped getting real data from the WebSocket
+
 v1.0.3
 - Improve Historical data download 
 
