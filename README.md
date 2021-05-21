@@ -9,7 +9,7 @@ After Windows Definder Updated to 1.339.981.0, zorro_websocket_proxy.exe detecte
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.3/AlpacaZorroPlugin_v1.0.3.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.4/AlpacaZorroPlugin_v1.0.4.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
