@@ -372,12 +372,10 @@ void plotHeatmap(const char* name,var* Data,int Rows,int Cols)
 {
 	if(is(TRADEMODE) || (is(TRAINMODE) && mode(PARAMETERS|RULES))) return; 
 	if(!is(EXITRUN)) return;
-	//if(Scale == 0.) 
-	var Scale = 1;
 	int i,j;
 	if(!name) name = "Heatmap";
 	if(isf(PlotMode,PL_FILE)) {
-// set the x/y scale according to the number of assets
+// set the x/y scale according to number of rows
 		PlotScale = 300/Rows;	
 		if(Rows >= 20) PlotScale = 450./Rows;
 		if(Rows >= 40) PlotScale = 600./Rows;
@@ -395,14 +393,27 @@ void plotHeatmap(const char* name,var* Data,int Rows,int Cols)
 	for(i=0; i<Cols; i++)
 		for(j=0; j<Rows; j++) {
 			//print(TO_ANY,"\nHeat: %i %i %.2f",i,j,Data[i*Rows+j]);
-			plotGraph("Heat",i+1,-j-1,SQUARE|STATS,color(Data[i*Rows+j]*100./Scale,BLUE,RED,0,0));
+			plotGraph("Heat",i+1,-j-1,SQUARE|STATS,color(Data[i*Rows+j]*100.,BLUE,RED,0,0));
 		}
 }
+
+void plotHeatmap(const char* name,mat M)
+{ plotHeatmap(name,M->dat,M->rows,M->cols); }
 
 void plotHistogram(string Name,var Val,var Step,var Weight,int Color)
 {
 	var Bucket = floor(Val/Step);
-	plotBar(Name,Bucket,Step*Bucket,Weight,SUM+BARS+LBL2,Color);	
+	static var BucketMax = 0, BucketMin = 999999;
+	if(Color == -1) { // end the histogram
+		int i;
+		for(i=BucketMin; i<BucketMax; i++)
+			plotBar("#H",i,Step*i,1,BARS+LBL2,0xFF000000); // print labels
+		BucketMax = 0; BucketMin = 999999;
+	} else {
+		BucketMax = max(BucketMax,Bucket);
+		BucketMin = min(BucketMin,Bucket);
+		plotBar(Name,Bucket,Step*Bucket,Weight,SUM+BARS+LBL2,Color);
+	}
 }
 
 

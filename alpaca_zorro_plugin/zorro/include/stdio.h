@@ -226,11 +226,13 @@ void *bsearch(
 
 // string.h //////////////////////////////////////////////
 
+int __cdecl strncmp(const char *string1,const char *string2,size_t count );
 int __cdecl strcpy_s( char *dest, size_t dest_size, const char *src);
 int __cdecl sprintf_s(char *buffer,  size_t sizeOfBuffer,  const char *format,  ...);
 int __cdecl strcat_s(char *strDestination, size_t numberOfElements, const char *strSource);
-int __cdecl memcpy_s(void *dest,   size_t destSize,   const void *src,   size_t count);
+int __cdecl memcpy_s(void *dest, size_t destSize, const void *src, size_t count);
 
+API(strncmp,msvcrt)
 API(strcpy_s,msvcrt)
 API(sprintf_s,msvcrt)
 API(strcat_s,msvcrt)

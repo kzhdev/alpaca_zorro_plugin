@@ -5,12 +5,18 @@
 void contractPrint(CONTRACT* c,int To)
 {
 	if(!c) return; 
-	print(To,"\n%s,%s%s%s,%i,%.4f,%.4f,%.4f,%.4f,%i,%i,%s",
+	print(To,"\n%s,%s%s%s,%i,%s,%s,%s,%s,%s,%s,%s",
 		ifelse(is(TRADEMODE),(char *)c,strdate("%Y-%m-%d",c->time)),
 		ifelse(c->Type&FUTURE,"Future",""),
 		ifelse(c->Type&PUT,"Put",""),
 		ifelse(c->Type&CALL,"Call",""),
-		c->Expiry,(var)c->fStrike,(var)c->fUnl,(var)c->fAsk,(var)c->fBid,(int)c->fVal,(int)c->fVol,
+		c->Expiry,
+		sftoa(c->fStrike,5),
+		sftoa(c->fUnl,5),
+		sftoa(c->fAsk,4),
+		sftoa(c->fBid,4),
+		sftoa(c->fVal,3),
+		sftoa(c->fVol,3),
 		ifelse(is(TRADEMODE),strcon(c),""));
 }
 
@@ -20,13 +26,13 @@ void contractPrint(CONTRACT* c) { set(LOGFILE); contractPrint(c,TO_FILE); }
 void contractPrint(int Handle, int To)
 {
 	set(LOGFILE);
-	CONTRACT* c;
-	int i = 0;
 	if(is(TRADEMODE))
 		print(To,"\nClass,Type,Expiry,Strike,Underlying,Ask,Bid,Multiplier,Vol,Symbol");
 	else
 		print(To,"\nDate,Type,Expiry,Strike,Underlying,Ask,Bid,Val,Vol");
+	int i = 0;
 	if(Handle > 0) {
+		CONTRACT* c;
 		while(c = (CONTRACT*)dataStr(Handle,i++,0))
 			contractPrint(c,To);
 	} else if(!Handle) { // print current contract chain
@@ -176,8 +182,12 @@ var contractProfitN(CONTRACT* C,int N,var Price)
 
 var contractStrike(int Type,int Days,var Price,var HistVol,var RiskFree,var Delta)
 {
-	if(!Live && Verbose > 0 && (!Type || Price == 0. || abs(Delta) > 1)) 
-	{ printf("\nError 011: contractStrike"); quit(""); } 
+	if(!Live && Verbose > 0 && (!Type || Price == 0. || abs(Delta) > 1)) { 
+		printf("\nError 011: contractStrike(%i,%i,%.2f,..,%.3f)",
+		Type,Days,Price,Delta); 
+		quit("");
+		return 0;
+	} 
 //	K = S0 * exp(-qnorm(delta) * sigma * sqrt(T) + ((sigma^2)/2) * T)
 	var T = Days/365.25;
 	var D1 = qnorm(abs(Delta)); // * exp(RiskFree*T));
@@ -350,10 +360,7 @@ var comboRisk(int Sign)
 	return -MaxRisk;
 }
 
-var comboRisk()
-{
-	return comboRisk(1);
-}
+var comboRisk() { return comboRisk(1); }
 
 var comboProfit(var Price,int Sign)
 {
@@ -390,11 +397,11 @@ int comboType()
 	else if(!comboContract(2)) // put or call
 		return comboContract(1)->Type;
 	else if(!comboContract(3)) // Spread (call-call,put-put) or Strangle (call-put)
-		return 4 + ((comboContract(1)->Type)&(CALL | PUT))
-		+ ((comboContract(2)->Type)&(CALL | PUT));
+		return 4 + ((comboContract(1)->Type)&(CALL|PUT))
+		+ ((comboContract(2)->Type)&(CALL|PUT));
 	else if(!comboContract(4)) // Butterfly (call-call-call,put-put-put)
-		return 12 + ((comboContract(1)->Type)&(CALL | PUT));
-	else // Condor
+		return 12 + ((comboContract(1)->Type)&(CALL|PUT));
+	else // we assume Condor
 		return 20;
 }
 
@@ -465,6 +472,19 @@ var comboMargin(int Sign, int AssetType)
 		return Price/Legs;
 		}
 	}
+}
+
+void comboPrint(int To)
+{
+	if(!comboLegs()) return;
+	set(LOGFILE);
+	if(is(TRADEMODE))
+		print(To,"\nClass,Type,Expiry,Strike,Underlying,Ask,Bid,Multiplier,Vol,Symbol");
+	else
+		print(To,"\nDate,Type,Expiry,Strike,Underlying,Ask,Bid,Val,Vol");
+	int i;
+	for(i=1; i <= comboLegs(); i++)
+		contractPrint(comboContract(i),To);
 }
 
 ///////////////////////////////////////////////////////////////////////

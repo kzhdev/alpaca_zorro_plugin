@@ -122,6 +122,7 @@
 #define GapDays	g->nGapDays
 #define MaxBars	g->nMaxBars
 #define NumBars	g->numBars
+#define NumTicks	g->numTicks
 #define NumMinutes g->numMinutes
 #define Bar			g->nBar
 #define StartBar	g->nFrameStart
@@ -326,6 +327,7 @@
 #define CommissionCost	g->w.vCommissionCost
 #define ReturnMean		g->w.vMean
 #define ReturnStdDev		g->w.vStdDev
+#define ReturnSemiDev	g->w.vSemiDev
 #define ReturnUlcer		g->w.vUlcer
 #define ReturnR2			g->w.vR2
 #define ReturnCBI			g->w.vCBI
@@ -392,6 +394,7 @@
 #define all_trades		forTrade(2); g->nItor; forTrade(3) // all trades forward
 #define past_trades		forTrade(32); g->nItor; forTrade(32+1) // all trades backwards
 #define break_trades		if(!forTrade(64)) break	// abort loop
+#define return_trades	if(!forTrade(64)) return	// abort loop and return
 #define used_assets		forAsset(0); g->nItor; forAsset(1)
 #define listed_assets	forAsset(2); g->nItor; forAsset(1+2)
 #define break_assets		if(!forAsset(64)) break	// abort loop
@@ -430,6 +433,7 @@
 #define Contracts		(g->asset->pContracts)
 #define NumContracts g->asset->numContracts
 #define ContractRow	(g->asset->nContractRow+g->asset->nContractOffs)
+#define ContractHandle	(g->asset->nHandle)
 #define ThisContract	g->contract
 #define ThisCombo		g->combo
 #define ContractAsk	((var)(ThisContract->fAsk))
@@ -495,5 +499,6 @@
 #define YMDHMS	"%y%m%d %H:%M:%S"
 #define HMS	"%H:%M:%S"
 #define YMD	"%Y%m%d"
-
+#define OHLC seriesO(),seriesHigh(),seriesL(),seriesC()
+#define TICKPERIOD	ifelse(Live,1/60.,1)
 #define _POS(s)		debuginfo((char*)s)

@@ -1,7 +1,8 @@
 //////////////////////////////////////////////////////////////////////
 // Zorro-specific variables & functions
 // for use by lite-C scripts & Zorro program
-// (c) oP group 2014, 2019
+// (c) oP group 2014, 2021
+// Do not modify this file
 //////////////////////////////////////////////////////////////////////
 #ifndef trading_h
 #define trading_h
@@ -24,6 +25,7 @@ typedef long function;
 // constant limits (don't change!)
 #define NAMESIZE		16		// asset and algo names
 #define NAMESIZE2		40		// broker and account names
+#define UUIDSIZE		256
 #define NUM_SKILLS	8
 #define NUM_SKILLS2	16
 #define NUM_RESULTS	20
@@ -33,6 +35,7 @@ typedef long function;
 #define MAX_ASSETS	8000	// max assets in list
 #define MAX_CONTRACTS 20000 // max size of CONTRACTS chain
 #define MAX_QUOTES	5000	// size of T2 orderbook list
+#define MAX_BUFFER	20000	// size of text buffers
 
 /////////////////////////////////////////////////////////////////////
 // trading structs
@@ -40,20 +43,14 @@ typedef struct T1
 {
 	DATE	time;	// GMT timestamp, OLE datetime, 0.5 ms precision
 	float fVal;	// positive for ask, negative for bid	
-} T1; // single-stream tick, .t1 file content
+} T1; // single stream tick, .t1 file content
 
 typedef struct T2
 {
   DATE  time; // GMT timestamp
-  float fVal; // price quote, positive for ask and negative for bid
+  float fVal; // price, positive for ask/last, negative for bid
   float fVol; // volume / size
-} T2; // order book data
-
-typedef struct THL
-{
-	DATE	time;	
-	float fHigh, fLow;	
-} THL; // two-stream tick, internal format
+} T2; // 2-stream tick, f.i. order book data, .t2 file content
 
 typedef struct T6
 {
@@ -61,11 +58,11 @@ typedef struct T6
 	float fHigh, fLow;	// (f1,f2)
 	float fOpen, fClose;	// (f3,f4)	
 	float fVal, fVol; // additional data, f.i. spread and volume (f5,f6)
-} T6; // 6-stream tick, .t6 file content
+} T6; // candle with extra data, .t6 file content
 
 typedef struct CONTRACT
 {
-	DATE	time;			// live: trading class string
+	DATE	time;			// hist: timestamp; live: trading class string
 	float fAsk, fBid; // premium without multiplier (f1,f2)
 	float fVal;			// script dependent - bid volume, IV, delta... (f3)
 	float fVol;			// trade volume, ask volume, or open interest (f4)
@@ -73,7 +70,7 @@ typedef struct CONTRACT
 	float fStrike;		// (f6)
 	long	Expiry;		// YYYYMMDD (i7)
 	long	Type;			// PUT, CALL, FUTURE, EUROPEAN, BINARY (s8)
-} CONTRACT; // for options, futures, FOPs
+} CONTRACT; // options, futures, FOPs, .t8 file content
 
 typedef struct COMBO
 {
@@ -139,8 +136,8 @@ typedef struct ASSET
 	var	*pOpen,*pClose,*pHigh,*pLow,*pPrice;	// price history data array
 	var	*pVal,*pVol;	// additional price data lists, f.i. spread and volume
 	CONTRACT *pContracts;	// contract chain
-	void	**pTicks;		// tick pointer array, used for tick simulation in trade functions
-	void	*tick_start,*tick_end;	// tick list in THL or T6 format, dependent on LEAN
+	void	*tick_current;		// tick pointer of the current bar
+	void	*tick_start,*tick_end;	// tick list in T2 or T6 format, dependent on LEAN
 	void	*tick_mem;		// allocated tick memory
 	int	nTotalTicks;	// number of ticks in tick_mem
 	int	nFirstPriceBar; // first simulation bar for this asset
@@ -220,7 +217,7 @@ typedef struct TRADE
 // saved until this position; change "TRD" header when changed
 	void	*algo;		// trade ALGO 
 	void	*manage;		// trade management function pointer
-	var	*dSignals;	// pointer to advise parameters; uuid in live trading
+	var	*vExtraData; // advise signals or uuid string
 	float fLastStop;	// for updating the stop
 	float fPad[1]; 
 	int	nBarLast;	// bar number of last trail step  
@@ -233,7 +230,7 @@ typedef struct TRADE
 #define TR_EXPIRED	(1<<3)	// option or future expired
 #define TR_WAITSELL	(1<<4)	// close position at the next tick
 #define TR_WAITBUY	(1<<5)	// pending trade 
-//#define TR_UNUSED	(1<<6)	// 
+#define TR_UUID		(1<<6)	// trade uses UUID
 #define TR_SUSPEND	(1<<7)	// suspend trade function
 #define TR_EVENT		(1<<8)	// trade function was called by enter/exit event
 #define TR_MISSEDENTRY	(1<<10)	// missed the entry limit in the last bar
@@ -252,6 +249,7 @@ typedef struct TRADE
 #define TR_GTC			(1<<23)	// Good-till-cancelled trade on the broker side
 #define TR_ACCOUNT	(1<<24)	// trade with the main account
 #define TR_ENTRYSTOP	(1<<25)	// entry stop, rather than limit
+#define TR_BSTOP	TR_ENTRYSTOP	// bracket stop order
 #define TR_ENTER		(1<<26)  // entered by TMF return value
 #define TR_EXIT		(1<<27)  // exit by TMF return value
 #define TR_REMOVED	(1<<28)	// removed from the online trade list (f.i. margin call or manually closed)
@@ -298,7 +296,7 @@ typedef struct STATUS {
 // clear again until this position
 	struct STATUS *other;	// opposite status (short<->long)					
 	ASSET	*asset;				// asset pointer
-	int	nCycles;				// number of optimize cycles
+	int	nCycles;				// number of optimize cycles or parameters
 	int	nSteps[MAX_PARAMS];	// list of optimize steps
 	float	fParam[MAX_PARAMS];	// list of optimal parameters
 	float* fStat;				// matrix of optimize results
@@ -403,7 +401,7 @@ typedef struct GLOBALS
 	int	nSelectCore;	// select a core for multithreaded cycles
 	int	nTrainMode;		// optimize mode
 	int	nFill;			//. order fill mode
-	int	nTickSize;		// T6 or THL
+	int	nTickSize;		// T6 or THL, for storing internal ticks
 	int	nMinutesPerDay;	// minimum trading time per day, default = 360
 	DATE	tNow;				// for time/date functions
 	var	vSpreadFactor;	// 0.5 = open at mid price
@@ -421,18 +419,20 @@ typedef struct GLOBALS
 	int	nComboLeg;		// Number of the current combo leg, 1..4
 	COMBO	*combo;			// current selected combo
 	var	vScholzBrake;	// Olaf Scholz tax limit
-	long	pad2[6];
+	var	vPad2;			// 
+	long	pad2[4];
 
 // simulation performance (r/o)
 	STATUS	*statLong,*statShort;	// component statistics, set up by asset() and algo()
 	PERFORMANCE	w;			// overall win and loss statistics
-	int	pad20[8];
+	int	pad20[6];
 
+	DATE	tCurrentTime;	// current time
 	DATE	tStartTime;		// session start time
 	DATE	tDayOffset;		// for simulating live trading on a different day
 	DATE	tTimestamp;		// of last price quote
 	DATE	tTimeNext;		// next bar increase		
-	DATE	tTimeStart;		// latest history start of all assets
+	DATE	tTimeHistory;		// latest history start of all assets
 	var	vInitialBalance;
 	var	vBarRange;		// sum of all price movements
 	int	nHistoryTicks;	// number of ticks for BrokerHistory2
@@ -442,7 +442,8 @@ typedef struct GLOBALS
 	DWORD	nUniqueNumber;	// for generating unique file names
 	int	nHistoryZone;	// convert local time in history downloads
 	int	nBrokerZone;	// convert local time in broker plugin
-	long	pad3[7];
+	int	numTicks;		// total historical ticks processed
+	int	pad3[6];
 
 // account parameters (r/o)
 	var	vLossGlobal;	// total loss of all instances
@@ -453,7 +454,7 @@ typedef struct GLOBALS
 	var	vWinVal,vLossVal;	// current win/loss of all open positions
 	var	vBalance;	// account balance in trade mode
 	var	vEquity;		// account balance plus open trade value in trade mode
-	int	numTrades;	// number of open or pending trades
+	int	numTrades;	// number of real open or pending trades
 	int	numPending;	// number of virtual or real pending trades
 	int	numShort,numLong;	//. number of open long or short positions
 	int	numWinning,numLosing,numEven;	// # of trades winning, losing, break even
@@ -538,7 +539,7 @@ typedef struct GLOBALS
 	int	numAssets;		// number of assets used in the script
 	var	vParameter;		//. current optimize value
 	var	vObjectiveBest;	// best result from objective()
-	var	vPad61;
+	int	nLoopSelect[2];	// select single argument from loop
 	int	nWFOStart;		// bar number of the current WFO cycle start
 	int	nTrainFrame,nTestFrame;		// size of the training/test period in bars
 	int	nModels;			//. number of models for prediction
@@ -548,8 +549,10 @@ typedef struct GLOBALS
 	int	numRejected;	//. number of rejected trades
 	int	nComponents;	// component counter
 	int	nFrameEnd;		// last bar of the current frame
-	int	nOrderRow;		// row nuber in order list
-	long	pad62[9];
+	int	nOrderRow;		// row number in order list
+	int	nSeries;			//. current series number
+	int	nTest;			// test modes
+	long	pad62[7];
 
 	var	*pSeriesBuffer;	// pointer of the last/next series
 	var	*pPrevCurve;	// daily balance/equity curve from previous backtest
@@ -599,6 +602,7 @@ typedef struct GLOBALS
 	const char *sAccountName;	// from the account list
 	var*	pShape;		// price curve bending array
 	PARAMETER* pParameters;	// list of parameters in a training run
+
 	long	pad7[13];
 
 // chart/log parameters (r/w)
@@ -755,24 +759,16 @@ typedef struct GLOBALS
 #define BUSY			FLAG(3)	// broker API or script function busy 
 #define SLIDERS		FLAG(4)	// slider was moved
 #define NOWATCH		FLAG(5)	// ignore watch() statements
-
-//#define SAV_TRADES	FLAG(10)	// save modes
-//#define SAV_SLIDERS	FLAG(11)
-//#define SAV_ALGOVARS	FLAG(12)
-//#define SAV_STATS		FLAG(13)
-//#define SAV_BACKUP	FLAG(14)
-//#define SAV_HTML		FLAG(15)
+#define NOSHIFT		FLAG(6)	// prevent shifting series
 
 // defines for functions and parameters
 #define NOW		-999999
 #define NAY		-999997
 #define NAIVE		0
-#define ATCLOSE	1
-#define DELAYED	3
 #define HFT			8
 #define DIAG		8
 #define ALERT		(1<<4)
-#define UPDATE		(1<<5)
+#define SILENT		(1<<5)
 #define LOGMSG		(1<<9)	// show log in message window
 
 #define NEURAL		(1<<20)	// use external AI
@@ -808,6 +804,7 @@ typedef struct GLOBALS
 #define FROM_BITTREX	(1<<18)
 #define FROM_CRYPTOC	(1<<19)
 #define FROM_IEX		(1<<20)
+#define FROM_SOURCE	(1<<21)
 
 #define FOREX		1
 #define INDEX		2	
@@ -882,6 +879,8 @@ typedef struct GLOBALS
 #define CROSS2	(DOT+(9<<20))
 #define ALL		(1<<24)
 #define TXT		(1<<25)
+#define DSET	(1<<26)
+#define CONTOUR (1<<27)
 #define MULTICOLOR (1<<30)
 
 #define PL_ALL		(1<<6)
@@ -961,20 +960,24 @@ typedef struct GLOBALS
 #define GET_MAXTICKS		43 // max history ticks
 #define GET_IDTYPE		44 // trade id, 0 = number, 1 = GUID string pointer
 #define GET_MAXREQUESTS	45 // for setting up MaxRequests
+#define GET_HEARTBEAT	47 // for setting up TickTime
 #define GET_LOCK			46	// Locking required. 
 #define GET_TYPE			50	// Asset type. 
 #define GET_COMPLIANCE	51 // NFA compliance.
 #define GET_NTRADES		52 // Number of open trades
 #define GET_POSITION		53	// Open net lots per asset 
 #define GET_ACCOUNT		54	// Account number (string)
+#define GET_AVGENTRY		55	// Average entry price 
 #define GET_BOOK			62	// Order book
 #define GET_OPTIONS		64 // Option chain
 #define GET_FUTURES		65	
 #define GET_FOP			66	
 #define GET_UNDERLYING	67	
 #define GET_SERVERSTATE	68
-#define GET_GREEKS		69
-#define GET_LOOPS			70
+#define GET_GREEKS		69 // for the last option price request
+#define GET_LOOPS			70	// return # of wait loops of last command, for diagnostics 
+#define GET_TRADES		71 // list of positions
+#define GET_DATA			72 // direct response from REST API
 
 #define SET_PATCH			128 // Work around broker API bugs
 #define SET_SLIPPAGE		129 // Max adverse slippage for orders
@@ -987,7 +990,8 @@ typedef struct GLOBALS
 #define SET_HISTORY		136 // set file name for direct history download
 #define SET_COMBO_LEGS	137 // declare the next n trades as an option combo
 #define SET_DIAGNOSTICS	138 // activate plugin diagnostics output
-#define SET_AMOUNT		139 // set order amount size
+#define SET_AMOUNT		139 // set lot amount
+#define SET_LEVERAGE		140 // set leverage for subsequent trades
 #define GET_PRICETYPE	150 // type of prices returned by the API
 #define SET_PRICETYPE	151 
 #define GET_VOLTYPE		152 // type of volume returned by the API
@@ -1001,8 +1005,10 @@ typedef struct GLOBALS
 #define SET_HWND			172
 #define SET_MAXTICKS		173 // max history ticks
 #define GET_CALLBACK		174 // plugin supplied callback function 
-#define SET_COMMENT		180 // Comment on the chart
+#define SET_COMMENT		180 // Comment on the chart window
 #define SET_BROKER		181 // Set broker/exchange for aggregators
+#define SET_SERVER		182 // Send ':' content of Server field
+#define SET_CCY			183 // Send currency from CCY field
 
 #define PLOT_STRING		188	// send a string to a plot object
 #define PLOT_REMOVE		260
@@ -1038,7 +1044,8 @@ typedef struct GLOBALS
 #define H_HISTORY		1001	// predefined handles
 #define H_YIELD		1002
 #define H_QUOTES		1003
-#define H_HISTORY1	1004	
+#define H_HISTORY1	1004
+#define H_TEMP			1005
 #define H_ASSET		1010	// + number of assets
 
 #endif // NO_DEFINES

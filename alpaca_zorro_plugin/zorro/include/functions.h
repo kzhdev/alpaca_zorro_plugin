@@ -168,7 +168,7 @@ C long F(file_date)(const char* name);
 C char* F(file_select)(const char* dir,const char* filter);
 // internet 
 C char* F(http_transfer)(const char* url,char* data);
-C int F(http_send)(const char* url,char* data,char* header);
+C int F(http_send)(const char* url,const char* data,const char* header);
 C int F(http_post)(const char* url,char* data);
 C int F(http_proxy)(const char* proxy,int port);
 C long F(http_status)(int id);
@@ -273,7 +273,7 @@ C var F(compress)(var x,int TimePeriod);
 C var F(scale)(var x,int TimePeriod);
 C var F(normalize)(var x,int TimePeriod);
 C var F(zscore)(var x,int TimePeriod);
-C var F(diff)(var val);
+C var F(diff)(var x,int TimePeriod);
 // analysis
 C int F(predict)(int type,vars Data,int TimePeriod,var Threshold);
 C var F(polyfit)(var* a,vars Data,int TimePeriod,int n,var weight);
@@ -661,7 +661,7 @@ C void F(call)(int Mode,void* Address,int Arg1,var Arg2);
 C var F(SemiMoment)(vars Data,int Period,int n);
 C var F(Sharpe)(vars Data,int Period);
 C var F(Sortino)(vars Data,int Period);
-C var F(knapsack)(int* Items,var* Prices,var* Values,int N,var Budget,var Cap);
+C var F(knapsack)(int* Items,var* Costs,var* Values,int N,var Budget,var Cap);
 C void F(plotText)(const char* Name,var X,var Y,const char* Text,int Style,int Color);
 C var F(OBV)(var* Data,var Volume);
 C int F(invalid)(var V);
@@ -677,6 +677,22 @@ C var F(CTI)(vars Data,int Length);
 C var F(CCYI)(vars Data,int Length);
 C var F(CCYIR)(vars Data,int Length);
 C var F(CCYIState)(vars Data,int Length,var Threshold);
+
+C var* F(seriesO)();
+C var* F(seriesH)();
+C var* F(seriesL)();
+C var* F(seriesC)();
+C var F(assign)(int* Items,var* Costs,var* Weights,int N,var Budget);
+C int F(brokerTrades)(int Filter);
+C void F(assetSource)(const char *Filename,const char* URL,const char* Header,const char* Body,const char* Format);
+
+C int F(dataSize)(int Handle, int *Rows, int *Cols);
+C int F(dataParseString)(int Handle,const char* Format,char* Content);
+C DATE F(mtu)(int UnixTime);
+C void F(matSaveCSV)(mat M,const char* Name);
+C int F(dataRearrange)(int H1,int H2,int RowX,int RowY,int Mode);
+C int F(dataCol)(int Handle,var* Data,int Col);
+C void F(dataChart)(int Handle,const char* name,int Type,int Color);
 
 // new functions at the end, add to func_list, chm idx, npp, funclist.htm.
 #undef F

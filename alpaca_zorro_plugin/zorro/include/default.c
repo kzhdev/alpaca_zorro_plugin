@@ -24,13 +24,13 @@ void lcStructs()
 	T1* t1 = 0; t1->time = 0;
 	T2* t2 = 0; t2->time = 0;
 	T6* t6 = 0; t6->time = 0;
-	THL* thl = 0; thl->time = 0;
 	BAR* b = 0; b->time_base = 0;
 	DATA* d = 0; d->Data = 0;
 	DATASET* ds = 0; ds->fData = 0;
 	MATRIX* m = 0; m->dat = 0;
 	CONTRACT* c = 0; c->time = 0;
 	COMBO* co = 0; co->Leg[0] = 0;
+	PARAMETER* pa = 0; pa->Value = 0;
 }
 
 // lite-C internal functions
@@ -44,7 +44,7 @@ var max(var a,var b);
 int max(int a,int b);
 var min(var a,var b);
 int min(int a,int b);
-void watch(string text,...);
+int watch(string text,...);
 
 var round(var val,var step) { return roundto(val,step); }
 var round(var val) { return roundto(val,1.); }
@@ -68,6 +68,7 @@ var Fisher(var* Data,int Period) { return FisherN(Data,Period); }
 var HH(int Period) { return HH(Period,0); }
 var LL(int Period) { return LL(Period,0); }
 int contractCheck(TRADE* tr) { return contractCheck(tr,3); }
+var diff(var x) { return diff(x,1); }
 
 var genSine(var Period) { return genSine(Period,Period); }
 var genSquare(var Period) { return genSquare(Period,Period); }
