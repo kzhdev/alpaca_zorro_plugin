@@ -335,28 +335,30 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
         }
 
         auto& retrvievedBars = retrieved.content().bars;
-        if (retrvievedBars.empty()) {
+        if (!retrvievedBars.empty()) {
+            LOG_TRACE("%d bars downloaded. %s-%s\n", retrvievedBars.size(), retrvievedBars.front().time_string.c_str(), retrvievedBars.back().time_string.c_str());
+
+            if (!retrieved.content().next_page_token.empty()) {
+                LOG_DIAG("data pagenated\n");
+                // need to get more data entil reach the end;
+                cached.insert(cached.end(), retrvievedBars.begin(), retrvievedBars.end());
+                page_token = retrieved.content().next_page_token;
+                continue;
+            }
+            else {
+                page_token = "";
+            }
+
+            e = cached.empty() ? retrvievedBars.front().time - 30 : cached[0].time - 30;
+            buildBar(retrvievedBars);
+            if (!cached.empty()) {
+                buildBar(cached);
+            }
+        } else {
             LOG_TRACE("0 bars downloaded.\n");
-            break;
+            e = s - 30;
         }
-        LOG_TRACE("%d bars downloaded. %s-%s\n", retrvievedBars.size(), retrvievedBars.front().time_string.c_str(), retrvievedBars.back().time_string.c_str());
-
-        if (!retrieved.content().next_page_token.empty()) {
-            LOG_DIAG("data pagenated\n");
-            // need to get more data entil reach the end;
-            cached.insert(cached.end(), retrvievedBars.begin(), retrvievedBars.end());
-            page_token = retrieved.content().next_page_token;
-            continue;
-        }
-        else {
-            page_token = "";
-        }
-
-        e = cached.empty() ? retrvievedBars.front().time - 30 : cached[0].time - 30;
-        buildBar(retrvievedBars);
-        if (!cached.empty()) {
-            buildBar(cached);
-        }
+        
     } while (limit && ((s > start) || !page_token.empty()));
     LOG_DIAG("limit: %d, s: %d\n", limit, s);
     std::reverse(bars.begin(), bars.end());

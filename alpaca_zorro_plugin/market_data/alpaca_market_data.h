@@ -141,7 +141,6 @@ namespace alpaca {
 
        
         __time32_t e = end;
-        __time32_t s;
        
         std::string page_token;
         uint32_t nForceRetry = 6;

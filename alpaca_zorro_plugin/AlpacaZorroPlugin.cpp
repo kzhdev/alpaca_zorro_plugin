@@ -171,6 +171,7 @@ namespace alpaca
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
         if (!pPrice) { // this is subscribe
+            BrokerError(("Subscribe " + std::string(Asset)).c_str());
             if (config.dataSource || !wsClient) {
                 // Polygon or not using websocket
                 return 1;
@@ -178,9 +179,26 @@ namespace alpaca
 
             if (wsClient->subscribeAsset(Asset)) {
                 LOG_DEBUG("%s subscribed\n", Asset);
-                return 1;
             }
-            return 0;
+            else {
+                LOG_DEBUG("Failed to subscribed %s\n", Asset);
+                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST.").c_str());
+            }
+            return 1;
+        }
+
+        if (wsClient && wsClient->authenticated() && !wsClient->isSubscribed(Asset)) {
+            // When strategy logged out and re-logged in after market close re-open, Zorro does not 
+            // pass the NULL pPrice to subscribe.
+            //
+            // Need to resubscribe Websocket price update
+            if (wsClient->subscribeAsset(Asset)) {
+                LOG_DEBUG("%s subscribed\n", Asset);
+            }
+            else {
+                LOG_DEBUG("Failed to subscribed %s\n", Asset);
+                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST.").c_str());
+            }
         }
 
         if (s_priceType == 2) {
@@ -712,6 +730,7 @@ namespace alpaca
 
         case SET_HWND:
         case GET_CALLBACK:
+        case SET_CCY:
             break;
 
         case 2001: {

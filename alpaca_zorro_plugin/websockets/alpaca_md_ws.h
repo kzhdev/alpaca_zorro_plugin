@@ -13,8 +13,9 @@ namespace alpaca {
 
     class AlpacaMdWs : public zorro::websocket::ZorroWebsocketProxyClient, public zorro::websocket::WebsocketProxyCallback {
         enum Status : uint8_t {
-            CONNECTING,
             DISCONNECTED,
+            LOGOUT,
+            CONNECTING,
             AUTHENTICATING,
             AUTHENTICATED,
             SUBSCRIBING,
@@ -22,7 +23,6 @@ namespace alpaca {
             NOT_SUBSCRIBED,
             UNSUBSCRIBING,
             UNSUBSCRIBED,
-            LOGOUT,
         };
         std::atomic_uint_fast32_t id_{ 0 };
         volatile Status status_{ Status::DISCONNECTED };
@@ -34,13 +34,11 @@ namespace alpaca {
         uint32_t error_count_ = 0;
 
         struct Subscription {
-            slick::SlickQueue<Trade> tradeQueue{ 8 };
-            slick::SlickQueue<Quote> quoteQueue{ 8 };
+            std::unique_ptr<slick::SlickQueue<Trade>> tradeQueue = std::make_unique<slick::SlickQueue<Trade>>(8);
+            std::unique_ptr<slick::SlickQueue<Quote>> quoteQueue = std::make_unique<slick::SlickQueue<Quote>>(8);
         };
 
-        std::shared_ptr<Subscription> subscribed_;
-        std::unordered_map<std::string, std::shared_ptr<Subscription>> subscriptions_populator_;
-        std::unordered_map<std::string, std::shared_ptr<Subscription>> subscriptions_reader_;
+        std::unordered_map<std::string, Subscription> subscriptions_;
 
     public:
         AlpacaMdWs()
@@ -85,7 +83,7 @@ namespace alpaca {
                 }
 
                 BrokerError("Websocket reopened.");
-                for (auto& kvp : subscriptions_reader_) {
+                for (auto& kvp : subscriptions_) {
                     subscribeAsset(kvp.first, true);
                 }
             }
@@ -98,15 +96,29 @@ namespace alpaca {
             status_ = Status::LOGOUT;
         }
 
+        bool authenticated() const noexcept {
+            return status_ >= Status::AUTHENTICATED;
+        }
+
+        bool isSubscribed(const std::string& asset) const noexcept {
+            return subscriptions_.find(asset) != subscriptions_.end();
+        }
+
         bool subscribeAsset(const std::string& asset, bool force = false) {
-            if (status_ < Status::AUTHENTICATED) {
+            if (!authenticated()) {
                 return false;
             }
 
-            if (!force && subscriptions_reader_.find(asset) != subscriptions_reader_.end()) {
+            auto iter = subscriptions_.find(asset);
+            if (iter == subscriptions_.end()) {
+                iter = subscriptions_.emplace(asset, Subscription()).first;
+            }
+            else if (!force) {
                 return true;
             }
-            
+
+            auto& subscription = iter->second;
+
             rapidjson::StringBuffer s;
             rapidjson::Writer<rapidjson::StringBuffer> writer(s);
             writer.StartObject();
@@ -124,7 +136,6 @@ namespace alpaca {
             auto data = s.GetString();
 
             pending_subscription_ = asset;
-            subscribed_.reset();
             status_ = Status::SUBSCRIBING;
             auto id = id_.load(std::memory_order_relaxed);
             LOG_INFO("Subscribe %s, id=%d\n", asset.c_str(), id);
@@ -135,18 +146,12 @@ namespace alpaca {
             }
             if (existing) {
                 status_ = Status::SUBSCRIBED;
-                subscriptions_reader_.emplace(asset, std::make_shared<Subscription>());
                 pending_subscription_ = "";
                 return true;
             }
             waitForWsReadyOrError(Status::SUBSCRIBED);
-            auto b = status_ == Status::SUBSCRIBED;
-            if (b) {
-                subscriptions_reader_.emplace(asset, std::move(subscribed_));
-                subscribed_.reset();
-            }
             pending_subscription_ = "";
-            return b;
+            return status_ == Status::SUBSCRIBED;
         }
 
         Trade* getLastTrade(const std::string& asset) {
@@ -155,13 +160,12 @@ namespace alpaca {
                 return nullptr;
             }
 
-            auto it = subscriptions_reader_.find(asset);
-            if (it == subscriptions_reader_.end()) {
+            auto it = subscriptions_.find(asset);
+            if (it == subscriptions_.end()) {
                 return nullptr;
             }
 
-            auto& sub = it->second;
-            return sub->tradeQueue.read_last();
+            return it->second.tradeQueue->read_last();
         }
 
         Quote* getLastQuote(const std::string& asset) {
@@ -170,13 +174,12 @@ namespace alpaca {
                 return nullptr;
             }
 
-            auto it = subscriptions_reader_.find(asset);
-            if (it == subscriptions_reader_.end()) {
+            auto it = subscriptions_.find(asset);
+            if (it == subscriptions_.end()) {
                 return nullptr;
             }
 
-            auto& sub = it->second;
-            return sub->quoteQueue.read_last();
+            return it->second.quoteQueue->read_last();
         }
 
     private:
@@ -199,7 +202,7 @@ namespace alpaca {
 
             LOG_INFO("Unsubscribe all Assets\n");
             status_ = Status::UNSUBSCRIBING;
-            for (auto& kvp : subscriptions_reader_) {
+            for (auto& kvp : subscriptions_) {
                 rapidjson::StringBuffer s;
                 rapidjson::Writer<rapidjson::StringBuffer> writer(s);
                 writer.StartObject();
@@ -220,7 +223,7 @@ namespace alpaca {
                 unsubscribe(id_.load(std::memory_order_relaxed), kvp.first, data, s.GetSize());
             }
             status_ = Status::UNSUBSCRIBED;
-            subscriptions_reader_.clear();
+            subscriptions_.clear();
         }
 
 
@@ -325,9 +328,6 @@ namespace alpaca {
                                 if (status_ == Status::SUBSCRIBING) {
                                     auto it = ss_.str().find(pending_subscription_);
                                     if (it != std::string::npos) {
-                                        subscribed_ = std::make_shared<Subscription>();
-                                        subscriptions_populator_.insert(std::make_pair(pending_subscription_, subscribed_));
-                                        MemoryBarrier();
                                         status_ = Status::SUBSCRIBED;
                                     }
                                     else {
@@ -388,14 +388,14 @@ namespace alpaca {
             std::string symbol;
             Parser<T> parser(objJson);
             parser.get<std::string>("S", symbol);
-            auto it = subscriptions_populator_.find(symbol);
-            if (it != subscriptions_populator_.end()) {
-                auto& queue = it->second->tradeQueue;
-                auto index = queue.reserve();
-                auto trade = queue[index];
+            auto it = subscriptions_.find(symbol);
+            if (it != subscriptions_.end()) {
+                auto& queue = it->second.tradeQueue;
+                auto index = queue->reserve();
+                auto trade = (*queue.get())[index];
                 parser.get<double>("p", trade->price);
                 parser.get<int>("s", trade->size);
-                queue.publish(index);
+                queue->publish(index);
             }
         }
 
@@ -404,16 +404,16 @@ namespace alpaca {
             std::string symbol;
             Parser<T> parser(objJson);
             parser.get<std::string>("S", symbol);
-            auto it = subscriptions_populator_.find(symbol);
-            if (it != subscriptions_populator_.end()) {
-                auto& queue = it->second->quoteQueue;
-                auto index = queue.reserve();
-                auto quote = queue[index];
+            auto it = subscriptions_.find(symbol);
+            if (it != subscriptions_.end()) {
+                auto& queue = it->second.quoteQueue;
+                auto index = queue->reserve();
+                auto quote = (*queue.get())[index];
                 parser.get<double>("ap", quote->ask_price);
                 parser.get<int>("as", quote->ask_size);
                 parser.get<double>("bp", quote->bid_price);
                 parser.get<int>("bs", quote->bid_size);
-                queue.publish(index);
+                queue->publish(index);
             }
         }
     };
