@@ -20,7 +20,7 @@ Alternatively, the latest definition is available for download here: https://www
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.5/AlpacaZorroPlugin_v1.0.5.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.0.5.1/AlpacaZorroPlugin_v1.0.5.1.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
