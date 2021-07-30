@@ -1,3 +1,6 @@
+v1.0.5.1
+- [HotFix] Fix order request object didn't pass to Alpaca. #4
+
 v1.0.5
 - Fixed an issue where when Zorro Logout/Re-Login after market close/re-open, Zorro doesn't resubscribe assets which cause the plugin not reopen websockets
 

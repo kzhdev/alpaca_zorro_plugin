@@ -221,7 +221,7 @@ namespace alpaca {
             if (data) {
                 LOG_TRACE("Data:\n%s\n", data);
             }
-            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_.c_str(), nullptr, LogLevel::L_TRACE);
+            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_.c_str(), data, LogLevel::L_TRACE);
             if (!response && response.what() == "client_order_id must be unique") {
                 // clinet order id has been used.
                 // increment conflict count and try again.
