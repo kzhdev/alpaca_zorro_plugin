@@ -172,7 +172,7 @@ namespace alpaca
     {
         if (!pPrice) { // this is subscribe
             BrokerError(("Subscribe " + std::string(Asset)).c_str());
-            if (config.dataSource || !wsClient) {
+            if (config.dataSource || !wsClient || !wsClient->authenticated()) {
                 // Polygon or not using websocket
                 return 1;
             }
@@ -182,7 +182,7 @@ namespace alpaca
             }
             else {
                 LOG_DEBUG("Failed to subscribed %s\n", Asset);
-                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST.").c_str());
+                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
             }
             return 1;
         }
@@ -197,13 +197,13 @@ namespace alpaca
             }
             else {
                 LOG_DEBUG("Failed to subscribed %s\n", Asset);
-                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST.").c_str());
+                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
             }
         }
 
         if (s_priceType == 2) {
             Trade* trade = nullptr;
-            if (!config.dataSource && wsClient) {
+            if (!config.dataSource && wsClient && wsClient->authenticated()) {
                 trade = wsClient->getLastTrade(Asset);
             }
             if (trade) {
@@ -232,7 +232,7 @@ namespace alpaca
         }
         else {
             Quote* quote = nullptr;
-            if (!config.dataSource && wsClient) {
+            if (!config.dataSource && wsClient && wsClient->authenticated()) {
                 quote = wsClient->getLastQuote(Asset);
             }
             if (quote) {
@@ -423,44 +423,51 @@ namespace alpaca
             if (pFill) {
                 *pFill = response.content().filled_qty;
             }
-            //return -1;
             return internalOrdId;
         }
 
-        if (s_tif == TimeInForce::IOC || s_tif == TimeInForce::FOK) {
-            // order not filled in the submitOrder response
-            // query order status to get fill status
-            do {
-                auto response2 = client->getOrder(exchOrdId, false, true);
-                if (!response2) {
-                    break;
-                }
-                order = &response2.content();
-                s_mapOrderByClientOrderId[internalOrdId] = *order;
-                if (pPrice) {
-                    *pPrice = order->filled_avg_price;
-                }
-                if (pFill) {
-                    *pFill = order->filled_qty;
-                }
-
-                if (order->status == "canceled" ||
-                    order->status == "filled" ||
-                    order->status == "expired") {
-                    break;
-                }
-
-                auto timePast = std::difftime(std::time(nullptr), start);
-                if (timePast >= 30) {
-                    auto response3 = client->cancelOrder(exchOrdId);
-                    if (!response3) {
-                        BrokerError(("Failed to cancel unfilled FOK/IOC order " + exchOrdId + " " + response3.what()).c_str());
-                    }
-                    return 0;
-                }
-            } while (!order->filled_qty);
+        if (type == OrderType::Limit && order->status == "new") {
+            return internalOrdId;
         }
-        //return -1;
+
+        // Limit order has not accepted by Exchange yet
+        // or market order hasn't been filled yet
+        // wait until the order is in proper state
+        do {
+            auto response2 = client->getOrder(exchOrdId, false, true);
+            if (!response2) {
+                break;
+            }
+            order = &response2.content();
+            s_mapOrderByClientOrderId[internalOrdId] = *order;
+
+            if (type == OrderType::Limit && order->status == "new") {
+                break;
+            }
+
+            if (pPrice) {
+                *pPrice = order->filled_avg_price;
+            }
+            if (pFill) {
+                *pFill = order->filled_qty;
+            }
+
+            if (order->status == "canceled" ||
+                order->status == "filled" ||
+                order->status == "expired") {
+                break;
+            }
+
+            auto timePast = std::difftime(std::time(nullptr), start);
+            if (timePast >= 30) {
+                LOG_INFO("Order submit timed out. Canceling order %s\n", exchOrdId.c_str());
+                auto response3 = client->cancelOrder(exchOrdId);
+                if (!response3) {
+                    BrokerError(("Failed to cancel order " + exchOrdId + " " + response3.what()).c_str());
+                }
+                return (s_tif == TimeInForce::IOC || s_tif == TimeInForce::FOK) ? 0 : -2;
+            }
+        } while (!order->filled_qty);
         return internalOrdId;
     }
 

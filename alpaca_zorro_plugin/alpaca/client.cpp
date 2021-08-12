@@ -102,7 +102,7 @@ namespace alpaca {
 
         Response<Order> response;
         if (logResponse) {
-            return request<Order, Client>(url, headers_.c_str());
+            return request<Order, Client>(url, headers_.c_str(), nullptr, LogLevel::L_INFO);
         }
         return request<Order, Client>(url, headers_.c_str(), nullptr, LogLevel::L_TRACE);
     }
