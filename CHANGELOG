@@ -1,3 +1,7 @@
+v1.0.6
+- BrokerBuy2 wait for the order change to right status
+- Prevent from re-open Websocket if it failed to open during login
+
 v1.0.5.1
 - [HotFix] Fix order request object didn't pass to Alpaca. #4
 
