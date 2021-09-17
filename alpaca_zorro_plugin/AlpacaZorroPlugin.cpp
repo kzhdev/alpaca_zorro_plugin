@@ -313,7 +313,7 @@ namespace alpaca
         };
 
         if (config.dataSource == 0 && !config.alpacaPaidPlan) {
-            LOG_DEBUG("BorkerHisotry %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+            LOG_DEBUG("BrokerHistory %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
             auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             if ((now - end) <= 900) {
                 //if (config.fillDelayedDataWithPolygon && polygon) {
@@ -338,7 +338,7 @@ namespace alpaca
         }
 
         while(true) {
-            LOG_DEBUG("BorkerHisotry %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
+            LOG_DEBUG("BrokerHistory %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
 
             auto response = pMarketData->getBars(Asset, start, end, nTickMinutes, nTicks, s_priceType);
             if (!response) {
@@ -479,6 +479,7 @@ namespace alpaca
         }*/
         
         Response<Order> response;
+        Order* order = nullptr;
         auto iter = s_mapOrderByClientOrderId.find(nTradeID);
         if (iter == s_mapOrderByClientOrderId.end()) {
             // unknown order?
@@ -493,31 +494,43 @@ namespace alpaca
                 BrokerError(response.what().c_str());
                 return NAY;
             }
+            order = &response.content();
             s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
         }
         else {
-            response = client->getOrder(iter->second.id);
-            if (!response) {
-                BrokerError(response.what().c_str());
-                return NAY;
+            order = &iter->second;
+            if (order->status != "filled" && order->status != "canceled" && order->status != "expired") {
+                response = client->getOrder(iter->second.id);
+                if (!response) {
+                    BrokerError(response.what().c_str());
+                    return NAY;
+                }
+                order = &response.content();
+                s_mapOrderByClientOrderId[nTradeID] = *order;
             }
         }
-
-        auto& order = response.content();
-        s_mapOrderByClientOrderId[nTradeID] = order;
 
         if (pOpen) {
-            *pOpen = order.filled_avg_price;
+            *pOpen = order->filled_avg_price;
         }
 
-        if (pProfit && order.filled_qty) {
-            auto resp = pMarketData->getLastQuote(order.symbol);
-            if (resp) {
-                auto& quote = resp.content().quote;
-                *pProfit = order.side == OrderSide::Buy ? ((quote.ask_price - order.filled_avg_price) * order.filled_qty) : (order.filled_avg_price - quote.bid_price) * order.filled_qty;
+        if (pProfit && order->filled_qty) {
+            Quote* quote = nullptr;
+            if (!config.dataSource && wsClient) {
+                quote = wsClient->getLastQuote(order->symbol);
+            }
+            if (quote) {
+                *pProfit = order->side == OrderSide::Buy ? ((quote->ask_price - order->filled_avg_price) * order->filled_qty) : (order->filled_avg_price - quote->bid_price) * order->filled_qty;
+            }
+            else {
+                auto response = pMarketData->getLastQuote(order->symbol);
+                if (response) {
+                    auto& quote = response.content().quote;
+                    *pProfit = order->side == OrderSide::Buy ? ((quote.ask_price - order->filled_avg_price) * order->filled_qty) : (order->filled_avg_price - quote.bid_price) * order->filled_qty;
+                }
             }
         }
-        return order.filled_qty;
+        return order->filled_qty;
     }
 
     DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
@@ -599,15 +612,20 @@ namespace alpaca
 
     void downloadAssets(char* symbols) {
         FILE* f;
-        if (fopen_s(&f, "./Log/AssetsAlpaca.csv", "w+")) {
-            LOG_ERROR("Failed to open ./Log/AssetsAlpaca file\n");
+        std::string filename = config.alpacaPaidPlan ? "./Log/AssetsAlpaca.csv" : "./Log/AssetsAlpacaPaper.csv";
+        if (fopen_s(&f, filename.c_str(), "w+")) {
+            LOG_ERROR("Failed to open %s file\n", filename.c_str());
             return;
         }
 
         BrokerError("Generating Asset List...");
         fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission\n");
 
-        auto getAsset = [f](const std::string& asset) {
+        auto getAsset = [f](const std::string& asset) -> bool {
+            if (!pMarketData) {
+                // When Stop button clicked while Zorro downloading accets
+                return false;
+            }
             BrokerError(("Asset " + asset).c_str());
             BrokerProgress(1);
             auto quote = pMarketData->getLastQuote(asset);
@@ -618,6 +636,7 @@ namespace alpaca
             else {
                 BrokerError(quote.what().c_str());
             }
+            return true;
         };
 
         if (!symbols) {
@@ -626,7 +645,12 @@ namespace alpaca
                 if (!asset.tradable) {
                     continue;
                 }
-                getAsset(asset.symbol);
+                try {
+                    if (!getAsset(asset.symbol)) {
+                        break;
+                    }
+                }
+                catch (...) {}
             }
         }
         else {
@@ -634,8 +658,13 @@ namespace alpaca
             char* next_token;
             char* token = strtok_s(symbols, delim, &next_token);
             while (token != nullptr) {
-                getAsset(token);
-                token = strtok_s(nullptr, delim, &next_token);
+                try {
+                    if (!getAsset(token)) {
+                        break;
+                    }
+                    token = strtok_s(nullptr, delim, &next_token);
+                }
+                catch (...) {}
             }
         }
         
