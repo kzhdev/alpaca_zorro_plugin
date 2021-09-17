@@ -5,7 +5,7 @@
 **AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool for financial research and an automatic trading system.
 
 ## Windows Defender (Updated)
-After Windows Defender Updated to 1.339.981.0, zorro_websocket_proxy.exe detected as a **Trojan:Win32/Sabsik.FT.A!ml** incorrectly by Windows Defender on Windows Server 2019. zorro_websocket_proxy.exe has been sent to Microsoft for analysis. It is totally safe to use. To restore zorro_websocket_proxy.exe from quarantine, go to **Windows Security**, click **Virus & Thread Protection** -> **Thread history** ->  **Trojan:Win32/Sabsik.FT.A!ml** then click the **Restore** button.
+Windows Defender, version 1.339.981.0, incorrectly detects zorro_websocket_proxy.exe as a **Trojan:Win32/Sabsik.FT.A!ml** on Windows Server 2019. zorro_websocket_proxy.exe has been sent to Microsoft for analysis. It is totally safe to use. To restore zorro_websocket_proxy.exe from quarantine, go to **Windows Security**, click **Virus & Thread Protection** -> **Thread history** ->  **Trojan:Win32/Sabsik.FT.A!ml** then click the **Restore** button.
 
 **Microsoft has removed zorro_websocket_socket.exe from the malware definitions.**
 ```
@@ -41,7 +41,7 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
   ```
 
   **AlpacaDataSource**
-  Specify to use Alpaca MarketData or Polygon MarketData. By default, Alpaca MarketData will be used.
+  Specify to use Alpaca market data or Polygon market data. By default, Alpaca market data will be used.
 
   **AlpacaPaidDataPlan**
   Specify which Alpaca Websocket endpoint will be used. By default, the paid data plan will be used.
@@ -123,7 +123,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
 
 * Support [Polygon](https://polygon.io) market data
 
-  After Alpaca departure from Polygon, Alpaca ApiKey no longer works for Polygon. AlpacaZorroPlugin kept the Polygon market data support. 
+  After Alpaca’s departure from Polygon, Alpaca ApiKey no longer works for Polygon. AlpacaZorroPlugin kept the Polygon market data support. 
   **NOTE:** The Polygon ApiKey is moved into the Zorro config file.
   **NOTE:** Polygon free plan can't be used as an alternative market data source due to lack of last trade and last quote data.
 
@@ -133,7 +133,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   brokerCommand(2001, char *symbols);
   ```
 
-  **symbols** - One or more symbols separated by a comma. If symbols = **0**, all symbols will be included.
+  **symbols** - One or more symbols separated by a comma, or **0** for all tradeable symbols.
   An AssetAlpaca.csv file will be generated in the Log directory.
 
   ``` C++
@@ -141,6 +141,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   // GenerateAlpacaAssetList.c
   function main() {
     brokerCommand(2001, "SPY,AAPL,MSFT,TSLA");  // Generate AssetsAlpaca.csv contains SPY, AAPL, MSFT, TSLA symbols
+    //brokerCommand(2001, 0);   // Generate AssetsAplaca.csv contains all tradeable symbols /v2/assets endpoint. 
   }
   ```
 
