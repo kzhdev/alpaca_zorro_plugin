@@ -1,11 +1,11 @@
 # AlpacaZorroPlugin
 
-**[Alpaca](http://alpaca.markets)** is a modern commision-free brokerage for algorithmic trading. Alpaca API allows a trading algo to access real-time price, place orders and manage portfolio through either REST or streaming.
+**[Alpaca](http://alpaca.markets)** is a modern commission-free brokerage for algorithmic trading. Alpaca API allows a trading algo to access real-time price, place orders, and manage portfolio through either REST or streaming.
 
-**AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool for financial research and automatic trading system.
+**AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool for financial research and an automatic trading system.
 
-## Windows Definder (Updated)
-After Windows Definder Updated to 1.339.981.0, zorro_websocket_proxy.exe detected as a **Trojan:Win32/Sabsik.FT.A!ml** incorrectly by Windows Definder on Windows Server 2019. zorro_websocket_proxy.exe has been send to Microsoft for analysis. It is totaly safe to use. To restore zorro_websocket_proxy.exe from quarantin, go to **Windows Security**, click **Virus & Thread Protection** -> **Thread history** ->  **Trojan:Win32/Sabsik.FT.A!ml** then click the **Restore** button.
+## Windows Defender (Updated)
+After Windows Defender Updated to 1.339.981.0, zorro_websocket_proxy.exe detected as a **Trojan:Win32/Sabsik.FT.A!ml** incorrectly by Windows Defender on Windows Server 2019. zorro_websocket_proxy.exe has been sent to Microsoft for analysis. It is totally safe to use. To restore zorro_websocket_proxy.exe from quarantine, go to **Windows Security**, click **Virus & Thread Protection** -> **Thread history** ->  **Trojan:Win32/Sabsik.FT.A!ml** then click the **Restore** button.
 
 **Microsoft has removed zorro_websocket_socket.exe from the malware definitions.**
 ```
@@ -24,7 +24,7 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
 
 ## How to Use
 
-* First generate a API Key in Alpaca website.
+* First generate an API Key on the Alpaca website.
 * In Zorro, select Alpaca.
 * Enter the **API Key** in the **User ID** input box
 * Enter the **Secret Key** in the **Password** input box.
@@ -41,25 +41,25 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
   ```
 
   **AlpacaDataSource**
-  Specify to use Alpaca MaketData or Polygon MarketData. By default, Alpaca MarketData will be used.
+  Specify to use Alpaca MarketData or Polygon MarketData. By default, Alpaca MarketData will be used.
 
   **AlpacaPaidDataPlan**
-  Specify which Alpaca Websocket enpoint will be used. By default, paid data plan will be used.
+  Specify which Alpaca Websocket endpoint will be used. By default, the paid data plan will be used.
 
   **AlpacaLogLevel**
-  By default, ApacaPlugin log is turned off unless "diag" mode is enabled. AlpacaPlugin logging can be enabled through this config.
+  By default, the ApacaPlugin log is turned off unless the "diag" mode is enabled. AlpacaPlugin logging can be enabled through this config.
 
   **AlpacaUseWebsocket**
-  Specify receiving price update from Websocket or REST API.
+  Specify receiving price updates from Websocket or REST API.
 
   **PolygonApiKey**
-  The Polygon ApiKey. If AlpacaDataSource set to 1, the PolygonApiKey must be provided through this config, otherwise Alpaca MarketData will be used.
+  The Polygon ApiKey. If AlpacaDataSource is set to 1, the PolygonApiKey must be provided through this config, otherwise, Alpaca MarketData will be used.
 
 ## Features
 
 * Support Alpaca MarketData V2 Websocket Real-Time Data. Multiple ZorroS instances can share one WebSocket connection through ZorroWebsocketProxy.<br/>
 **NTOE:** ZorroWebsocketProxy has a lock-free design, it spins on one CPU core. High CPU usage is normal and expected.<br/>
-Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket set to 0, last price will be polled from Snapshot REST endpoint.
+Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket is set to 0, the last price will be polled from the Snapshot REST endpoint.
 
 * Support **Limit**, **Market** order types
 
@@ -86,7 +86,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   //  5 - OPG
   //  6 - CLS
   //
-  // NOTE: brokemand(SET_ORDERTYPE, 0) will be ignored, this is because Zorro always call brokerCommand(SET_ORDERTYPE, 0) before setting limit price.
+  // NOTE: brokerCommand(SET_ORDERTYPE, 0) will be ignored, this is because Zorro always calls brokerCommand(SET_ORDERTYPE, 0) before setting the limit price.
 
   brokerCommand(SET_ORDERTYPE, 4);  // set TIF to Day
   OrderLimit = 100.00;
@@ -123,9 +123,9 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
 
 * Support [Polygon](https://polygon.io) market data
 
-  After Alpaca departured from Polygon, Alpaca ApiKey no longer works for Polygon. AlpacaZorroPlugin keeped the Polygon market data support. 
-  **NOTE:** The Polygon ApiKey is movied into Zorro config file.
-  **NOTE:** Polygon free plan can't be used as alternative market data source due to lack of last trade and last quote data.
+  After Alpaca departure from Polygon, Alpaca ApiKey no longer works for Polygon. AlpacaZorroPlugin kept the Polygon market data support. 
+  **NOTE:** The Polygon ApiKey is moved into the Zorro config file.
+  **NOTE:** Polygon free plan can't be used as an alternative market data source due to lack of last trade and last quote data.
 
 * Generate AssetList file through custom borkerCommand
   
@@ -133,8 +133,8 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   brokerCommand(2001, char *symbols);
   ```
 
-  **symbols** - One or more symbols separated by comma. If symbols = **0**, all symbols will be included.
-  An AssetAlpaca.csv file will be generated in the Log diredtory.
+  **symbols** - One or more symbols separated by a comma. If symbols = **0**, all symbols will be included.
+  An AssetAlpaca.csv file will be generated in the Log directory.
 
   ``` C++
   Exemple:
@@ -178,7 +178,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
 
 ## Bug Report
 
-If you find any issue or have any suggestion, please report in GitHub [issues](https://github.com/kzhdev/alpaca_zorro_plugin/issues).
+If you find any issue or have any suggestions, please report in GitHub [issues](https://github.com/kzhdev/alpaca_zorro_plugin/issues).
 
 
 ---
