@@ -1,8 +1,8 @@
 # AlpacaZorroPlugin
 
-**[Alpaca](http://alpaca.markets)** is a moden commision-free brokrage for algorithmic trading. Alpaca API allows a trading algo to access real-time price, place orders and manage potofolio through either REST or streaming.
+**[Alpaca](http://alpaca.markets)** is a modern commision-free brokerage for algorithmic trading. Alpaca API allows a trading algo to access real-time price, place orders and manage portfolio through either REST or streaming.
 
-**AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool fro financial research and automatic traiding system.
+**AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool for financial research and automatic trading system.
 
 ## Windows Definder (Updated)
 After Windows Definder Updated to 1.339.981.0, zorro_websocket_proxy.exe detected as a **Trojan:Win32/Sabsik.FT.A!ml** incorrectly by Windows Definder on Windows Server 2019. zorro_websocket_proxy.exe has been send to Microsoft for analysis. It is totaly safe to use. To restore zorro_websocket_proxy.exe from quarantin, go to **Windows Security**, click **Virus & Thread Protection** -> **Thread history** ->  **Trojan:Win32/Sabsik.FT.A!ml** then click the **Restore** button.
