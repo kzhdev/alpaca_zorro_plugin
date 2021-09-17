@@ -622,12 +622,11 @@ namespace alpaca
         fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission\n");
 
         auto getAsset = [f](const std::string& asset) -> bool {
-            if (!pMarketData) {
-                // When Stop button clicked while Zorro downloading accets
+            BrokerError(("Asset " + asset).c_str());
+            auto rt = BrokerProgress(0);
+            if (!rt) {
                 return false;
             }
-            BrokerError(("Asset " + asset).c_str());
-            BrokerProgress(1);
             auto quote = pMarketData->getLastQuote(asset);
             if (quote) {
                 auto& q = quote.content().quote;
