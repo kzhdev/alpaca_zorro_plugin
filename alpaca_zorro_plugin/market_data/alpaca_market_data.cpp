@@ -198,7 +198,7 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
     uint32_t limit) const {
 
     // Alpaca only suport 1Min, 1Hour, 1D bars
-    static std::vector<std::pair<uint32_t, const char*>> supported_timeframe = { {1, "1Min"}, {60, "1Hour"}, {1440, "1D"} };
+    static std::vector<std::pair<uint32_t, const char*>> supported_timeframe = { {1, "1Min"}, {15, "15Min"}, {60, "1Hour"}, {1440, "1Day"}};
 
     std::string timeframe;
     uint32_t n = 1;
@@ -207,11 +207,14 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
     case 1:
         timeframe = "1Min";
         break;
+    case 15:
+        timeframe = "15Min";
+        break;
     case 60:
         timeframe = "1Hour";
         break;
     case 1440:
-        timeframe = "1D";
+        timeframe = "1Day";
         break;
     default:
         break;
@@ -331,6 +334,10 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
             else {
                 BrokerError(("Failed to get bars. " + retrieved.what()).c_str());
             }
+            break;
+        }
+
+        if (!BrokerProgress(1)) {
             break;
         }
 
