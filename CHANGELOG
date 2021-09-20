@@ -1,3 +1,12 @@
+v1.1.0
+- Fix typos
+- Rename asset list to AssetAlpacaPaper.csv in Demo mode.
+- Stop generating AssetList if the "Close" button is clicked.
+- To reduce messaging, the BrokerTrade command will not fetch a filled, canceled, or expired order repeatedly. It will use lastQuote from WebSocket if WebSocket is enabled.
+- Change daily TimeFrame from '1D' to '1Day', added 15 minutes TimeFrame.
+- Stop historical data downloading if the "Close" button is clicked.
+- Trim symbols in the genAssetList custom broker command.
+
 v1.0.6
 - BrokerBuy2 wait for the order change to right status
 - Prevent from re-open Websocket if it failed to open during login
