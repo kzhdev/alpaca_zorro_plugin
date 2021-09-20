@@ -116,8 +116,15 @@ namespace alpaca
         if (!pMarketData) {
             pMarketData = alpacaMD.get();
             config.dataSource = 0;
-            BrokerError("Use Alpaca market data");
-            LOG_INFO("Use Alpaca market data\n");
+            if (config.alpacaPaidPlan) {
+                BrokerError("Use Alpaca Pro Market Data");
+                LOG_INFO("Use Alpaca Pro Market Data\n");
+            }
+            else {
+                BrokerError("Use Alpaca Basic Market Data");
+                LOG_INFO("Use Alpaca Basic Market Data\n");
+            }
+            
         }
 
         //attempt login
@@ -658,7 +665,9 @@ namespace alpaca
             char* token = strtok_s(symbols, delim, &next_token);
             while (token != nullptr) {
                 try {
-                    if (!getAsset(token)) {
+                    std::string symbol = token;
+                    trim(symbol);
+                    if (!getAsset(symbol)) {
                         break;
                     }
                     token = strtok_s(nullptr, delim, &next_token);
