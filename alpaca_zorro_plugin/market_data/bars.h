@@ -61,6 +61,9 @@ namespace alpaca {
 		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<std::string>("next_page_token", next_page_token);
 			if (parser.json.HasMember("bars")) {
+				if (parser.json["bars"].IsNull()) {
+					return std::make_pair(0, "OK");
+				}
 				for (auto& symbol_bar : parser.json["bars"].GetArray()) {
 					auto barJson = symbol_bar.GetObject();
 					Parser<decltype(symbol_bar.GetObject())> p(barJson);
