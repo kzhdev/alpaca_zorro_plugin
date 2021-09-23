@@ -56,7 +56,7 @@ namespace alpaca {
 
     private:
         Response<Snapshot> getSnapshot(const std::string& symbol) const {
-            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot", headers_.c_str());
+            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot", headers_.c_str(), nullptr, LogLevel::L_TRACE);
         }
 
         Response<std::vector<Bar>> getBarsV1(
