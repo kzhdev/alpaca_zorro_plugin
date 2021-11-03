@@ -17,6 +17,8 @@ namespace alpaca {
 
     class MarketData;
 
+    double fix_floating_error(double value, int32_t norm_factor = 1e8);
+
     class Client final {
     public:
         explicit Client() = delete;
@@ -47,21 +49,22 @@ namespace alpaca {
 
         Response<Order> submitOrder(
             const std::string& symbol,
-            const int quantity,
+            const double quantity,
             const OrderSide side,
             const OrderType type,
             const TimeInForce tif,
-            const std::string& limit_price = "",
-            const std::string& stop_price = "",
+            const double limit_price = NAN,
+            const double stop_price = NAN,
             bool extended_hours = false,
             const std::string& client_order_id = "",
+            double minFractionalQty = 1,
             const OrderClass order_class = OrderClass::Simple,
             TakeProfitParams* take_profit_params = nullptr,
             StopLossParams* stop_loss_params = nullptr) const;
 
         Response<Order> replaceOrder(
             const std::string& id,
-            const int quantity,
+            const double quantity,
             const TimeInForce tif,
             const std::string& limit_price = "",
             const std::string& stop_price = "",

@@ -38,6 +38,7 @@ namespace alpaca {
 		bool marginable;
 		bool shortable;
 		bool tradable;
+		bool fractionable;
 		std::string asset_class;
 		std::string exchange;
 		std::string id;
@@ -58,6 +59,7 @@ namespace alpaca {
 			parser.get<std::string>("status", status);
 			parser.get<std::string>("symbol", symbol);
 			parser.get<bool>("tradable", tradable);
+			parser.get<bool>("fractionable", fractionable);
 			return std::make_pair(0, "OK");
 		}
 	};

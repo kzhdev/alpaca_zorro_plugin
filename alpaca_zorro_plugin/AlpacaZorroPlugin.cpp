@@ -44,6 +44,7 @@ namespace {
     std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
     Configuration config;
     uint32_t alpaca_md_ws_id = 0;
+    double s_amount = 1;
 }
 
 namespace alpaca
@@ -92,6 +93,7 @@ namespace alpaca
         s_tif = TimeInForce::FOK;
         s_nextOrderText = "";
         s_priceType = 0;
+        s_amount = 1.;
         Logger::instance().init("Alpaca");
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
@@ -140,6 +142,11 @@ namespace alpaca
             BrokerError("Login failed.");
             BrokerError(response.what().c_str());
             return 0;
+        }
+
+        if (config.fractionalLotAmount > 1) {
+            config.fractionalLotAmount = 1;
+            BrokerError(("Fractional qty disabled. Invalid config: AlpacaFranctionalLotAmount must be less than 1. AlpacaFranctionalLotAmount=" + std::to_string(config.fractionalLotAmount)).c_str());
         }
 
         auto& account = response.content().account_number;
@@ -272,7 +279,19 @@ namespace alpaca
         }
 
         if (pLotAmount) {
-            *pLotAmount = 1;
+            auto response = client->getAsset(Asset);
+            if (response) {
+                auto& asset = response.content();
+                if (asset.fractionable) {
+                    *pLotAmount = config.fractionalLotAmount;
+                }
+                else {
+                    *pLotAmount = 1;
+                }
+            }
+            else {
+                *pLotAmount = 1;
+            }
         }
 
         if (pRollLong) {
@@ -398,23 +417,27 @@ namespace alpaca
 
         OrderSide side = nAmount > 0 ? OrderSide::Buy : OrderSide::Sell;
         OrderType type = OrderType::Market;
+        double qty = std::abs(nAmount);
         if (dLimit) {
             type = OrderType::Limit;
         }
-        std::string limit;
-        if (dLimit) {
-            limit = std::to_string(dLimit);
+        else {
+            dLimit = NAN;
+            qty *= s_amount;
         }
-        std::string stop;
+
         if (dStopDist) {
 
         }
 
-        LOG_DEBUG("BrokerBuy2 %s orderText=%s nAmount=%d dStopDist=%f limit=%f\n", Asset, s_nextOrderText.c_str(), nAmount, dStopDist, dLimit);
 
-        auto response = client->submitOrder(Asset, std::abs(nAmount), side, type, s_tif, limit, stop, false, s_nextOrderText);
+        LOG_DEBUG("BrokerBuy2 %s orderText=%s nAmount=%d qty=%f dStopDist=%f limit=%f\n", Asset, s_nextOrderText.c_str(), nAmount, qty, dStopDist, dLimit);
+
+        auto response = client->submitOrder(Asset, qty, side, type, s_tif, dLimit, NAN, false, s_nextOrderText, config.fractionalLotAmount);
         if (!response) {
             BrokerError(response.what().c_str());
+            // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+            s_amount = 1.;
             return 0;
         }
 
@@ -428,8 +451,10 @@ namespace alpaca
                 *pPrice = response.content().filled_avg_price;
             }
             if (pFill) {
-                *pFill = response.content().filled_qty;
+                *pFill = alpaca::fix_floating_error(response.content().filled_qty / s_amount);
             }
+            // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+            s_amount = 1.;
             return internalOrdId;
         }
 
@@ -456,7 +481,7 @@ namespace alpaca
                 *pPrice = order->filled_avg_price;
             }
             if (pFill) {
-                *pFill = order->filled_qty;
+                *pFill = alpaca::fix_floating_error(order->filled_qty / s_amount);
             }
 
             if (order->status == "canceled" ||
@@ -475,6 +500,8 @@ namespace alpaca
                 return (s_tif == TimeInForce::IOC || s_tif == TimeInForce::FOK) ? 0 : -2;
             }
         } while (!order->filled_qty);
+        // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+        s_amount = 1.;
         return internalOrdId;
     }
 
@@ -537,7 +564,7 @@ namespace alpaca
                 }
             }
         }
-        return order->filled_qty;
+        return order->filled_qty / config.fractionalLotAmount;
     }
 
     DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
@@ -573,8 +600,11 @@ namespace alpaca
         }
         else {
             // close working order?
+            auto qty = nAmount * s_amount;
+            // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+            s_amount = 1.;
             BrokerError(("Close working order " + std::to_string(nTradeID)).c_str());
-            if (std::abs(nAmount) == order.qty) {
+            if (std::abs(qty) == order.qty) {
                 auto response = client->cancelOrder(iter->second.id);
                 if (response) {
                     return nTradeID;
@@ -583,7 +613,7 @@ namespace alpaca
                 return 0;
             }
             else {
-                auto response = client->replaceOrder(order.id, iter->second.qty - nAmount, order.tif, (Limit ? std::to_string(Limit) : ""), "", iter->second.client_order_id);
+                auto response = client->replaceOrder(order.id, iter->second.qty - qty, order.tif, (Limit ? std::to_string(Limit) : ""), "", iter->second.client_order_id);
                 if (response) {
                     auto& replacedOrder = response.content();
                     uint32_t orderId = replacedOrder.internal_id;
@@ -626,18 +656,23 @@ namespace alpaca
         }
 
         BrokerError("Generating Asset List...");
-        fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission\n");
+        fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission,Symbol\n");
 
-        auto getAsset = [f](const std::string& asset) -> bool {
-            BrokerError(("Asset " + asset).c_str());
+        auto getAsset = [f](const alpaca::Asset& asset) -> bool {
+            BrokerError(("Asset " + asset.symbol).c_str());
             auto rt = BrokerProgress(0);
             if (!rt) {
                 return false;
             }
-            auto quote = pMarketData->getLastQuote(asset);
+            auto quote = pMarketData->getLastQuote(asset.symbol);
             if (quote) {
                 auto& q = quote.content().quote;
-                fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,1,0.000,%s\n", asset.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.c_str());
+                if (!asset.fractionable) {
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,1,0.000,%s\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.symbol.c_str());
+                }
+                else {
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,%f,0.000,%s\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), config.fractionalLotAmount, asset.symbol.c_str());
+                }
             }
             else {
                 BrokerError(quote.what().c_str());
@@ -652,7 +687,7 @@ namespace alpaca
                     continue;
                 }
                 try {
-                    if (!getAsset(asset.symbol)) {
+                    if (!getAsset(asset)) {
                         break;
                     }
                 }
@@ -667,8 +702,14 @@ namespace alpaca
                 try {
                     std::string symbol = token;
                     trim(symbol);
-                    if (!getAsset(symbol)) {
-                        break;
+                    auto response = client->getAsset(symbol);
+                    if (response) {
+                        if (!getAsset(response.content())) {
+                            break;
+                        }
+                    }
+                    else {
+                        BrokerError(response.what().c_str());
                     }
                     token = strtok_s(nullptr, delim, &next_token);
                 }
@@ -765,6 +806,11 @@ namespace alpaca
         case GET_VOLTYPE:
           return 0;
 
+        case SET_AMOUNT:
+            s_amount = *(double*)dwParameter;
+            LOG_DIAG("SET_AMOUNT: %.8f\n", s_amount);
+            break;
+
         case SET_DIAGNOSTICS:
             if ((int)dwParameter == 1 || (int)dwParameter == 0) {
                 Logger::instance().setLevel((int)dwParameter ? LogLevel::L_DEBUG : LogLevel::L_OFF);
@@ -781,7 +827,6 @@ namespace alpaca
             downloadAssets((char*)dwParameter);
             break;
         }
-            
 
         default:
             LOG_DEBUG("Unhandled command: %d %lu\n", Command, dwParameter);

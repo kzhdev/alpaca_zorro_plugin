@@ -23,15 +23,15 @@ namespace alpaca {
 
     struct Configuration {
         std::string polygonApiKey;
+        double fractionalLotAmount = 1;
         uint8_t dataSource = 0;
         uint8_t logLevel = 0;
         bool alpacaPaidPlan = true;
         bool useWebsocket = true;
 
         void init() {
-            if (!readConfig("./ZorroFix.ini")) {
-                readConfig("./Zorro.ini");
-            }
+            readConfig("./Zorro.ini");
+            readConfig("./ZorroFix.ini");
         }
 
     private:
@@ -49,6 +49,7 @@ namespace alpaca {
                 getConfig(line, ConfigFound::LogLevel, "AlpacaLogLevel", logLevel);
                 getConfig(line, ConfigFound::PolygonApiKey, "PolygonApiKey", polygonApiKey);
                 getConfig(line, ConfigFound::UseWebsocket, "AlpacaUseWebsocket", useWebsocket);
+                getConfig(line, ConfigFound::FractionalLotAmount, "AlpacaFractionalLotAmount", fractionalLotAmount);
             }
 
             return configFound_.all();
@@ -90,7 +91,7 @@ namespace alpaca {
         }
 
         template<typename T>
-        inline typename std::enable_if<!std::is_same<T, std::string>::value>::type setValue(T& value, const std::string& v) { value = atoi(v.c_str()); }
+        inline typename std::enable_if<!std::is_same<T, std::string>::value>::type setValue(T& value, const std::string& v) { value = atof(v.c_str()); }
 
     private:
         enum ConfigFound : uint8_t {
@@ -99,7 +100,9 @@ namespace alpaca {
             PolygonApiKey,
             LogLevel,
             UseWebsocket,
+            FractionalLotAmount,
+            __end__,
         };
-        std::bitset<5> configFound_ = 0;
+        std::bitset<ConfigFound::__end__> configFound_ = 0;
     };
 }

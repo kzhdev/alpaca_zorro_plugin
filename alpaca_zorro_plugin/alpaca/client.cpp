@@ -22,9 +22,27 @@ namespace {
 
     std::unique_ptr<alpaca::AlpacaMarketData> alpacaMarketData;
     std::unique_ptr<alpaca::Polygon> polygon;
+
+    constexpr double epsilon = 1e-9;
+    constexpr uint64_t default_norm_factor = 1e8;
+
+    inline static uint32_t compute_number_decimals(double value) {
+        value = std::abs(alpaca::fix_floating_error(value));
+        uint32_t count = 0;
+        while (value - std::floor(value) > epsilon) {
+            ++count;
+            value *= 10;
+        }
+        return count;
+    }
 }
 
 namespace alpaca {
+    double fix_floating_error(double value, int32_t norm_factor) {
+        auto v = value + epsilon;
+        return ((double)((int64_t)(v * norm_factor)) / norm_factor);
+    }
+
 
     Client::Client(std::string key, std::string secret, bool isPaperTrading)
         : baseUrl_(isPaperTrading ? s_APIBaseURLPaper : s_APIBaseURLLive)
@@ -113,20 +131,28 @@ namespace alpaca {
 
     Response<Order> Client::submitOrder(
         const std::string& symbol,
-        const int quantity,
+        const double quantity,
         const OrderSide side,
         const OrderType type,
         const TimeInForce tif,
-        const std::string& limit_price,
-        const std::string& stop_price,
+        const double limit_price,
+        const double stop_price,
         bool extended_hours,
         const std::string& client_order_id,
+        double minFractionalQty,
         const OrderClass order_class,
         TakeProfitParams* take_profit_params,
         StopLossParams* stop_loss_params) const {
 
         if (!is_open_ && !extended_hours) {
             return Response<Order>(1, "Market Close.");
+        }
+
+        if (std::floor(quantity) != quantity) {
+            if (type != OrderType::Market ||
+                (tif == TimeInForce::CLS || tif == TimeInForce::GTC || tif == TimeInForce::OPG)) {
+                return Response<Order>(1, "Fractional qty only for Market and Day order type");
+            }
         }
 
         Response<Order> response;
@@ -142,7 +168,17 @@ namespace alpaca {
             writer.String(symbol.c_str());
 
             writer.Key("qty");
-            writer.Int(quantity);
+            if (std::floor(quantity) == quantity) {
+                writer.Int(quantity);
+            }
+            else {
+                assert(minFractionalQty < 1);
+                std::ostringstream q;
+                q.precision(compute_number_decimals(minFractionalQty));
+                q << std::fixed << fix_floating_error(quantity);
+                writer.String(q.str().c_str());
+                //writer.Double(fix_floating_error(quantity));
+            }
 
             writer.Key("side");
             writer.String(to_string(side));
@@ -153,14 +189,14 @@ namespace alpaca {
             writer.Key("time_in_force");
             writer.String(to_string(tif));
 
-            if (!limit_price.empty()) {
+            if (!std::isnan(limit_price)) {
                 writer.Key("limit_price");
-                writer.String(limit_price.c_str());
+                writer.String(std::to_string(limit_price).c_str());
             }
 
-            if (!stop_price.empty()) {
+            if (!std::isnan(stop_price)) {
                 writer.Key("stop_price");
-                writer.String(stop_price.c_str());
+                writer.String(std::to_string(stop_price).c_str());
             }
 
             if (extended_hours) {
@@ -235,7 +271,7 @@ namespace alpaca {
 
     Response<Order> Client::replaceOrder(
         const std::string& id,
-        const int quantity,
+        const double quantity,
         const TimeInForce tif,
         const std::string& limit_price,
         const std::string& stop_price,

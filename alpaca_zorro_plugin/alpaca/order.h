@@ -176,8 +176,8 @@ namespace alpaca {
         double filled_avg_price = 0.;
         double limit_price = 0.;
         double stop_price = 0.;
-        uint32_t qty = 0;
-        uint32_t filled_qty = 0;
+        double qty = 0.;
+        double filled_qty = 0.;
         int32_t internal_id = 0;
         AssetClass asset_class = AssetClass::USEquity;
         OrderSide side;
@@ -204,28 +204,28 @@ namespace alpaca {
 
         template<typename CallerT, typename T>
         std::pair<int, std::string> fromJSON(const T& parser) {
-            parser.get<std::string>("id", id);
-            parser.get<std::string>("client_order_id", client_order_id);
-            parser.get<std::string>("created_at", created_at);
-            parser.get<std::string>("updated_at", updated_at);
-            parser.get<std::string>("submitted_at", submitted_at);
-            parser.get<std::string>("filled_at", filled_at);
-            parser.get<std::string>("expired_at", expired_at);
-            parser.get<std::string>("canceled_at", canceled_at);
-            parser.get<std::string>("failed_at", failed_at);
-            parser.get<std::string>("asset_id", asset_id);
-            parser.get<std::string>("symbol", symbol);
+            parser.get("id", id);
+            parser.get("client_order_id", client_order_id);
+            parser.get("created_at", created_at);
+            parser.get("updated_at", updated_at);
+            parser.get("submitted_at", submitted_at);
+            parser.get("filled_at", filled_at);
+            parser.get("expired_at", expired_at);
+            parser.get("canceled_at", canceled_at);
+            parser.get("failed_at", failed_at);
+            parser.get("asset_id", asset_id);
+            parser.get("symbol", symbol);
             asset_class = to_assetClass(parser.get<std::string>("asset_class"));
-            parser.get<uint32_t>("qty", qty);
-            parser.get<uint32_t>("filled_qty", filled_qty);
+            parser.get("qty", qty);
+            parser.get("filled_qty", filled_qty);
             type = to_orderType(parser.get<std::string>("type"));
             side = to_orderSide(parser.get<std::string>("side"));
             tif = to_timeInForce(parser.get<std::string>("time_in_force"));
-            parser.get<double>("limit_price", limit_price);
-            parser.get<double>("stop_price", stop_price);
-            parser.get<double>("filled_avg_price", filled_avg_price);
-            parser.get<std::string>("status", status);
-            parser.get<bool>("extended_hours", extended_hours);
+            parser.get("limit_price", limit_price);
+            parser.get("stop_price", stop_price);
+            parser.get("filled_avg_price", filled_avg_price);
+            parser.get("status", status);
+            parser.get("extended_hours", extended_hours);
 
             if (client_order_id.substr(0, 6) == "ZORRO_") {
                 auto pos = client_order_id.rfind("_");
