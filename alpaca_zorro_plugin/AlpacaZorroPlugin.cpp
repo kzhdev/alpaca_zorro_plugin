@@ -458,7 +458,7 @@ namespace alpaca
             return internalOrdId;
         }
 
-        if (type == OrderType::Limit && order->status == "new") {
+        if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
             return internalOrdId;
         }
 
@@ -473,7 +473,7 @@ namespace alpaca
             order = &response2.content();
             s_mapOrderByClientOrderId[internalOrdId] = *order;
 
-            if (type == OrderType::Limit && order->status == "new") {
+            if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
                 break;
             }
 
