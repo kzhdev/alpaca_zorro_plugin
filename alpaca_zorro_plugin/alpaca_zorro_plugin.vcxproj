@@ -86,8 +86,24 @@
       <AdditionalDependencies>zorro_websocket_proxy_client.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>mkdir $(OutputPath)release\Plugin\websocket_proxy
+mkdir $(OutputPath)release\include
+mkdir $(OutputPath)pdb\websocket_proxy
+copy $(ProjectDir)AlpacaBrokerCommands.h  $(OutputPath)release\include\
+xcopy $(OutDir)websocket_proxy  $(OutputPath)release\Plugin\websocket_proxy\ /S /C
+del  $(OutputPath)release\Plugin\websocket_proxy\*.pdb
+copy $(OutDir)Alpaca.dll  $(OutputPath)release\Plugin\
+copy $(OutDir)websocket_proxy\zorro_websocket_proxy.pdb  $(OutputPath)pdb\websocket_proxy\
+copy $(OutDir)Alpaca.pdb $(OutputPath)pdb\</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>rmdir /S /Q $(SolutionDir)$(Configuration)\release
+rmdir /S /Q $(SolutionDir)$(Configuration)\pdb</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="AlpacaBrokerCommands.h" />
     <ClInclude Include="AlpacaZorroPlugin.h" />
     <ClInclude Include="alpaca\account.h" />
     <ClInclude Include="alpaca\alpaca_websockets.h\Header.h" />
@@ -144,4 +160,12 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <Target Name="ZipRelease" AfterTargets="PostBuildEvent" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+        <ZipDirectory
+            SourceDirectory="$(OutputPath)release"
+            DestinationFile="$(OutputPath)AlpacaZorroPlugin_v.zip" />
+		<ZipDirectory
+            SourceDirectory="$(OutputPath)pdb"
+            DestinationFile="$(OutputPath)AlpacaZorroPlugin_v_pdb.zip" />
+  </Target>
 </Project>

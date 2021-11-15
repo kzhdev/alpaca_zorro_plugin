@@ -20,7 +20,7 @@ Alternatively, the latest definition is available for download here: https://www
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.1.0/AlpacaZorroPlugin_v1.1.0.zip), unzip and place the Alpaca.dll file and the websocket_proxy folder into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.0/AlpacaZorroPlugin_v1.2.0.zip), unzip, place the "include/AlpacaBrokerCommand.h" file into the **include** folder under Zorro's root path, and place the "Plugin/Alpaca.dll" file and the "Plugin/websocket_proxy" folder into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
@@ -30,13 +30,14 @@ To install the plugin, download the [latest release](https://github.com/kzhdev/a
 * Enter the **Secret Key** in the **Password** input box.
 
 ## AlpacaPlugin Specific Config
-Following optional Alpaca specific configurations are added since V1.0.0. These configurations can be added in Zorro.ini or ZorroFix.ini (preferred) file.
+Following optional Alpaca-specific configurations are added since V1.0.0. These configurations can be added in Zorro.ini or ZorroFix.ini (preferred) file.
 
   ```text
   AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon. Default to 0.
   AlpacaPaidDataPlan = 1	            // 0 = False (Use Basic Data Plan), 1 = True (Use Pro Data Plan). Default to 1.
   AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE. Default to 0.
   AlpacaUseWebsocket = 0                // 0 = Not use Websocket, 1 = Use Websocket. Default to 1.
+  AlpacaFractionalLotAmount = 0.001     // The LotAmount for fractionable asset. Default to 1.
   PolygonApiKey = "*************"       // Polygon ApiKey
   ```
 
@@ -51,6 +52,10 @@ Following optional Alpaca specific configurations are added since V1.0.0. These 
 
   **AlpacaUseWebsocket**
   Specify receiving price updates from Websocket or REST API.
+
+  **AlpacaFractionalLotAmount**
+  The LotAmount for a fractionable asset. Set this config to a number less than 1 to enable fractional quantity. When generating AssetList.csv, the LotAmount of any fractionable asset is set to the value of this configuration.
+  **NOTE:** Fractional quantity only for Market and Day order type
 
   **PolygonApiKey**
   The Polygon ApiKey. If AlpacaDataSource is set to 1, the PolygonApiKey must be provided through this config, otherwise, Alpaca MarketData will be used.
@@ -79,21 +84,22 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   // By default, enterLong/enterShort places an order with FOK TimeInfoForce type
   // Use borkerCommand(SET_ORDERTYPE, tif) to change TimeInForce.
   // Valid TimeInForce value is
-  //  1 - ICO
-  //  2 - GTC
-  //  3 - FOK (default)
-  //  4 - DAY
-  //  5 - OPG
-  //  6 - CLS
+  //  ORDERTYPE_IOC - ICO
+  //  ORDERTYPE_GTC - GTC
+  //  ORDERTYPE_FOK - FOK (default)
+  //  ORDERTYPE_DAY - DAY
+  //  ORDERTYPE_OPG - OPG
+  //  ORDERTYPE_CLS - CLS
   //
   // NOTE: brokerCommand(SET_ORDERTYPE, 0) will be ignored, this is because Zorro always calls brokerCommand(SET_ORDERTYPE, 0) before setting the limit price.
 
-  brokerCommand(SET_ORDERTYPE, 4);  // set TIF to Day
+  #include "AlpacaBrokerCommands.h"
+  brokerCommand(SET_ORDERTYPE, ORDERTYPE_DAY);  // set TIF to Day
   OrderLimit = 100.00;
   enterShort(5);    // Sell 5 lot Day order at limit price 100.00
 
   OrderLimit = 0;   // set order type back to Market
-  brokerCommand(SET_ORDERTYPE, 6);  // set TIF to CLS
+  brokerCommand(SET_ORDERTYPE, ORDERTYPE_CLS);  // set TIF to CLS
   enteryLong(5);    // Buy 5 lot MarketOnClose order
   ```
 
@@ -121,6 +127,18 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   brokerCommand(GET_POSITION, "AAPL");
   ```
 
+* Support Fractional Quantity
+  To enable Franction Quantity support, add the AlpacaFractionalLotAmount config in Zorro.ini or ZorroFix.ini
+  ``` C++
+  // AlpacaFractionalLotAmount = 0.001 in ZorroFix.ini
+  #include "AlpacaBrokerCommands.h"
+  ...
+  asset("TLSA");
+  brokerCommand(SET_ORDERTYPE, ORDERTYPE_DAY);  // Fractional qty only for Market and Day order type
+  LotAmount = 5;
+  enterLong();      // Buy 0.005 shares TLSA
+  ```
+
 * Support [Polygon](https://polygon.io) market data
 
   After Alpaca’s departure from Polygon, Alpaca ApiKey no longer works for Polygon. AlpacaZorroPlugin kept the Polygon market data support. 
@@ -130,7 +148,8 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
 * Generate AssetList file through custom borkerCommand
   
   ``` C++
-  brokerCommand(2001, char *symbols);
+  #include "AlpacaBrokerCommands.h"
+  brokerCommand(CREATE_ASSETLIST, char *symbols);
   ```
 
   **symbols** - One or more symbols separated by a comma, or **0** for all tradeable symbols.
@@ -139,10 +158,21 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   ``` C++
   Exemple:
   // GenerateAlpacaAssetList.c
+  #include "AlpacaBrokerCommands.h"
   function main() {
-    brokerCommand(2001, "SPY,AAPL,MSFT,TSLA");  // Generate AssetsAlpaca.csv contains SPY, AAPL, MSFT, TSLA symbols
-    //brokerCommand(2001, 0);   // Generate AssetsAplaca.csv contains all tradeable symbols /v2/assets endpoint. 
+    brokerCommand(CREATE_ASSETLIST, "SPY,AAPL,MSFT,TSLA");  // Generate AssetsAlpaca.csv contains SPY, AAPL, MSFT, TSLA symbols
+    //brokerCommand(CREATE_ASSETLIST, 0);   // Generate AssetsAplaca.csv contains all tradeable symbols /v2/assets endpoint. 
   }
+  ```
+
+* Get properties of current Asset
+  ``` C++
+  #include "AlpacaBorkerCommads.h"
+  ....
+  int fractionable = borkerCommand(IS_ASSERT_FRACTIONABLE, Asset);
+  int shortable = borkerCommand(IS_ASSERT_SHORTABLE, Asset);
+  int easyToBorrow = borkerCommand(IS_ASSERT_EASY_TO_BORROW, Asset);
+  int marginable = borkerCommand(IS_ASSERT_EASY_TO_MARGINABLE, Asset);
   ```
 
 * Following Zorro Broker API functions has been implemented:
@@ -179,9 +209,11 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
 
 ## Bug Report
 
-If you find any issue or have any suggestions, please report in GitHub [issues](https://github.com/kzhdev/alpaca_zorro_plugin/issues).
+If you find any issues or have any suggestions, please report them in GitHub [issues](https://github.com/kzhdev/alpaca_zorro_plugin/issues).
 
 
 ---
 
 Thanks to [JetBrains](https://jb.gg/OpenSource/?from=alpaca_zorro_plugin) for donating product licenses to help develop **AlpacaZorroPlugin**
+
+

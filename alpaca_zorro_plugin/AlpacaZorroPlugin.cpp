@@ -25,6 +25,7 @@
 #include "market_data/polygon.h"
 #include "config.h"
 #include "websockets/alpaca_md_ws.h"
+#include "AlpacaBrokerCommands.h"
 
 #define PLUGIN_VERSION	2
 
@@ -45,6 +46,7 @@ namespace {
     Configuration config;
     uint32_t alpaca_md_ws_id = 0;
     double s_amount = 1;
+    std::unordered_map<std::string, Asset> s_mapAssets;
 }
 
 namespace alpaca
@@ -279,9 +281,25 @@ namespace alpaca
         }
 
         if (pLotAmount) {
-            auto response = client->getAsset(Asset);
-            if (response) {
-                auto& asset = response.content();
+            auto iter = s_mapAssets.find(Asset);
+            if (iter == s_mapAssets.end()) {
+                auto response = client->getAsset(Asset);
+                if (response) {
+                    auto& asset = response.content();
+                    s_mapAssets.emplace(Asset, asset);
+                    if (asset.fractionable) {
+                        *pLotAmount = config.fractionalLotAmount;
+                    }
+                    else {
+                        *pLotAmount = 1;
+                    }
+                }
+                else {
+                    *pLotAmount = 1;
+                }
+            }
+            else {
+                auto& asset = iter->second;
                 if (asset.fractionable) {
                     *pLotAmount = config.fractionalLotAmount;
                 }
@@ -289,9 +307,7 @@ namespace alpaca
                     *pLotAmount = 1;
                 }
             }
-            else {
-                *pLotAmount = 1;
-            }
+            
         }
 
         if (pRollLong) {
@@ -656,7 +672,7 @@ namespace alpaca
         }
 
         BrokerError("Generating Asset List...");
-        fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission,Symbol\n");
+        fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission,Symbol,Description\n");
 
         auto getAsset = [f](const alpaca::Asset& asset) -> bool {
             BrokerError(("Asset " + asset.symbol).c_str());
@@ -668,10 +684,10 @@ namespace alpaca
             if (quote) {
                 auto& q = quote.content().quote;
                 if (!asset.fractionable) {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,1,0.000,%s\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.symbol.c_str());
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,1,0.000,%s,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.symbol.c_str(), asset.name.c_str());
                 }
                 else {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,%f,0.000,%s\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), config.fractionalLotAmount, asset.symbol.c_str());
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,%f,0.000,%s,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), config.fractionalLotAmount, asset.symbol.c_str(), asset.name.c_str());
                 }
             }
             else {
@@ -756,6 +772,7 @@ namespace alpaca
 
         case SET_SYMBOL:
             s_asset = (char*)dwParameter;
+            LOG_DEBUG("SET_SYMBOL: %s\n", s_asset.c_str());
             return 1;
 
         case SET_MULTIPLIER:
@@ -767,22 +784,22 @@ namespace alpaca
             switch ((int)dwParameter) {
             case 0:
                 return 0;
-            case 1:
+            case ORDERTYPE_IOC:
                 s_tif = TimeInForce::IOC;
                 break;
-            case 2:
+            case ORDERTYPE_GTC:
                 s_tif = TimeInForce::GTC;
                 break;
-            case 3:
+            case ORDERTYPE_FOK:
                 s_tif = TimeInForce::FOK;
                 break;
-            case 4:
+            case ORDERTYPE_DAY:
                 s_tif = TimeInForce::Day;
                 break;
-            case 5:
+            case ORDERTYPE_OPG:
                 s_tif = TimeInForce::OPG;
                 break;
-            case 6:
+            case ORDERTYPE_CLS:
                 s_tif = TimeInForce::CLS;
                 break;
             }
@@ -823,8 +840,84 @@ namespace alpaca
         case SET_CCY:
             break;
 
-        case 2001: {
+        case CREATE_ASSETLIST: {
             downloadAssets((char*)dwParameter);
+            break;
+        }
+
+        case IS_ASSET_FRACTIONABLE: {
+            auto asset_str = (char*)dwParameter;
+            auto iter = s_mapAssets.find(asset_str);
+            if (iter != s_mapAssets.end()) {
+                return (int)iter->second.fractionable;
+            }
+            else {
+                auto response = client->getAsset(asset_str);
+                if (response) {
+                    auto& asset = response.content();
+                    s_mapAssets.emplace(asset_str, asset);
+                    return (int)asset.fractionable;
+                }
+                BrokerError(response.what().c_str());
+                return 0;
+            }
+            break;
+        }
+
+        case IS_ASSET_SHORTABLE: {
+            auto asset_str = (char*)dwParameter;
+            auto iter = s_mapAssets.find(asset_str);
+            if (iter != s_mapAssets.end()) {
+                return (int)iter->second.shortable;
+            }
+            else {
+                auto response = client->getAsset(asset_str);
+                if (response) {
+                    auto& asset = response.content();
+                    s_mapAssets.emplace(asset_str, asset);
+                    return (int)asset.shortable;
+                }
+                BrokerError(response.what().c_str());
+                return 0;
+            }
+            break;
+        }
+
+        case IS_ASSET_EASY_TO_BORROW: {
+            auto asset_str = (char*)dwParameter;
+            auto iter = s_mapAssets.find(asset_str);
+            if (iter != s_mapAssets.end()) {
+                return (int)iter->second.easy_to_borrow;
+            }
+            else {
+                auto response = client->getAsset(asset_str);
+                if (response) {
+                    auto& asset = response.content();
+                    s_mapAssets.emplace(asset_str, asset);
+                    return (int)asset.easy_to_borrow;
+                }
+                BrokerError(response.what().c_str());
+                return 0;
+            }
+            break;
+        }
+
+        case IS_ASSET_MARGINABLE: {
+            auto asset_str = (char*)dwParameter;
+            auto iter = s_mapAssets.find(asset_str);
+            if (iter != s_mapAssets.end()) {
+                return (int)iter->second.marginable;
+            }
+            else {
+                auto response = client->getAsset(asset_str);
+                if (response) {
+                    auto& asset = response.content();
+                    s_mapAssets.emplace(asset_str, asset);
+                    return (int)asset.marginable;
+                }
+                BrokerError(response.what().c_str());
+                return 0;
+            }
             break;
         }
 

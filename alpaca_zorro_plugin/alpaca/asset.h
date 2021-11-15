@@ -44,22 +44,24 @@ namespace alpaca {
 		std::string id;
 		std::string status;
 		std::string symbol;
+		std::string name;
 
 	private:
 		template<typename> friend class Response;
 
 		template<typename CallerT, typename T>
 		std::pair<int, std::string> fromJSON(const T& parser) {
-			parser.get<std::string>("class", asset_class);
-			parser.get<bool>("easy_to_borrow", easy_to_borrow);
-			parser.get<std::string>("exchange", exchange);
-			parser.get<std::string>("id", id);
-			parser.get<bool>("marginable", marginable);
-			parser.get<bool>("shortable", shortable);
-			parser.get<std::string>("status", status);
-			parser.get<std::string>("symbol", symbol);
-			parser.get<bool>("tradable", tradable);
-			parser.get<bool>("fractionable", fractionable);
+			parser.get("class", asset_class);
+			parser.get("easy_to_borrow", easy_to_borrow);
+			parser.get("exchange", exchange);
+			parser.get("id", id);
+			parser.get("marginable", marginable);
+			parser.get("shortable", shortable);
+			parser.get("status", status);
+			parser.get("symbol", symbol);
+			parser.get("tradable", tradable);
+			parser.get("fractionable", fractionable);
+			parser.get("name", name);
 			return std::make_pair(0, "OK");
 		}
 	};

@@ -1,30 +1,39 @@
+v1.2.0
+- Added AlpacaBrokerCommands.h header file. 
+- Added fractional qty support
+  - Added AlpacaFractionalLotAmount config. Set this config will modify the LotAmount of a fractionable asset.
+    For example: with AlpacaFractionalLotAmount = 0.0001 in the Zorro.ini or ZorroFix.ini, enterLong(1) places bid of 0.0001 shares of a fractionable asset
+  - Use BrokerCommand(IS_ASSET_FRACTIONABLE, Asset) to check if current Asset is fractionable. (Need to include AlpacaBorkerCommands.h in the strategy)
+- Fix MOC and MOO order can't open error.
+- Added IS_ASSERET_FRACTIONABLE, IS_ASSET_SHORABLE, IS_ASSET_EASY_TO_BORROW, IS_ASSET_MARGINABLE custom broker commands
+- Added a Description column in the generated AssetList.csv
+
 v1.1.0
 - Fix typos
 - Rename asset list to AssetAlpacaPaper.csv in Demo mode.
 - Stop generating AssetList if the "Close" button is clicked.
-- To reduce messaging, the BrokerTrade command will not fetch a filled, canceled, or expired order repeatedly. It will use lastQuote from WebSocket if WebSocket is enabled.
+- To reduce messaging, the BrokerTrade command will not fetch a filled, canceled, or expired order repeatedly. It will use the last quote from WebSocket if WebSocket is enabled.
 - Change daily TimeFrame from '1D' to '1Day', added 15 minutes TimeFrame.
 - Stop historical data downloading if the "Close" button is clicked.
 - Trim symbols in the genAssetList custom broker command.
 
 v1.0.6
-- BrokerBuy2 wait for the order change to right status
+- BrokerBuy2 wait for the order change to the right status
 - Prevent from re-open Websocket if it failed to open during login
 
 v1.0.5.1
 - [HotFix] Fix order request object didn't pass to Alpaca. #4
 
 v1.0.5
-- Fixed an issue where when Zorro Logout/Re-Login after market close/re-open, Zorro doesn't resubscribe assets which cause the plugin not reopen websockets
+- Fixed an issue where when Zorro Logout/Re-Login after market close/re-open, Zorro doesn't resubscribe assets which cause the plugin not to reopen WebSockets
 
 v1.0.4
 - Fix when historical data taking too long, the plugin stopped getting real data from the WebSocket
-
 v1.0.3
 - Improve Historical data download 
 
 v1.0.2.1
-- Fix server_queue_ not ready on administrator account
+- Fix server_queue_ not ready on the administrator account
 
 v1.0.2
 - Improved logger performance.
@@ -34,19 +43,19 @@ v1.0.2
 - Added AlpacaUseWebsocket config to turn off Websocket.
 
 v1.0.1
-- Fix sometimes server heartbeat timeout after the first strategy launching proxy server
+- Fix sometimes server heartbeat timeout after the first strategy launching the proxy server
 - Shutdown proxy server 10 seconds after last strategy logout.
 - Start client worker thread on strategy login. Stop client worker thread on strategy logout.
 - GET_LOCK broker command returns 1 now.
-- Default websocket url to Pro plan url.
+- Default WebSocket URL to Pro plan URL.
 
 v1.0.0
-- Introduced ZorroWebsocketProxy so that multiple ZorroS instances can share one Websocket connection
-  **NOTE** ZorroWebsocketProxy adopts a lock-free design which spins on one CPU core. High CPU usage is normal and expected.
+- Introduced ZorroWebsocketProxy so that multiple ZorroS instances can share one WebSocket connection
+  **NOTE** ZorroWebsocketProxy adopts a lock-free design that spins on one CPU core. High CPU usage is normal and expected.
 
 - Added Alpaca MarketData V2 Websocket support
-  - Las trade and last quote are directly from WebSocket stream. This is dramatically reduced Zorro API query.
-  - if last trade or last quote update have not received yet, the plugin will pull last trade and quote from V1 endpoint.
+  - Las trade and last quote are directly from the WebSocket stream. This is dramatically reduced the Zorro API query.
+  - if the last trade or last quote update has not been received yet, the plugin will pull the last trade and quote from the V1 endpoint.
 
 - Added Alpaca plugin specific setting to Zorro.ini or ZorroFix.ini file.
   - AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon
@@ -55,27 +64,26 @@ v1.0.0
   - PolygonApiKey = "*************"       // Polygon ApiKey
   please refer to the README.md for details.
 
-- Historical bars are still retrieved from V1 endpoint because V2 Historical Bars are not ready yet. 
+- Historical bars are still retrieved from the V1 endpoint because V2 Historical Bars are not ready yet. 
 
-- Polygon MarketData is still supported, but the ApiKey has moved into Zorro config file.
-  NOTE: Polygon free plan can't be used as alternative market data source due to lack of last trade and last quote data.
+- Polygon MarketData is still supported, but the ApiKey has moved into the Zorro config file.
+  NOTE: Polygon free plan can't be used as an alternative market data source due to lack of last trade and last quote data.
 
 v0.2.6
 - Get Polygon.io support back
 
 v0.2.5
-- [bug fix] Fix duplicate entry in hitory data download
-- Implemented a throttler to prevent request from exceeding rate limit
-- Remove Ploygon support. 
-  All Polygon.io services through Alpaca will be discontinued after Feb. 26 2021 market close.
-  The plugin will no longer be able to use Polygon.io data feed via Alpaca API key.
+- [bug fix] Fix duplicate entry in the history data download
+- Implemented a throttler to prevent requests from exceeding the rate limit
+- Remove Polygon support. 
+  All Polygon.io services through Alpaca will be discontinued after Feb. 26 2021 market is closed.
+  The plugin will no longer be able to use Polygon.io data feed via the Alpaca API key.
 
 v0.2.4
 - Support both Alpaca market data and Polygon in live mode.
   * "APIKey" in User input, use Alpaca market data
   * "APIKey_APIKey" in User input, use Polygon market data.
-- [bug fix] - In live mode, historical market data download might use 60 minutes bar which
-  is not supported by Alpaca.
+- [bug fix] - In live mode, historical market data download might use 60 minutes bar which is not supported by Alpaca.
 - Added LastTrade price type support. 
 - Implement GET_PRICETYPE broker command
 - [bug fix] Not return correct short position
@@ -84,12 +92,12 @@ v0.2.3
 [bugfix] - Fix Polygon historical data download stuck when there is no more data to download.
 
 v0.2.2
-- Add PIPCost in generated asset list
+- Add PIPCost in the generated asset list
 
 v0.2.1
 [Feature] - Add AssetList download broker command.
 [Improvement] - Handle asset not found.
-[bugfix] - When switching to Alpaca market data, log message still shows Polygon.
+[bugfix] - When switching to Alpaca market data, the log message still shows Polygon.
 [bugfix] - Empty bars causes crash in diagnostic.
 
 v0.2.0
@@ -97,10 +105,12 @@ v0.2.0
 [bugfix] - Fix order replacement.
 
 v0.1.2
-[hotfix] - Change Live market data api url to Alpaca market data.
+[hotfix] - Change Live market data API URL to Alpaca market data.
 
 v0.1.1
-[hotfix] - Fix Quote deserialization cause crash in prod build.
+[hotfix] - Fix Quote deserialization cause a crash in the prod build.
 
 v0.1.0
 - Initial Release
+
+

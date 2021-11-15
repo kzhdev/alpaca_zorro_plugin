@@ -149,8 +149,7 @@ namespace alpaca {
         }
 
         if (std::floor(quantity) != quantity) {
-            if (type != OrderType::Market ||
-                (tif == TimeInForce::CLS || tif == TimeInForce::GTC || tif == TimeInForce::OPG)) {
+            if (type != OrderType::Market || (tif != TimeInForce::Day)) {
                 return Response<Order>(1, "Fractional qty only for Market and Day order type");
             }
         }
