@@ -34,7 +34,7 @@ Following optional Alpaca-specific configurations are added since V1.0.0. These 
 
   ```text
   AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon. Default to 0.
-  AlpacaPaidDataPlan = 1	            // 0 = False (Use Basic Data Plan), 1 = True (Use Pro Data Plan). Default to 1.
+  AlpacaPaidDataPlan = 1	              // 0 = False (Use Basic Data Plan), 1 = True (Use Pro Data Plan). Default to 1.
   AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE. Default to 0.
   AlpacaUseWebsocket = 0                // 0 = Not use Websocket, 1 = Use Websocket. Default to 1.
   AlpacaFractionalLotAmount = 0.001     // The LotAmount for fractionable asset. Default to 1.
