@@ -2,10 +2,10 @@ v1.2.0
 - Added AlpacaBrokerCommands.h header file. 
 - Added fractional qty support
   - Added AlpacaFractionalLotAmount config. Set this config will modify the LotAmount of a fractionable asset.
-    For example: with AlpacaFractionalLotAmount = 0.0001 in the Zorro.ini or ZorroFix.ini, enterLong(1) places bid of 0.0001 shares of a fractionable asset
-  - Use BrokerCommand(IS_ASSET_FRACTIONABLE, Asset) to check if current Asset is fractionable. (Need to include AlpacaBorkerCommands.h in the strategy)
+    For example: with AlpacaFractionalLotAmount = 0.0001 in the Zorro.ini or ZorroFix.ini, enterLong(1) places a bid of 0.0001 shares of a fractionable asset
+  - Use brokerCommand(IS_ASSET_FRACTIONABLE, Asset) to check if current Asset is fractionable. (Need to include AlpacaBorkerCommands.h in the strategy)
 - Fix MOC and MOO order can't open error.
-- Added IS_ASSERET_FRACTIONABLE, IS_ASSET_SHORABLE, IS_ASSET_EASY_TO_BORROW, IS_ASSET_MARGINABLE custom broker commands
+- Added IS_ASSERET_FRACTIONABLE, IS_ASSET_SHORTABLE, IS_ASSET_EASY_TO_BORROW, IS_ASSET_MARGINABLE custom broker commands
 - Added a Description column in the generated AssetList.csv
 
 v1.1.0
