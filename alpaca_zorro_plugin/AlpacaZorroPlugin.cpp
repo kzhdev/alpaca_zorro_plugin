@@ -672,7 +672,7 @@ namespace alpaca
         }
 
         BrokerError("Generating Asset List...");
-        fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission,Symbol,Description\n");
+        fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission,Symbol,Type,Description\n");
 
         auto getAsset = [f](const alpaca::Asset& asset) -> bool {
             BrokerError(("Asset " + asset.symbol).c_str());
@@ -684,10 +684,10 @@ namespace alpaca
             if (quote) {
                 auto& q = quote.content().quote;
                 if (!asset.fractionable) {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,1,0.000,%s,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.symbol.c_str(), asset.name.c_str());
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,1,0.000,%s,0,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.symbol.c_str(), asset.name.c_str());
                 }
                 else {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,0.0,1,%f,0.000,%s,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), config.fractionalLotAmount, asset.symbol.c_str(), asset.name.c_str());
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,%f,0.000,%s,0,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), config.fractionalLotAmount, asset.symbol.c_str(), asset.name.c_str());
                 }
             }
             else {

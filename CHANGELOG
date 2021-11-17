@@ -1,3 +1,7 @@
+v1.2.1
+- Added Type column in the AssetList.csv. 
+- Changed the MarginCost to -100 in the AssetList.csv
+
 v1.2.0
 - Added AlpacaBrokerCommands.h header file. 
 - Added fractional qty support

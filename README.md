@@ -20,7 +20,7 @@ Alternatively, the latest definition is available for download here: https://www
 
 ## Install
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.0/AlpacaZorroPlugin_v1.2.0.zip), unzip, place the "include/AlpacaBrokerCommand.h" file into the **include** folder under Zorro's root path, and place the "Plugin/Alpaca.dll" file and the "Plugin/websocket_proxy" folder into the **Plugin** folder under Zorro's root path.
+To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip), unzip, place the "include/AlpacaBrokerCommand.h" file into the **include** folder under Zorro's root path, and place the "Plugin/Alpaca.dll" file and the "Plugin/websocket_proxy" folder into the **Plugin** folder under Zorro's root path.
 
 ## How to Use
 
