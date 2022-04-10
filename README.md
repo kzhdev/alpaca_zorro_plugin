@@ -4,20 +4,6 @@
 
 **AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool for financial research and an automatic trading system.
 
-## Windows Defender (Updated)
-Windows Defender, version 1.339.981.0, incorrectly detects zorro_websocket_proxy.exe as a **Trojan:Win32/Sabsik.FT.A!ml** on Windows Server 2019. zorro_websocket_proxy.exe has been sent to Microsoft for analysis. It is totally safe to use. To restore zorro_websocket_proxy.exe from quarantine, go to **Windows Security**, click **Virus & Thread Protection** -> **Thread history** ->  **Trojan:Win32/Sabsik.FT.A!ml** then click the **Restore** button.
-
-**Microsoft has removed zorro_websocket_socket.exe from the malware definitions.**
-```
-We have removed the detection. Please follow the steps below to clear cached detection and obtain the latest malware definitions.
-
-1. Open command prompt as administrator and change directory to c:\Program Files\Windows Defender
-2. Run “MpCmdRun.exe -removedefinitions -dynamicsignatures”
-3. Run "MpCmdRun.exe -SignatureUpdate"
-
-Alternatively, the latest definition is available for download here: https://www.microsoft.com/en-us/wdsi/definitions
-```
-
 ## Install
 
 To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip), unzip, place the "include/AlpacaBrokerCommand.h" file into the **include** folder under Zorro's root path, and place the "Plugin/Alpaca.dll" file and the "Plugin/websocket_proxy" folder into the **Plugin** folder under Zorro's root path.
