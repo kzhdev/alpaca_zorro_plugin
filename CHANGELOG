@@ -1,9 +1,9 @@
 v1.3.0
-- Dropped Polygon support
-- Added latest quotes, lastest trades and snapshots support.
-- Added paper account WebSocket endpoint
-- Added Adjustment support for history bar download
-- Added log type to fine tune what to log.
+- Dropped Polygon support.
+- Added latest quotes, latest trades and snapshots support.
+- Added paper account WebSocket endpoint.
+- Added Adjustment support for history bar download.
+- Added log type to fine-tune what to log.
 
 v1.2.1
 - Added Type column in the AssetList.csv. 
