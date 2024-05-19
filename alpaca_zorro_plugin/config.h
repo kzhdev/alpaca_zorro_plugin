@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 #include <bitset>
+#include <market_data/bars.h>
+#include <fstream>
 
 namespace {
     inline void ltrim(std::string& s) {
@@ -21,20 +23,32 @@ namespace {
 
 namespace alpaca {
 
-    struct Configuration {
-        std::string polygonApiKey;
+    struct Config {
         double fractionalLotAmount = 1;
-        uint8_t dataSource = 0;
         uint8_t logLevel = 0;
+        uint8_t logType = 1;
         bool alpacaPaidPlan = true;
         bool useWebsocket = true;
+        Adjustment adjustment = Adjustment::all;
 
-        void init() {
+        static Config& get()
+        {
+            static Config instance;
+            return instance;
+        }
+
+        Config(const Config&) = delete;
+        Config(Config&&) = delete;
+        Config& operator=(const Config&) = delete;
+        Config& operator=(Config&&) = delete;
+
+    private:
+        Config() {
             readConfig("./Zorro.ini");
             readConfig("./ZorroFix.ini");
         }
+        ~Config() = default;
 
-    private:
         inline bool readConfig(const char* file) {
             std::ifstream config(file);
             if (!config.is_open()) {
@@ -44,10 +58,9 @@ namespace alpaca {
             std::string line;
 
             while (getline(config, line)) {
-                getConfig(line, ConfigFound::DataSource, "AlpacaDataSource", dataSource);
                 getConfig(line, ConfigFound::PaidPlan,  "AlpacaPaidDataPlan", alpacaPaidPlan);
                 getConfig(line, ConfigFound::LogLevel, "AlpacaLogLevel", logLevel);
-                getConfig(line, ConfigFound::PolygonApiKey, "PolygonApiKey", polygonApiKey);
+                getConfig(line, ConfigFound::LogType, "AlpacaLogType", logType);
                 getConfig(line, ConfigFound::UseWebsocket, "AlpacaUseWebsocket", useWebsocket);
                 getConfig(line, ConfigFound::FractionalLotAmount, "AlpacaFractionalLotAmount", fractionalLotAmount);
             }
@@ -91,14 +104,17 @@ namespace alpaca {
         }
 
         template<typename T>
-        inline typename std::enable_if<!std::is_same<T, std::string>::value>::type setValue(T& value, const std::string& v) { value = atof(v.c_str()); }
+        inline typename std::enable_if<std::is_integral<T>::value>::type setValue(T& value, const std::string& v) { value = atoi(v.c_str()); }
+
+        template<typename T>
+        inline typename std::enable_if<std::is_floating_point<T>::value>::type setValue(T& value, const std::string& v) { value = atof(v.c_str()); }
+
 
     private:
         enum ConfigFound : uint8_t {
-            DataSource,
             PaidPlan,
-            PolygonApiKey,
             LogLevel,
+            LogType,
             UseWebsocket,
             FractionalLotAmount,
             __end__,

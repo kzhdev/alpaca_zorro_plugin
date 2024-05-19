@@ -4,6 +4,13 @@
 #include "market_data/trade.h"
 #include "market_data/quote.h"
 
+#ifdef _WIN32
+// Remove GetObject definition from windows.h, which prevents calls to
+// RapidJSON's GetObject.
+// https://github.com/Tencent/rapidjson/issues/1448
+#undef GetObject
+#endif  // _WIN32
+
 namespace alpaca {
 
     struct Snapshot {

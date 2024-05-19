@@ -2,6 +2,7 @@
 #include "market_data/alpaca_market_data.h"
 #include "date/date.h"
 #include "trade.h"
+#include "config.h"
 
 using namespace alpaca;
 
@@ -51,7 +52,7 @@ Response<std::vector<Bar>> AlpacaMarketData::getBarsV1(
                 sEnd.append("-00:00");  // add UTC timezone offset
             }
         }
-        catch (const std::exception& e) {
+        catch (const std::exception& /*e*/) {
             assert(false);
         }
     }
@@ -63,7 +64,7 @@ Response<std::vector<Bar>> AlpacaMarketData::getBarsV1(
             << "&limit=" << limit << (sStart.empty() ? "" : "&start=" + sStart)
             << (sEnd.empty() ? "" : "&end=" + sEnd);
 
-        return request<std::vector<Bar>, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr);
+        return request<std::vector<Bar>, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_HISTORY);
     }
 
 
@@ -86,7 +87,7 @@ Response<std::vector<Bar>> AlpacaMarketData::getBarsV1(
     }
     else {
         n = nTickMinutes;
-        timeframe + "1Min";
+        timeframe = "1Min";
     }
 
     uint32_t nLimit = n * limit;
@@ -102,7 +103,7 @@ Response<std::vector<Bar>> AlpacaMarketData::getBarsV1(
                 << (sEnd.empty() ? "" : "&end=" + sEnd);
 
             LOG_DEBUG("--> %s\n", url.str().c_str());
-            retrieved = request<std::vector<Bar>, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr);
+            retrieved = request<std::vector<Bar>, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_HISTORY);
             LOG_DEBUG("%d bars downloaded\n", retrieved.content().size());
             if (!retrieved) {
                 retrieved.content().swap(response.content());
@@ -119,7 +120,7 @@ Response<std::vector<Bar>> AlpacaMarketData::getBarsV1(
                 << (sEnd.empty() ? "" : "&end=" + sEnd);
 
             LOG_DEBUG("--> %s\n", url.str().c_str());
-            retrieved = request<std::vector<Bar>, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr, alpaca::L_TRACE);
+            retrieved = request<std::vector<Bar>, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr, alpaca::L_TRACE, LogType::LT_HISTORY);
             LOG_DEBUG("%d bars downloaded\n", retrieved.content().size());
             if (!retrieved) {
                 retrieved.content().swap(response.content());
@@ -141,7 +142,7 @@ Response<std::vector<Bar>> AlpacaMarketData::getBarsV1(
                 if (i != 0) {
                     response.content().push_back(rtBar);
                 }
-                if (bar.time > end) {
+                if (bar.time > static_cast<uint32_t>(end)) {
                     exceeded_end = true;
                 }
                 rtBar.time = bar.time;
@@ -198,26 +199,22 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
     uint32_t limit) const {
 
     // Alpaca only suport 1Min, 1Hour, 1D bars
-    static std::vector<std::pair<uint32_t, const char*>> supported_timeframe = { {1, "1Min"}, {15, "15Min"}, {60, "1Hour"}, {1440, "1Day"}};
+    static std::vector<std::pair<uint32_t, const char*>> supported_timeframe = { {1440, "1Day"}, {10080, "1Week"} };
 
     std::string timeframe;
     uint32_t n = 1;
     uint32_t granularity = nTickMinutes;
-    switch (nTickMinutes) {
-    case 1:
-        timeframe = "1Min";
-        break;
-    case 15:
-        timeframe = "15Min";
-        break;
-    case 60:
-        timeframe = "1Hour";
-        break;
-    case 1440:
-        timeframe = "1Day";
-        break;
-    default:
-        break;
+
+    if (nTickMinutes < 60)
+    {
+        timeframe = std::to_string(nTickMinutes) + "Min";
+    }
+    else if (nTickMinutes < 1440)
+    {
+        if ((nTickMinutes % 60) == 0)
+        {
+            timeframe = std::to_string(nTickMinutes / 60) + "Hour";
+        }
     }
 
     if (timeframe.empty()) {
@@ -229,30 +226,30 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
                 break;
             }
         }
+
+        if (timeframe.empty())
+        {
+            LOG_ERROR("Invalid timeframe (%d)\n", nTickMinutes);
+            return Response<std::vector<Bar>>(1, "Invalid timeframe " + std::to_string(nTickMinutes));
+        }
     }
 
     uint32_t i = 0;
     Response<std::vector<Bar>> response;
     auto& bars = response.content();
     bars.reserve(limit);
-    std::vector<Bar> cached;
     Bar rtBar;
     __time32_t e = end;
-    __time32_t s;
     std::string page_token;
     bool bFirstBar = true;
     uint32_t bar_end_time;
 
-    auto buildBar = [&limit, start, e, &rtBar, &bFirstBar, n, &i, nTickMinutes, &bars, &bar_end_time, granularity](std::vector<Bar>& dowloadedBars) {
+    auto buildBar = [&limit, start, e, &rtBar, &bFirstBar, n, &i, nTickMinutes, &bars, &bar_end_time, granularity](std::vector<Bar>& dowloadedBars) -> bool {
         int residual = 0;
-        while (!dowloadedBars.empty() && limit) {
-            const auto& bar = dowloadedBars.back();
+        for (auto ii = 0u;ii < dowloadedBars.size() && limit > 0; ++ii) {
+            auto& bar = dowloadedBars[ii];
             if (bar.time < (uint32_t)start) {
-                break;
-            }
-
-            if (bar.time_string == "2021-05-11T23:59:00Z" || bar.time_string == "2021-05-12T08:01:00Z") {
-                printf("\n");
+                return false;
             }
 
             if (n == 1) {
@@ -263,10 +260,9 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
                 if (i == 0) {
                     if (bFirstBar) {
                         auto duration = nTickMinutes * 60;
-                        if (((e - bar.time) < duration) && ((e % duration) > (bar.time % duration))) {
+                        if (((int)(e - bar.time) < duration) && ((e % duration) > (int)(bar.time % duration))) {
                             // drop incompleted bar data
                             LOG_DIAG("Drop bar at %s\n", bar.time_string.c_str());
-                            dowloadedBars.pop_back();
                             continue;
                         }
                         bFirstBar = false;
@@ -276,8 +272,8 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
                     LOG_DIAG("Bar end at %s\n", rtBar.time_string.c_str());
                 }
                 else {
-                    if ((bar_end_time - bar.time) > ((nTickMinutes - 1) * 60))  { 
-                        LOG_DIAG("Some data is missing, the data at %s belongs to different bar.\n", bar.time_string.c_str());
+                    if ((int)(bar_end_time - bar.time) > ((nTickMinutes - 1) * 60))  { 
+                        LOG_WARNING("Some data is missing, the data at %s belongs to different bar.\n", bar.time_string.c_str());
                         LOG_DIAG("Bar end at %s\n", bar.time_string.c_str());
                         bars.emplace_back(std::move(rtBar));
                         rtBar = bar;
@@ -306,30 +302,30 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
                     assert(i < n);
                 }
             }
-            dowloadedBars.pop_back();
         }
+        return true;
     };
 
-    auto lmt = 5000 * granularity;
+    auto lmt = 10000 * granularity;
 
     do {
-        s = std::max<__time32_t>(start, e - lmt * 60);
-        std::string sStart = timeToString(s);
+        std::string sStart = timeToString(start);
         std::string sEnd = timeToString(e);
         std::stringstream url;
         url << baseUrl_ << "/v2/stocks/" << symbol << "/bars?start=" << sStart
-            << "&end=" << sEnd << "&limit=" << 5000 << "&timeframe=" << timeframe;
+            << "&end=" << sEnd << "&limit=" << 10000 << "&timeframe=" << timeframe
+            << "&sort=desc&adjustment=" << to_string(Config::get().adjustment);
 
         if (!page_token.empty()) {
             url << "&page_token=" << page_token;
         }
 
-        auto retrieved = request<Bars, AlpacaMarketData>(url.str(), headers_.c_str());
+        auto retrieved = request<Bars, AlpacaMarketData>(url.str(), headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_HISTORY);
         if (!retrieved) {
             if (retrieved.getCode() == 40010001 && retrieved.what() == "end is too late for subscription") {
                 // Basic Plan has 15min delay
                 LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
-                response.onError(retrieved.getCode(), retrieved.what());
+                response.onError(retrieved.what(), retrieved.getCode());
             }
             else {
                 BrokerError(("Failed to get bars. " + retrieved.what()).c_str());
@@ -348,27 +344,23 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
             if (!retrieved.content().next_page_token.empty()) {
                 LOG_DIAG("data pagenated\n");
                 // need to get more data entil reach the end;
-                cached.insert(cached.end(), retrvievedBars.begin(), retrvievedBars.end());
                 page_token = retrieved.content().next_page_token;
-                continue;
             }
             else {
                 page_token = "";
             }
 
-            e = cached.empty() ? retrvievedBars.front().time - 30 : cached[0].time - 30;
-            buildBar(retrvievedBars);
-            if (!cached.empty()) {
-                buildBar(cached);
+            e = retrvievedBars.back().time - 30;
+            if (!buildBar(retrvievedBars))
+            {
+                break;
             }
         } else {
             LOG_TRACE("0 bars downloaded.\n");
-            e = s - 30;
+            break;
         }
-        
-    } while (limit && ((s > start) || !page_token.empty()));
-    LOG_DIAG("limit: %d, s: %d\n", limit, s);
-    std::reverse(bars.begin(), bars.end());
+    } while (limit || !page_token.empty());
+    LOG_DIAG("limit: %d\n", limit);
     return response;
 }
 

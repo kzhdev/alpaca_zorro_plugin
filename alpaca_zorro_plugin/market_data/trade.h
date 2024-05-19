@@ -3,6 +3,14 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <unordered_map>
+
+#ifdef _WIN32
+// Remove GetObject definition from windows.h, which prevents calls to
+// RapidJSON's GetObject.
+// https://github.com/Tencent/rapidjson/issues/1448
+#undef GetObject
+#endif  // _WIN32
 
 namespace alpaca {
 
@@ -24,15 +32,17 @@ namespace alpaca {
         friend struct Snapshot;
         friend struct LastTrade;
         friend struct Trades;
+        friend struct LastTrades;
 
         template<typename CallerT, typename T>
         std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
             parser.get<double>("p", price);
             parser.get<int>("s", size);
-            parser.get<int>("t", trade_id);
+            parser.get<int>("i", trade_id);
             parser.get<std::string>("x", exchange);
             parser.get<std::string>("t", sTime);
             timestamp = parseTimeStamp2(sTime);
+            parser.get<std::string>("z", z);
             return std::make_pair(0, "OK");
         }
 
@@ -46,7 +56,6 @@ namespace alpaca {
     };
 
     struct LastTrade {
-        std::string status;
         std::string symbol;
         Trade trade;
 
@@ -55,16 +64,11 @@ namespace alpaca {
 
         template <typename CallerT, typename T>
         std::pair<int, std::string> fromJSON(const T& parser) {
-            parser.get<std::string>("status", status);
             parser.get<std::string>("symbol", symbol);
 
-            if (status != "success") {
-                return std::make_pair(1, symbol + " " + status);
-            }
-
-            if (parser.json.HasMember("last") && parser.json["last"].IsObject()) {
-                auto obj = parser.json["last"].GetObject();
-                Parser<decltype(parser.json["last"].GetObject())> p(obj);
+            if (parser.json.HasMember("trade") && parser.json["trade"].IsObject()) {
+                auto obj = parser.json["trade"].GetObject();
+                Parser<decltype(parser.json["trade"].GetObject())> p(obj);
                 trade.fromJSON<CallerT>(p);
             }
 
@@ -92,6 +96,27 @@ namespace alpaca {
                     Trade t;
                     t.fromJSON<CallerT>(p);
                     trades.emplace_back(std::move(t));
+                }
+            }
+            return std::make_pair(0, "OK");
+        }
+    };
+
+    struct LastTrades {
+        std::unordered_map<std::string, Trade> trades;
+
+    private:
+        template <typename> friend class Response;
+
+        template <typename CallerT, typename T>
+        std::pair<int, std::string> fromJSON(const T& parser) {
+            if (parser.json.HasMember("trades")) {
+                for (auto& tradeJson : parser.json["trades"].GetObject()) {
+                    auto tradeObj = tradeJson.value.GetObject();
+                    Parser<decltype(tradeObj)> p(tradeObj);
+                    Trade t;
+                    t.fromJSON<CallerT>(p);
+                    trades.emplace(tradeJson.name.GetString(), std::move(t));
                 }
             }
             return std::make_pair(0, "OK");

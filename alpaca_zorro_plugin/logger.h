@@ -16,12 +16,25 @@ namespace alpaca {
         L_INFO,
         L_DEBUG,
         L_TRACE,
-        L_TRACE2,
+    };
+
+    enum LogType : uint8_t
+    {
+        LT_DEFAULT = 1,
+        LT_ACCOUNT = 1 << 1,
+        LT_BALANCE = 1 << 2,
+        LT_POSITION = 1 << 3,
+        LT_ORDER = 1 << 4,
+        LT_HISTORY = 1 << 5,
+        LT_MD = 1 << 6,
+        LT_WEB_SOCKET_DATA = 1 << 7,
+        LT_ALL_WITHOUT_WEB_SOCKET = LT_DEFAULT | LT_ACCOUNT | LT_BALANCE | LT_POSITION | LT_ORDER | LT_HISTORY | LT_MD,
+        LT_ALL = LT_ALL_WITHOUT_WEB_SOCKET | LT_WEB_SOCKET_DATA,
     };
 
     static constexpr char* to_string(LogLevel level) {
         constexpr char* s_levels[] = {
-            "OFF", "ERROR", "WARNING", "INFO", "DEBUG", "TRACE", "TRACE2"
+            "OFF", "ERROR", "WARNING", "INFO", "DEBUG", "TRACE"
         };
         return s_levels[level];
     }
@@ -39,25 +52,34 @@ namespace alpaca {
 #ifdef _DEBUG
             setLevel(LogLevel::L_TRACE);
 #endif
-            if (level_ != LogLevel::L_OFF) {
-                open_log();
-            }
         }
 
         LogLevel getLevel() const noexcept { return level_; }
 
         void setLevel(LogLevel level) noexcept {
             level_ = level;
-            if (level != LogLevel::L_OFF && !log_) {
-                open_log();
-            }
+            unable_to_open_ = false;
         }
 
+        uint8_t getLogType() const noexcept { return type_;  }
+        void setLogType(uint8_t type) noexcept { type_ = type; }
+
         template<typename ... Args>
-        inline void log(LogLevel level, const char* format, Args... args) {
+        inline void log(LogLevel level, LogType type, const char* format, Args... args) {
+            if (level_ < level || !(type_ & type)) {
+                return;
+            }
+
+            if (!log_ && !open_log()) {
+                return;
+            }
             std::time_t t = std::time(nullptr);
             struct tm _tm;
             localtime_s(&_tm, &t);
+            //if (_tm.tm_isdst > 0)
+            //{
+            //    --_tm.tm_hour;
+            //}
             char buf[25];
             std::strftime(buf, sizeof(buf), "%F %T", &_tm);
 
@@ -81,7 +103,12 @@ namespace alpaca {
             }
         }
 
-        void open_log() {
+        bool open_log() {
+            if (unable_to_open_)
+            {
+                return false;
+            }
+
             std::time_t t = std::time(nullptr);
             struct tm _tm;
             localtime_s(&_tm, &t);
@@ -92,35 +119,34 @@ namespace alpaca {
 
             if (!log_) {
                 BrokerError(("Failed to open log " + log_file).c_str());
-                level_ = LogLevel::L_OFF;
+                unable_to_open_ = true;
+                return false;
             }
+            return true;
         }
 
     private:
         std::string name_;
         FILE* log_  = nullptr;
         LogLevel level_ = LogLevel::L_OFF;
+        uint8_t type_ = LogType::LT_ALL_WITHOUT_WEB_SOCKET;
+        bool unable_to_open_ = false;
     };
 
 
 #ifndef _LOG
-#define _LOG(level, format, ...)           \
-{\
-    auto& logger = Logger::instance();              \
-    auto lvl = logger.getLevel();                 \
-    if (lvl >= level) {   \
-        logger.log(level, format, __VA_ARGS__);      \
-    }\
-}
-
-#define LOG_DEBUG(format, ...) _LOG(L_DEBUG, format, __VA_ARGS__);
-#define LOG_INFO(format, ...) _LOG(L_INFO, format, __VA_ARGS__);
-#define LOG_WARNING(format, ...) _LOG(L_WARNING, format, __VA_ARGS__);
-#define LOG_ERROR(format, ...) _LOG(L_ERROR, format, __VA_ARGS__);
-#define LOG_TRACE(format, ...) _LOG(L_TRACE, format, __VA_ARGS__);
-#define LOG_TRACE2(format, ...) _LOG(L_TRACE2, format, __VA_ARGS__);
+#define LOG_DEBUG(format, ...) Logger::instance().log(L_DEBUG, LT_ALL, format, __VA_ARGS__);
+#define LOG_DEBUG_EXT(type, format, ...) Logger::instance().log(L_DEBUG, type, format, __VA_ARGS__);
+#define LOG_INFO(format, ...) Logger::instance().log(L_INFO, LT_ALL, format, __VA_ARGS__);
+//#define LOG_INFO_EXT(type, format, ...) Logger::instance().log(L_INFO, type, format, __VA_ARGS__);
+#define LOG_WARNING(format, ...) Logger::instance().log(L_WARNING, LT_ALL, format, __VA_ARGS__);
+//#define LOG_WARNING_EXT(type, format, ...) Logger::instance().log(L_WARNING, type, format, __VA_ARGS__);
+#define LOG_ERROR(format, ...) Logger::instance().log(L_ERROR, LT_ALL, format, __VA_ARGS__);
+//#define LOG_ERROR_EXT(type, format, ...) Logger::instance().log(L_ERROR, type, format, __VA_ARGS__);
+#define LOG_TRACE(format, ...) Logger::instance().log(L_TRACE, LT_ALL, format, __VA_ARGS__);
+//#define LOG_TRACE_EXT(type, format, ...) Logger::instance().log(L_TRACE, type, format, __VA_ARGS__);
 #ifdef _DEBUG
-#define LOG_DIAG(format, ...) _LOG(L_DEBUG, format, __VA_ARGS__);
+#define LOG_DIAG(format, ...) Logger::instance().log(L_DEBUG, LT_ALL, format, __VA_ARGS__);
 #else
 #define LOG_DIAG(format, ...)
 #endif

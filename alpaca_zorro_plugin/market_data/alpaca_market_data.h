@@ -3,47 +3,42 @@
 #include <string>
 #include <functional>
 #include "request.h"
-#include "market_data/market_data_base.h"
 #include "market_data/snapshot.h"
+#include "market_data/bars.h"
 
 namespace alpaca {
 
-    class AlpacaMarketData : public MarketData {
+    class AlpacaMarketData {
+        bool paidPlan_ = false;
         static constexpr const char* baseUrl_ = "https://data.alpaca.markets";
+        static constexpr const char* cryptoBaseUrl_ = "https://data.alpaca.markets/v1beta3/crypto/us";
 
     public:
-        AlpacaMarketData(std::string headers, bool paidPlan) : MarketData(paidPlan), headers_(std::move(headers)) {
+        AlpacaMarketData(std::string headers, bool paidPlan) : paidPlan_(paidPlan), headers_(std::move(headers)) {
             downloaded_bars_.reserve(10000);
             leftover_bars_.reserve(1000);
         }
-        ~AlpacaMarketData() override = default;
+
+        ~AlpacaMarketData() = default;
 
         const char* name() const noexcept { return "Alpaca"; }
 
-        Response<LastQuote> getLastQuote(const std::string& symbol) const override {
-            auto snapshot = getSnapshot(symbol);
-            if (!snapshot) {
-                return Response<LastQuote>(snapshot.getCode(), snapshot.what());
-            }
-            auto rt = Response<LastQuote>();
-            LastQuote& lastQuote = rt.content();
-            lastQuote.symbol = snapshot.content().symbol;
-            lastQuote.status = "success";
-            lastQuote.quote = snapshot.content().last_quote;
-            return rt;
+        bool isPaidPlan() const noexcept { return paidPlan_; }
+
+        Response<LastQuote> getLastQuote(const std::string& symbol) const {
+            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/quotes/latest", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
-        Response<LastTrade> getLastTrade(const std::string& symbol) const override {
-            auto snapshot = getSnapshot(symbol);
-            if (!snapshot) {
-                return Response<LastTrade>(snapshot.getCode(), snapshot.what());
-            }
-            auto rt = Response<LastTrade>();
-            LastTrade& lastTrade = rt.content();
-            lastTrade.symbol = snapshot.content().symbol;
-            lastTrade.status = "success";
-            lastTrade.trade = snapshot.content().last_trade;
-            return rt;
+        Response<LastQuotes> getLastQuotes(const std::string& symbols) const {
+            return request<LastQuotes, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/quotes/latest?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+        }
+
+        Response<LastTrade> getLastTrade(const std::string& symbol) const {
+            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/trades/latest", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+        }
+
+        Response<LastTrades> getLastTrades(const std::string& symbols) const {
+            return request<LastTrades, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/trades/latest?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
         Response<std::vector<Bar>> getBars(
@@ -52,12 +47,17 @@ namespace alpaca {
             __time32_t end,
             int nTickMinutes = 1,
             uint32_t limit = 100,
-            int32_t price_type = 0) const override;
+            int32_t price_type = 0) const;
+
+        Response<Snapshot> getSnapshot(const std::string& symbol) const {
+            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+        }
+
+        Response<Snapshot> getSnapshots(const std::string& symbols) const {
+            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/snapshots?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+        }
 
     private:
-        Response<Snapshot> getSnapshot(const std::string& symbol) const {
-            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot", headers_.c_str(), nullptr, LogLevel::L_TRACE);
-        }
 
         Response<std::vector<Bar>> getBarsV1(
             const std::string& symbol,
@@ -162,7 +162,7 @@ namespace alpaca {
                     // Basic Plan has 15min delay
                     // TODO: switch to Polygon?
                     LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());
-                    response.onError(retrieved.getCode(), retrieved.what());
+                    response.onError(retrieved.what(), retrieved.getCode());
                 }
                 else if (retrieved.getCode() == 50010000 && retrieved.what() == "internal server error occurred") {
                     LOG_ERROR("%s(%d)\n", retrieved.what().c_str(), retrieved.getCode());

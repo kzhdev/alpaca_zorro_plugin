@@ -7,7 +7,13 @@
 #include <thread>
 #include "alpaca/json.h"
 #include "logger.h"
-#include "throttler.h"
+
+#ifdef _WIN32
+// Remove GetObject definition from windows.h, which prevents calls to
+// RapidJSON's GetObject.
+// https://github.com/Tencent/rapidjson/issues/1448
+#undef GetObject
+#endif  // _WIN32
 
 namespace alpaca {
 
@@ -17,6 +23,7 @@ namespace alpaca {
     extern long(__cdecl* http_status)(int id);
     extern long(__cdecl* http_result)(int id, char* content, long size);
     extern void(__cdecl* http_free)(int id);
+    extern uint64_t get_timestamp();
 
     template<typename>
     struct is_vector : std::false_type {};
@@ -43,15 +50,20 @@ namespace alpaca {
     class Response {
     public:
         explicit Response(int c = 0) noexcept : code_(c), message_("OK") {}
-        Response(int c, std::string m) noexcept : code_(c), message_(std::move(m)) {}
+        Response(int c, std::string m) noexcept : code_(c), message_(m) {}
 
-        void onError(int c, std::string m) {
+        void onError(std::string m, int c = 1) {
             code_ = c;
             message_ = std::move(m);
+            timestamp_ = get_timestamp();
         }
 
         int getCode() const noexcept {
             return code_;
+        }
+
+        uint64_t timestamp() const noexcept {
+            return timestamp_;
         }
 
         std::string what() const noexcept {
@@ -66,24 +78,31 @@ namespace alpaca {
             return code_ == 0;
         }
 
+        void reset(int c, std::string m) noexcept {
+            message_ = std::move(m);
+            code_ = c;
+            timestamp_ = 0;
+        }
+
     private:
         template<typename T, typename CallerT>
-        friend Response<T> request(const std::string&, const char*, const char*, LogLevel logLevel);
+        friend Response<T> request(const std::string&, const char*, const char*, LogLevel logLevel, LogType type);
+
+        template<typename T, typename CallerT>
+        friend void request(Response<T>& response, const std::string&, const char*, const char*, LogLevel logLevel, LogType type);
 
         template<typename CallerT>
         void parseContent(const std::string& content, const std::string& url) {
             rapidjson::Document d;
             if (d.Parse(content.c_str()).HasParseError()) {
-                message_ = "Received parse error when deserializing asset JSON. err=" + std::to_string(d.GetParseError()) + "\n" + content;
-                code_ = 1;
+                onError("Received parse error when deserializing asset JSON. err=" + std::to_string(d.GetParseError()) + "\n" + content);
                 return;
             }
 
             if (!d.IsObject()) {
                 if (d.IsArray()) {
                     if (!is_vector<T>::value) {
-                        message_ = "JSON is an arry type, but the response content is an object.";
-                        code_ = 1;
+                        onError("JSON is an arry type, but the response content is an object.");
                         return;
                     }
                 }
@@ -95,22 +114,20 @@ namespace alpaca {
             }
             else if (!std::is_same<CallerT, class Polygon>::value) {
                 if (d.HasMember("code") && d.HasMember("message")) {
-                    message_ = d["message"].GetString();
-                    code_ = d["code"].GetInt();
+                    onError(d["message"].GetString());
                     return;
                 }
                 else if (!d.HasMember("code") && d.HasMember("message") /*&& (strcmp(d["message"].GetString(), "too many requests.") == 0)*/) {
-                    message_ = d["message"].GetString();
-                    code_ = 1;
+                    onError(d["message"].GetString());
                     return;
                 }
             }
             else {
                 // Check polygon return
                 if (d.HasMember("error") && d.HasMember("errorcode")) {
-                    message_ = d["error"].GetString();
-                    message_.append(" ").append(url);
-                    code_ = atoi(d["errorcode"].GetString());
+                    std::string msg = d["error"].GetString();
+                    msg.append(" ").append(url);
+                    onError(std::move(msg), atoi(d["errorcode"].GetString()));
                     return;
                 }
             }
@@ -118,12 +135,10 @@ namespace alpaca {
             try {
                 Parser<rapidjson::Document> parser(d);
                 auto result = parse<T, CallerT>(parser, content_);
-                code_ = result.first;
-                message_ = result.second;
+                onError(result.second, result.first);   // This might not be an error, just to set the meassage and code
             }
             catch (std::exception& e) {
-                code_ = 1;
-                message_ = e.what();
+                onError(e.what());
             }
         }
         
@@ -170,6 +185,7 @@ namespace alpaca {
         }
 
     private:
+        uint64_t timestamp_ = 0;
         int code_;
         std::string message_;
         T content_;
@@ -183,29 +199,17 @@ namespace alpaca {
     * 
     */
     template<typename T, typename CallerT>
-    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, LogLevel logLevel = LogLevel::L_TRACE2) {
-        static Throttler throttler(3);
-
+    inline void request(Response<T>& response, const std::string& url, const char* headers = nullptr, const char* data = nullptr, LogLevel logLevel = LogLevel::L_TRACE, LogType type = LogType::LT_ALL) {
         if (url.empty()) {
-            return  Response<T>(1, "Invalid url - empty");
+            return response.onError("Invalid url - empty");
         }
 
-
-        LOG_DEBUG("--> %s\n", url.c_str());
-
-        while (!throttler.canSent()) {
-            // reached throttle limit
-            if (!BrokerProgress(1)) {
-                return Response<T>(1, "Brokerprogress returned zero. Aborting...");
-            }
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(250ms);
-        }
+        Logger::instance().log(logLevel, type, "--> %s\n", url.c_str());
 
         int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
 
         if (!id) {
-            return Response<T>(1, "Cannot connect to server");
+            return response.onError("Cannot connect to server");
         }
 
         long n = 0;
@@ -213,10 +217,11 @@ namespace alpaca {
         while (!(n = http_status(id))) {
             if (!BrokerProgress(1)) {
                 http_free(id);
-                return Response<T>(1, "Brokerprogress returned zero. Aborting...");
+                return response.onError("Brokerprogress returned zero. Aborting...");
             }
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(250ms);
+            std::this_thread::yield();
+            //using namespace std::chrono_literals;
+            //std::this_thread::sleep_for(100us);
             // print dots, abort if returns zero.
         }
 
@@ -231,20 +236,25 @@ namespace alpaca {
             http_free(id); //always clean up the id!
             switch (n) {
             case -2:
-                return Response<T>(n, "Id is invalid");
+                return response.onError("Id is invalid", n);
             case -3:
-                return Response<T>(n, "Website did not response");
+                return response.onError("Website did not response", n);
             case -4:
-                return Response<T>(n, "Host could not be resolved");
+                return response.onError("Host could not be resolved", n);
             default:
-                return Response<T>(n, "Transfer Failed");
+                return response.onError("Transfer Failed", n);
             }
         }
 
-        _LOG(logLevel, "<-- %s\n", ss.str().c_str());
+        Logger::instance().log(logLevel, type, "<-- %s\n", ss.str().c_str());
 
+        return response.parseContent<CallerT>(ss.str(), url);
+    }
+
+    template<typename T, typename CallerT>
+    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, LogLevel logLevel = LogLevel::L_TRACE, LogType type = LogType::LT_ALL) {
         Response<T> response;
-        response.parseContent<CallerT>(ss.str(), url);
+        request<T, CallerT>(response, url, headers, data, logLevel, type);
         return response;
     }
 

@@ -4,8 +4,31 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+// Remove GetObject definition from windows.h, which prevents calls to
+// RapidJSON's GetObject.
+// https://github.com/Tencent/rapidjson/issues/1448
+#undef GetObject
+#endif  // _WIN32
+
 namespace alpaca {
 	std::string timeToString(__time32_t time);
+
+	enum class Adjustment : uint8_t
+	{
+		raw = 0,
+		split = 1,
+		devidend = 2,
+		all = 3,
+	};
+
+	inline const char* to_string(Adjustment adj)
+	{
+		constexpr const char* str_adj[] = {
+			"raw", "split", "devidend", "all"
+		};
+		return str_adj[static_cast<uint8_t>(adj)];
+	}
 
 	struct Bar {
 		std::string time_string;

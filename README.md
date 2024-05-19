@@ -1,58 +1,54 @@
 # AlpacaZorroPlugin
 
-**[Alpaca](http://alpaca.markets)** is a modern commission-free brokerage for algorithmic trading. Alpaca API allows a trading algo to access real-time price, place orders, and manage portfolio through either REST or streaming.
+The AlpacaZorroPlugin is a powerful integration between **[Alpaca](http://alpaca.markets)**, a brokerage providing real-time market data and trading capabilities, and **[Zorro](https://zorro-project.com/)**,
+an institutional-grade development tool for financial research and automated trading. With this plugin, you can seamlessly trade using Alpaca within the Zorro environment.
 
-**AlpacaZorroPlugin** is a plugin for **[Zorro](https://zorro-project.com/)**, an institutional-grade development tool for financial research and an automatic trading system.
+## Installation
 
-## Install
+To install the plugin, follow these steps:
 
-To install the plugin, download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip), unzip, place the "include/AlpacaBrokerCommand.h" file into the **include** folder under Zorro's root path, and place the "Plugin/Alpaca.dll" file and the "Plugin/websocket_proxy" folder into the **Plugin** folder under Zorro's root path.
+1. download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip).
+2. Unzip the file.
+3. Copy teh `Alpca.dll` and the `websocket_proxy` folder into the `plugin` folder under Zorro's root path.
+4. Copy the `AlpacaBrokderCommands.h` file into the `include` folder under Zorro's root path.
 
-## How to Use
+## Usage
 
-* First generate an API Key on the Alpaca website.
-* In Zorro, select Alpaca.
-* Enter the **API Key** in the **User ID** input box
-* Enter the **Secret Key** in the **Password** input box.
+To use the plugin, follow these steps:
+
+1. Generate an API Key on the Alpaca website.
+2. Open Zorro, select Alpaca.
+3. Enter the **API Key** in the **User ID** input box.
+4. Enter the **Secret Key** in the **Password** input box.
 
 ## AlpacaPlugin Specific Config
-Following optional Alpaca-specific configurations are added since V1.0.0. These configurations can be added in Zorro.ini or ZorroFix.ini (preferred) file.
+
+Since version 1.0.0, the AlpacaZorroPlugin supports several optional Alpaca-specific configurations, which can be added to either the `Zorro.ini` or `ZorroFix.ini` file (preferred):
 
   ```text
-  AlpacaDataSource = 1                  // 0 = Alpaca, 1 = Polygon. Default to 0.
-  AlpacaPaidDataPlan = 1	              // 0 = False (Use Basic Data Plan), 1 = True (Use Pro Data Plan). Default to 1.
+  AlpacaPaidDataPlan = 1                // 0 = False (Use Basic Data Plan), 1 = True (Use Pro Data Plan). Default to 1.
   AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE. Default to 0.
+  AlpacaLogType = 127                   // 1 = DEFAULT, 2 = ACCOUNT, 4 = BALANCE, 8 = POSITION, 16 = ORDER, 32 = HISTORY, 64 = MD, 128 = WEB_SOCKET_DATA,
+                                        // 127 = DEFAULT | ACCOUNT | BALANCE | POSITION | ORDER | HISTORY | MD, 255 = ALL
   AlpacaUseWebsocket = 0                // 0 = Not use Websocket, 1 = Use Websocket. Default to 1.
   AlpacaFractionalLotAmount = 0.001     // The LotAmount for fractionable asset. Default to 1.
-  PolygonApiKey = "*************"       // Polygon ApiKey
   ```
 
-  **AlpacaDataSource**
-  Specify to use Alpaca market data or Polygon market data. By default, Alpaca market data will be used.
+The Configurations are:
 
-  **AlpacaPaidDataPlan**
-  Specify which Alpaca Websocket endpoint will be used. By default, the paid data plan will be used.
-
-  **AlpacaLogLevel**
-  By default, the ApacaPlugin log is turned off unless the "diag" mode is enabled. AlpacaPlugin logging can be enabled through this config.
-
-  **AlpacaUseWebsocket**
-  Specify receiving price updates from Websocket or REST API.
-
-  **AlpacaFractionalLotAmount**
-  The LotAmount for a fractionable asset. Set this config to a number less than 1 to enable fractional quantity. When generating AssetList.csv, the LotAmount of any fractionable asset is set to the value of this configuration.
-  **NOTE:** Fractional quantity only for Market and Day order type
-
-  **PolygonApiKey**
-  The Polygon ApiKey. If AlpacaDataSource is set to 1, the PolygonApiKey must be provided through this config, otherwise, Alpaca MarketData will be used.
+* **AlpacaPaidDataPlan**: Choose between free or paid Alpaca MarketData endpoint (default is the paid data plan).
+* **AlpacaLogLevel**: Set the level of AlpacaPlugin logging (default is OFF).
+* **AlpacaLogType**: Set which type of datt is logged (default is ALL except WEB_SOCKET_DATA).
+* **AlpacaUseWebsocket**: Speficy whether to receive price updates via WebSocket or REST API (default is WebSocket).
+* **AlpacaFractionalLotAmount**: Enable fractional quantity by setting this value to less than 1 (default is 1). Note that fractional quantity is only available for Market and Day order types.
 
 ## Features
 
-* Support Alpaca MarketData V2 Websocket Real-Time Data. Multiple ZorroS instances can share one WebSocket connection through ZorroWebsocketProxy.<br/>
-**NTOE:** ZorroWebsocketProxy has a lock-free design, it spins on one CPU core. High CPU usage is normal and expected.<br/>
-Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket is set to 0, the last price will be polled from the Snapshot REST endpoint.
+* Support Alpaca MarketData V2 Websocket Real-Time Data. Multiple ZorroS instances can share one WebSocket connection through ZorroWebsocketProxy. 
+  The Websocket can be turned off by the `AlpacaUseWebsocket` configuration. if `AlpacaUseWebsocket` is set to 0, the last price will be polled from the Snapshot REST endpoint.<br/>
+  **NTOE:** ZorroWebsocketProxy has a lock-free design, it spins on one CPU core. High CPU usage is normal and expected.
 
-* Support **Limit**, **Market** order types
+* Support **Limit**, **Market** order types. 
 
   ```C++
   // By default, enterLong/enterShort places a Market order
@@ -79,7 +75,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   //
   // NOTE: brokerCommand(SET_ORDERTYPE, 0) will be ignored, this is because Zorro always calls brokerCommand(SET_ORDERTYPE, 0) before setting the limit price.
 
-  #include "AlpacaBrokerCommands.h"
+  #include <AlpacaBrokerCommands.h>
   brokerCommand(SET_ORDERTYPE, ORDERTYPE_DAY);  // set TIF to Day
   OrderLimit = 100.00;
   enterShort(5);    // Sell 5 lot Day order at limit price 100.00
@@ -89,7 +85,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   enteryLong(5);    // Buy 5 lot MarketOnClose order
   ```
 
-* Support LastQuote/LastTrade price type
+* Support LastQuote/LastTrade price type.
 
   ```C++
   // By default, it use ask/bid price mode
@@ -117,7 +113,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   To enable Franction Quantity support, add the AlpacaFractionalLotAmount config in Zorro.ini or ZorroFix.ini
   ``` C++
   // AlpacaFractionalLotAmount = 0.001 in ZorroFix.ini
-  #include "AlpacaBrokerCommands.h"
+  #include <AlpacaBrokerCommands.h>
   ...
   asset("TLSA");
   brokerCommand(SET_ORDERTYPE, ORDERTYPE_DAY);  // Fractional qty only for Market and Day order type
@@ -125,16 +121,10 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   enterLong();      // Buy 0.005 shares TLSA
   ```
 
-* Support [Polygon](https://polygon.io) market data
-
-  After Alpaca’s departure from Polygon, Alpaca ApiKey no longer works for Polygon. AlpacaZorroPlugin kept the Polygon market data support. 
-  **NOTE:** The Polygon ApiKey is moved into the Zorro config file.
-  **NOTE:** Polygon free plan can't be used as an alternative market data source due to lack of last trade and last quote data.
-
 * Generate AssetList file through custom borkerCommand
   
   ``` C++
-  #include "AlpacaBrokerCommands.h"
+  #include <AlpacaBrokerCommands.h>
   brokerCommand(CREATE_ASSETLIST, char *symbols);
   ```
 
@@ -144,7 +134,7 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   ``` C++
   Exemple:
   // GenerateAlpacaAssetList.c
-  #include "AlpacaBrokerCommands.h"
+  #include <AlpacaBrokerCommands.h>
   function main() {
     brokerCommand(CREATE_ASSETLIST, "SPY,AAPL,MSFT,TSLA");  // Generate AssetsAlpaca.csv contains SPY, AAPL, MSFT, TSLA symbols
     //brokerCommand(CREATE_ASSETLIST, 0);   // Generate AssetsAplaca.csv contains all tradeable symbols /v2/assets endpoint. 
@@ -153,12 +143,25 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
 
 * Get properties of current Asset
   ``` C++
-  #include "AlpacaBorkerCommads.h"
+  #include <AlpacaBrokerCommands.h>
   ....
   int fractionable = borkerCommand(IS_ASSERT_FRACTIONABLE, Asset);
   int shortable = borkerCommand(IS_ASSERT_SHORTABLE, Asset);
   int easyToBorrow = borkerCommand(IS_ASSERT_EASY_TO_BORROW, Asset);
   int marginable = borkerCommand(IS_ASSERT_EASY_TO_MARGINABLE, Asset);
+  ```
+
+* Set Historical Bar Adjustment 
+  ``` C++
+  #include <AlpacaBrokerCommands.h>
+  ....
+  brokerCommand(SET_ADJUSTMENT, ADJUSTMENT_RAW);
+
+  // Valid Adjustment value are
+  //  ADJUSTMENT_RAW      - 0
+  //  ADJUSTMENT_SPLIT    - 1
+  //  ADJUSTMENT_DEVEDEND - 2
+  //  ADJUSTMENT_ALL      - 3
   ```
 
 * Following Zorro Broker API functions has been implemented:
@@ -169,7 +172,6 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
   * BrokerTime
   * BrokerAsset
   * BrokerHistory2
-    * Alpaca only support M1, M5, M15 and D1 bars.
   * BrokerBuy2
   * BrokerTrade
   * BrokerSell2
@@ -196,10 +198,5 @@ Websocket can be turned off by AlpacaUseWebsocket config. If AlpacaUseWebsocket 
 ## Bug Report
 
 If you find any issues or have any suggestions, please report them in GitHub [issues](https://github.com/kzhdev/alpaca_zorro_plugin/issues).
-
-
----
-
-Thanks to [JetBrains](https://jb.gg/OpenSource/?from=alpaca_zorro_plugin) for donating product licenses to help develop **AlpacaZorroPlugin**
 
 

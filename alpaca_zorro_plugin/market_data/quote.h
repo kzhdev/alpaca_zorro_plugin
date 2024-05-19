@@ -1,6 +1,14 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
+
+#ifdef _WIN32
+// Remove GetObject definition from windows.h, which prevents calls to
+// RapidJSON's GetObject.
+// https://github.com/Tencent/rapidjson/issues/1448
+#undef GetObject
+#endif  // _WIN32
 
 namespace alpaca {
 
@@ -19,6 +27,7 @@ namespace alpaca {
 		friend struct LastQuote;
 		friend struct Quotes;
 		friend struct Snapshot;
+		friend struct LastQuotes;
 
 		template<typename CallerT, typename T>
 		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
@@ -55,17 +64,11 @@ namespace alpaca {
 		
 		template<typename CallerT, typename T> 
 		std::pair<int, std::string> fromJSON(const T& parser/*, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0*/) {
-			parser.get<std::string>("status", status);
 			parser.get<std::string>("symbol", symbol);
 
-			if (status != "success") {
-				return std::make_pair(1, symbol + " " + status);
-			}
-
-			
-			if (parser.json.HasMember("last") && parser.json["last"].IsObject()) {
-				auto obj = parser.json["last"].GetObject();
-				Parser<decltype(parser.json["last"].GetObject())> p(obj);
+			if (parser.json.HasMember("quote") && parser.json["quote"].IsObject()) {
+				auto obj = parser.json["quote"].GetObject();
+				Parser<decltype(parser.json["quote"].GetObject())> p(obj);
 				quote.fromJSON<CallerT>(p);
 			}
 			return std::make_pair(0, "OK");
@@ -92,6 +95,27 @@ namespace alpaca {
 					Quote t;
 					t.fromJSON<CallerT>(p);
 					quotes.emplace_back(std::move(t));
+				}
+			}
+			return std::make_pair(0, "OK");
+		}
+	};
+
+	struct LastQuotes {
+		std::unordered_map<std::string, Quote> quotes;
+
+	private:
+		template <typename> friend class Response;
+
+		template <typename CallerT, typename T>
+		std::pair<int, std::string> fromJSON(const T& parser) {
+			if (parser.json.HasMember("quotes")) {
+				for (const auto& quoteJson : parser.json["quotes"].GetObject()) {
+					auto quoteObj = quoteJson.value.GetObject();
+					Parser<decltype(quoteObj)> p(quoteObj);
+					Quote quote;
+					quote.fromJSON<CallerT>(p);
+					quotes.emplace(quoteJson.name.GetString(), std::move(quote));
 				}
 			}
 			return std::make_pair(0, "OK");

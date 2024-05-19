@@ -14,14 +14,14 @@ namespace alpaca{
         std::istringstream infile{ std::move(timestamp) };
         sys_seconds tp;  // This is a system_clock time_point with seconds precision
         infile >> date::parse("%FT%T%Ez", tp);
-        return tp.time_since_epoch().count();
+        return static_cast<__time32_t>(tp.time_since_epoch().count());
     }
 
     __time32_t parseTimeStamp2(const std::string& timestamp) {
         std::istringstream iss{ timestamp };
         date::sys_seconds tp;
         iss >> date::parse("%FT%T", tp);
-        return tp.time_since_epoch().count();
+        return static_cast<__time32_t>(tp.time_since_epoch().count());
     }
 
     int32_t getTimeZoneOffset(const std::string& timestamp) {

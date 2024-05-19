@@ -9,6 +9,13 @@
 #include "rapidjson/writer.h"
 #include <atomic>
 
+#ifdef _WIN32
+// Remove GetObject definition from windows.h, which prevents calls to
+// RapidJSON's GetObject.
+// https://github.com/Tencent/rapidjson/issues/1448
+#undef GetObject
+#endif  // _WIN32
+
 namespace alpaca {
 
     class AlpacaMdWs : public zorro::websocket::ZorroWebsocketProxyClient, public zorro::websocket::WebsocketProxyCallback {
@@ -48,7 +55,7 @@ namespace alpaca {
 
         bool login(std::string key, std::string secret, const std::string& url) noexcept {
             auto log_func = [this](zorro::websocket::LogLevel level, const std::string& msg) { 
-                _LOG(static_cast<alpaca::LogLevel>(level), "%s\n", msg.c_str()); 
+                Logger::instance().log(static_cast<alpaca::LogLevel>(level), LogType::LT_DEFAULT, "%s\n", msg.c_str());
             };
             // pass logger to WebsocketProxyClient
             setLogger(log_func);
@@ -356,7 +363,7 @@ namespace alpaca {
                     }
                 }
 
-                LOG_TRACE2("%s\n", ss_.str().c_str());
+                LOG_TRACE("%s\n", ss_.str().c_str());
 
                 // reset message
                 ss_.str("");

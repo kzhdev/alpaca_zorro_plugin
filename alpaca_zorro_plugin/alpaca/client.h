@@ -12,6 +12,7 @@
 #include "alpaca/clock.h"
 #include "alpaca/order.h"
 #include "alpaca/position.h"
+#include "alpaca/Balance.h"
 
 namespace alpaca {
 
@@ -29,11 +30,16 @@ namespace alpaca {
 
         const std::string& headers() const noexcept { return headers_;  }
 
+        const std::string& getApiKey() const noexcept {
+            return apiKey_;
+        }
+
         Response<Account> getAccount() const;
+        Response<Balance> getBalance() const;
 
         Response<Clock> getClock() const;
 
-        Response<std::vector<Asset>> getAssets() const;
+        Response<std::vector<Asset>> getAssets(bool active_only = true) const;
         Response<Asset> getAsset(const std::string& symbol) const;
 
         Response<std::vector<Order>> getOrders(
@@ -44,7 +50,7 @@ namespace alpaca {
             const OrderDirection = OrderDirection::Descending,
             const bool nested = false) const;
 
-        Response<Order> getOrder(const std::string& id, const bool nested = false, const bool logResponse = false) const;
+        Response<Order> getOrder(const std::string& id, const bool nested = false) const;
         Response<Order> getOrderByClientOrderId(const std::string& clientOrderId) const;
 
         Response<Order> submitOrder(
@@ -73,6 +79,7 @@ namespace alpaca {
         Response<Order> cancelOrder(const std::string& id) const;
 
         Response<Position> getPosition(const std::string& symbol) const;
+        Response<std::vector<Position>> getPositions() const;
 
     private:
         const std::string baseUrl_;
