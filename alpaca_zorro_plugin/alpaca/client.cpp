@@ -66,7 +66,12 @@ namespace alpaca {
     }
 
     Response<Clock> Client::getClock() const {
-        return request<Clock, Client>(baseUrl_ + "/v2/clock", headers_.c_str(), nullptr);
+        auto rsp = request<Clock, Client>(baseUrl_ + "/v2/clock", headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_DEFAULT);
+        if (rsp)
+        {
+            is_open_ = rsp.content().is_open;
+        }
+        return rsp;
     }
 
     Response<std::vector<Asset>> Client::getAssets(bool active_only) const {
@@ -256,9 +261,9 @@ namespace alpaca {
             writer.EndObject();
             auto data = s.GetString();
 
-            LOG_DEBUG("--> POST %s/v2/orders\n", baseUrl_.c_str());
+            LOG_DEBUG_EXT(LogType::LT_ORDER, "--> POST %s/v2/orders\n", baseUrl_.c_str());
             if (data) {
-                LOG_TRACE("Data:\n%s\n", data);
+                LOG_TRACE_EXT(LogType::LT_ORDER, "Data:\n%s\n", data);
             }
             response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_.c_str(), data, LogLevel::L_DEBUG, LT_ORDER);
             if (!response && response.what() == "client_order_id must be unique") {

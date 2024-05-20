@@ -138,17 +138,19 @@ namespace alpaca {
 #define LOG_DEBUG(format, ...) Logger::instance().log(L_DEBUG, LT_ALL, format, __VA_ARGS__);
 #define LOG_DEBUG_EXT(type, format, ...) Logger::instance().log(L_DEBUG, type, format, __VA_ARGS__);
 #define LOG_INFO(format, ...) Logger::instance().log(L_INFO, LT_ALL, format, __VA_ARGS__);
-//#define LOG_INFO_EXT(type, format, ...) Logger::instance().log(L_INFO, type, format, __VA_ARGS__);
+#define LOG_INFO_EXT(type, format, ...) Logger::instance().log(L_INFO, type, format, __VA_ARGS__);
 #define LOG_WARNING(format, ...) Logger::instance().log(L_WARNING, LT_ALL, format, __VA_ARGS__);
-//#define LOG_WARNING_EXT(type, format, ...) Logger::instance().log(L_WARNING, type, format, __VA_ARGS__);
+#define LOG_WARNING_EXT(type, format, ...) Logger::instance().log(L_WARNING, type, format, __VA_ARGS__);
 #define LOG_ERROR(format, ...) Logger::instance().log(L_ERROR, LT_ALL, format, __VA_ARGS__);
-//#define LOG_ERROR_EXT(type, format, ...) Logger::instance().log(L_ERROR, type, format, __VA_ARGS__);
+#define LOG_ERROR_EXT(type, format, ...) Logger::instance().log(L_ERROR, type, format, __VA_ARGS__);
 #define LOG_TRACE(format, ...) Logger::instance().log(L_TRACE, LT_ALL, format, __VA_ARGS__);
-//#define LOG_TRACE_EXT(type, format, ...) Logger::instance().log(L_TRACE, type, format, __VA_ARGS__);
+#define LOG_TRACE_EXT(type, format, ...) Logger::instance().log(L_TRACE, type, format, __VA_ARGS__);
 #ifdef _DEBUG
 #define LOG_DIAG(format, ...) Logger::instance().log(L_DEBUG, LT_ALL, format, __VA_ARGS__);
+#define LOG_DIAG_EXT(type, format, ...) Logger::instance().log(L_DEBUG, type, format, __VA_ARGS__);
 #else
 #define LOG_DIAG(format, ...)
+#define LOG_DIAG_EXT(type, format, ...)
 #endif
 #endif
 }

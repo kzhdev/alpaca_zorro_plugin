@@ -85,7 +85,7 @@ namespace alpaca {
         const std::string baseUrl_;
         const std::string apiKey_;
         const std::string headers_;
-        mutable bool is_open_ = false;
+        mutable bool is_open_ = true;
         const bool isLiveMode_;
     };
 

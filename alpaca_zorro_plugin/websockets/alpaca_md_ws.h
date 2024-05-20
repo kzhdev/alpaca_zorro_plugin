@@ -55,7 +55,7 @@ namespace alpaca {
 
         bool login(std::string key, std::string secret, const std::string& url) noexcept {
             auto log_func = [this](zorro::websocket::LogLevel level, const std::string& msg) { 
-                Logger::instance().log(static_cast<alpaca::LogLevel>(level), LogType::LT_DEFAULT, "%s\n", msg.c_str());
+                Logger::instance().log(static_cast<alpaca::LogLevel>(level), LogType::LT_WEB_SOCKET_DATA, "%s\n", msg.c_str());
             };
             // pass logger to WebsocketProxyClient
             setLogger(log_func);
@@ -346,7 +346,7 @@ namespace alpaca {
                                          ss_.str() == "[{\"T\":\"subscription\",\"trades\":[],\"quotes\":[],\"bars\":[]}]")*/ {
                                     //status_ = Status::UNSUBSCRIBED;
                                         //LOG_INFO("Unsubscribed.\n");
-                                    LOG_TRACE("%s\n", ss_.str().c_str());
+                                    LOG_TRACE_EXT(LogType::LT_WEB_SOCKET_DATA, "%s\n", ss_.str().c_str());
                                 }
                             }
                             else if (t == "t") {
@@ -356,14 +356,14 @@ namespace alpaca {
                                 onQuote(objJson);
                             }
                             else {
-                                LOG_DEBUG("%s\n", ss_.str().c_str());
-                                LOG_WARNING("Unhandled %s\n", t.GetString());
+                                LOG_DEBUG_EXT(LogType::LT_WEB_SOCKET_DATA, "%s\n", ss_.str().c_str());
+                                LOG_WARNING_EXT(LogType::LT_WEB_SOCKET_DATA, "Unhandled %s\n", t.GetString());
                             }
                         }
                     }
                 }
 
-                LOG_TRACE("%s\n", ss_.str().c_str());
+                LOG_TRACE_EXT(LogType::LT_WEB_SOCKET_DATA, "%s\n", ss_.str().c_str());
 
                 // reset message
                 ss_.str("");
@@ -386,7 +386,7 @@ namespace alpaca {
 
             writer.EndObject();
             auto data = s.GetString();
-            LOG_INFO("Authenticating...\n");
+            LOG_INFO_EXT(LogType::LT_WEB_SOCKET_DATA, "Authenticating...\n");
             send(id_.load(std::memory_order_relaxed), data, s.GetSize());
         }
 

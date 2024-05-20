@@ -125,17 +125,9 @@ namespace alpaca
         //attempt login
         if (wsClient)
         {
-            //if (isPaperTrading)
-            //{
-            //    if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PAPER_PRO_DATA_WS_URL : ALPACA_PAPER_BASIC_DATA_WS_URL)) {
-            //        BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
-            //    }
-            //}
-            //else
-            {
-                if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
-                    BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
-                }
+            if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
+                BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
+                wsClient.reset();
             }
         }
 
@@ -179,7 +171,6 @@ namespace alpaca
         }
 
         auto& clock = response.content();
-
         *pTimeGMT = convertTime(clock.timestamp);
         return clock.is_open ? 2 : 1;
     }
@@ -434,14 +425,14 @@ namespace alpaca
         auto populateTicks = [&barsDownloaded, nTickMinutes, &end, &ticks, nTicks](std::vector<Bar>& bars) {
             for (int i = bars.size() - 1; i >= 0 && barsDownloaded < nTicks; --i) {
                 auto& bar = bars[i];
-                // change time to bar close time
-                __time32_t barCloseTime = bar.time + nTickMinutes * 60;
-                if (barCloseTime > end) {
-                    // end time cannot exceeds tEnd
-                    continue;
-                }
+                //// change time to bar close time
+                //__time32_t barCloseTime = bar.time + nTickMinutes * 60;
+                //if (barCloseTime > end) {
+                //    // end time cannot exceeds tEnd
+                //    continue;
+                //}
                 auto& tick = ticks[barsDownloaded++];
-                tick.time = convertTime(barCloseTime);
+                tick.time = convertTime(static_cast<__time32_t>(bar.time));
                 tick.fOpen = static_cast<float>(bar.open_price);
                 tick.fHigh = static_cast<float>(bar.high_price);
                 tick.fLow = static_cast<float>(bar.low_price);
@@ -449,31 +440,6 @@ namespace alpaca
                 tick.fVol = static_cast<float>(bar.volume);
             }
         };
-
-        if (!s_config.alpacaPaidPlan) {
-            LOG_DEBUG("BrokerHistory %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
-            auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-            if ((now - end) <= 900) {
-                //if (s_config.fillDelayedDataWithPolygon && polygon) {
-                //    // Fill missed delay data from Polygon
-                //    s_logger->logInfo("Fill 15 minutes delay data with polygon\n", Asset, start, end, nTickMinutes, std::max<int>((30 / nTickMinutes), 1));
-                //    auto response = polygon->getBars(Asset, start, end, nTickMinutes, nTicks);
-                //    if (response) {
-                //        populateTicks(response.content());
-                //        if (!response.content().empty()) {
-                //            end = response.content()[0].time - 30;
-                //        }
-                //        else {
-                //            end = static_cast<__time32_t>(now) - 900;
-                //        }
-                //    }
-                //}
-                //else {
-                    end = static_cast<__time32_t>(now) - 900;
-                    LOG_INFO("Alpaca Basic Plan. Adjust end to %d\n", end);
-                //}
-            }
-        }
 
         while(true) {
             LOG_DEBUG("BrokerHistory %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
@@ -900,12 +866,11 @@ namespace alpaca
             return 0;   // historical data in UTC time
 
         case GET_MAXTICKS:
-            return 10000;
+            return 9999;
 
         case GET_MAXREQUESTS:
-            // Alpaca rate limit is 200 requests per minutes.
-            // The rate is throttled by throtter
-            return 0;
+            // Alpaca rate limit is 200 requests per minutes for Free plan.
+            return s_config.alpacaPaidPlan ? 0 : 200;
 
         case GET_LOCK:
             return 1;

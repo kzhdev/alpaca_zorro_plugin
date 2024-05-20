@@ -1,3 +1,9 @@
+v1.3.2
+- Set the market data feed for the free market data plan to IEX. This ensures accurate and reliable data for users on the free plan.
+- Fixed an issue where the market was incorrectly marked as closed.
+- Corrected the application of some log types that were not being applied correctly.
+- Fixed an issue where failed WebSocket login might cause crash.
+
 v1.3.1
 - Rollback the sandbox WebSocket endpoint for Paper account. The endpoint doesn't work.
 
