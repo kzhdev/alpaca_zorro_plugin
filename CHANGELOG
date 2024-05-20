@@ -1,3 +1,6 @@
+v1.3.1
+- Rollback the sandbox WebSocket endpoint for Paper account. The endpoint doesn't work.
+
 v1.3.0
 - Dropped Polygon support.
 - Added latest quotes, latest trades and snapshots support.

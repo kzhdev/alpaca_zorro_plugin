@@ -125,13 +125,13 @@ namespace alpaca
         //attempt login
         if (wsClient)
         {
-            if (isPaperTrading)
-            {
-                if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PAPER_PRO_DATA_WS_URL : ALPACA_PAPER_BASIC_DATA_WS_URL)) {
-                    BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
-                }
-            }
-            else
+            //if (isPaperTrading)
+            //{
+            //    if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PAPER_PRO_DATA_WS_URL : ALPACA_PAPER_BASIC_DATA_WS_URL)) {
+            //        BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
+            //    }
+            //}
+            //else
             {
                 if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
                     BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
