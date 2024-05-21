@@ -204,7 +204,7 @@ namespace alpaca {
             return response.onError("Invalid url - empty");
         }
 
-        Logger::instance().log(logLevel, type, "--> %s\n", url.c_str());
+       LOG_DEBUG("--> %s\n", url.c_str());
 
         int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
 

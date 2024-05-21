@@ -66,7 +66,7 @@ namespace alpaca {
     }
 
     Response<Clock> Client::getClock() const {
-        auto rsp = request<Clock, Client>(baseUrl_ + "/v2/clock", headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_DEFAULT);
+        auto rsp = request<Clock, Client>(baseUrl_ + "/v2/clock", headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_MISC);
         if (rsp)
         {
             is_open_ = rsp.content().is_open;

@@ -324,11 +324,6 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
             << "&end=" << sEnd << "&limit=10000&timeframe=" << timeframe
             << "&sort=desc&adjustment=" << to_string(Config::get().adjustment);
 
-        if (!Config::get().alpacaPaidPlan)
-        {
-            url << "&feed=iex";
-        }
-
         if (!page_token.empty()) {
             url << "&page_token=" << page_token;
         }

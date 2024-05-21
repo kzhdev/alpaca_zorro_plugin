@@ -20,15 +20,15 @@ namespace alpaca {
 
     enum LogType : uint8_t
     {
-        LT_DEFAULT = 1,
-        LT_ACCOUNT = 1 << 1,
-        LT_BALANCE = 1 << 2,
-        LT_POSITION = 1 << 3,
-        LT_ORDER = 1 << 4,
-        LT_HISTORY = 1 << 5,
-        LT_MD = 1 << 6,
-        LT_WEB_SOCKET_DATA = 1 << 7,
-        LT_ALL_WITHOUT_WEB_SOCKET = LT_DEFAULT | LT_ACCOUNT | LT_BALANCE | LT_POSITION | LT_ORDER | LT_HISTORY | LT_MD,
+        LT_ACCOUNT = 1,
+        LT_BALANCE = 1 << 1,
+        LT_POSITION = 1 << 2,
+        LT_ORDER = 1 << 3,
+        LT_HISTORY = 1 << 4,
+        LT_MD = 1 << 5,
+        LT_WEB_SOCKET_DATA = 1 << 6,
+        LT_MISC = 7,
+        LT_ALL_WITHOUT_WEB_SOCKET = LT_MISC | LT_ACCOUNT | LT_BALANCE | LT_POSITION | LT_ORDER | LT_HISTORY | LT_MD,
         LT_ALL = LT_ALL_WITHOUT_WEB_SOCKET | LT_WEB_SOCKET_DATA,
     };
 

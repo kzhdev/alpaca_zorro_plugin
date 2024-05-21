@@ -122,6 +122,8 @@ namespace alpaca
             }
         }
 
+        LOG_INFO("In %s mode\n", (isPaperTrading ? "Paper" : "Live"));
+
         //attempt login
         if (wsClient)
         {
@@ -425,12 +427,6 @@ namespace alpaca
         auto populateTicks = [&barsDownloaded, nTickMinutes, &end, &ticks, nTicks](std::vector<Bar>& bars) {
             for (int i = bars.size() - 1; i >= 0 && barsDownloaded < nTicks; --i) {
                 auto& bar = bars[i];
-                //// change time to bar close time
-                //__time32_t barCloseTime = bar.time + nTickMinutes * 60;
-                //if (barCloseTime > end) {
-                //    // end time cannot exceeds tEnd
-                //    continue;
-                //}
                 auto& tick = ticks[barsDownloaded++];
                 tick.time = convertTime(static_cast<__time32_t>(bar.time));
                 tick.fOpen = static_cast<float>(bar.open_price);
@@ -440,6 +436,15 @@ namespace alpaca
                 tick.fVol = static_cast<float>(bar.volume);
             }
         };
+
+        if (!s_config.alpacaPaidPlan) {
+            LOG_DEBUG("BrokerHistory %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+            auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            if ((now - end) <= 900) {
+                end = static_cast<__time32_t>(now) - 930;
+                LOG_INFO("Alpaca Basic Plan. Adjust end to %d\n", end);
+            }
+        }
 
         while(true) {
             LOG_DEBUG("BrokerHistory %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);

@@ -152,7 +152,9 @@ copy $(OutDir)Alpaca.pdb $(OutputPath)pdb\</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>rmdir /S /Q $(SolutionDir)$(Configuration)\release
-rmdir /S /Q $(SolutionDir)$(Configuration)\pdb</Command>
+rmdir /S /Q $(SolutionDir)$(Configuration)\pdb
+del $(SolutionDir)$(Configuration)\AlpacaZorroPlugin_v.zip
+del $(SolutionDir)$(Configuration)\AlpacaZorroPlugin_v_pdb.zip</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

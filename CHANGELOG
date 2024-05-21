@@ -1,3 +1,7 @@
+v1.3.3
+- Reverted the addition of the IEX feed for historical data, quotes, trades, and snapshots. This change ensures consistency with previous behavior.
+- Fixed an issue where historical data downloads for the free plan did not extend beyond the year 2020.
+
 v1.3.2
 - Set the market data feed for the free market data plan to IEX. This ensures accurate and reliable data for users on the free plan.
 - Fixed an issue where the market was incorrectly marked as closed.

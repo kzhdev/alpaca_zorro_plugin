@@ -26,35 +26,19 @@ namespace alpaca {
         bool isPaidPlan() const noexcept { return paidPlan_; }
 
         Response<LastQuote> getLastQuote(const std::string& symbol) const {
-            if (paidPlan_)
-            {
-                return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/quotes/latest", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
-            }
-            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/quotes/latest?feed=iex", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+            return request<LastQuote, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/quotes/latest", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
         Response<LastQuotes> getLastQuotes(const std::string& symbols) const {
-            if (paidPlan_)
-            {
-                return request<LastQuotes, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/quotes/latest?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
-            }
-            return request<LastQuotes, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/quotes/latest?symbols=" + symbols + "&feed=iex", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+            return request<LastQuotes, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/quotes/latest?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
         Response<LastTrade> getLastTrade(const std::string& symbol) const {
-            if (paidPlan_)
-            {
-                return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/trades/latest", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
-            }
-            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/trades/latest?feed=iex", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+            return request<LastTrade, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/trades/latest", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
         Response<LastTrades> getLastTrades(const std::string& symbols) const {
-            if (paidPlan_)
-            {
-                return request<LastTrades, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/trades/latest?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
-            }
-            return request<LastTrades, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/trades/latest?symbols=" + symbols + "&feed=iex", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+            return request<LastTrades, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/trades/latest?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
         Response<std::vector<Bar>> getBars(
@@ -66,20 +50,11 @@ namespace alpaca {
             int32_t price_type = 0) const;
 
         Response<Snapshot> getSnapshot(const std::string& symbol) const {
-            if (paidPlan_)
-            {
-                return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
-            }
-            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot?feed=iex", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
-
+            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/" + symbol + "/snapshot", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
         Response<Snapshot> getSnapshots(const std::string& symbols) const {
-            if (paidPlan_)
-            {
-                return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/snapshots?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
-            }
-            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/snapshots?symbols=" + symbols + "&feed=iex", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
+            return request<Snapshot, AlpacaMarketData>(std::string(baseUrl_) + "/v2/stocks/snapshots?symbols=" + symbols, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MD);
         }
 
     private:
