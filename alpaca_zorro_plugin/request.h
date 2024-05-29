@@ -7,6 +7,7 @@
 #include <thread>
 #include "alpaca/json.h"
 #include "logger.h"
+#include "throttler.h"
 
 #ifdef _WIN32
 // Remove GetObject definition from windows.h, which prevents calls to
@@ -23,6 +24,7 @@ namespace alpaca {
     extern long(__cdecl* http_status)(int id);
     extern long(__cdecl* http_result)(int id, char* content, long size);
     extern void(__cdecl* http_free)(int id);
+    extern std::unique_ptr<Throttler> s_throttler;
     extern uint64_t get_timestamp();
 
     template<typename>
@@ -204,7 +206,12 @@ namespace alpaca {
             return response.onError("Invalid url - empty");
         }
 
-       LOG_DEBUG("--> %s\n", url.c_str());
+        LOG_DEBUG("--> %s\n", url.c_str());
+
+        if (!s_throttler->waitForSending(logLevel)) {
+            // reached throttle limit
+            return response.onError("Brokerprogress returned zero. Aborting...");
+        }
 
         int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
 

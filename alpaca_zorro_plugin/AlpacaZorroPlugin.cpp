@@ -53,7 +53,7 @@ namespace {
     uint64_t s_lastTradesRequestTime = 0;
     Response<LastQuotes> s_lastQuotes{ 1, "No Data"};
     Response<LastTrades> s_lastTrades{ 1, "No Data"};
-} 
+}
 
 namespace alpaca
 {
@@ -61,6 +61,7 @@ namespace alpaca
     std::unique_ptr<AlpacaMarketData> pMarketData = nullptr;
     std::unique_ptr<AlpacaMdWs> wsClient = nullptr;
     std::unique_ptr<AlpacaMdWs> wsCryptoClient = nullptr;
+    std::unique_ptr<Throttler> s_throttler;
     
     ////////////////////////////////////////////////////////////////
     DLLFUNC_C int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress)
@@ -108,6 +109,7 @@ namespace alpaca
         Logger::instance().setLogType(s_config.logType);
 
         if (!client || client->getApiKey() != User) {
+            s_throttler = std::make_unique<Throttler>(User);
             client = std::make_unique<Client>(User, Pwd, isPaperTrading);
 
             pMarketData = std::make_unique<AlpacaMarketData>(client->headers(), s_config.alpacaPaidPlan);
