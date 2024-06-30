@@ -1,8 +1,8 @@
 v1.3.4
-- Subscribe Trades or Quotes via WebSocket based on the price type set in the script.
+- Subscribe to Trades or Quotes via WebSocket based on the price type set in the script.
 - Add REST API throttle for Free MD plan.
-- When WebSocket enabled, subscribe price from REST API once to avoid querying REST API repeatedly due to illiquid symbols.
-- Add miliseconds in log.
+- When WebSocket is enabled, subscribe price from REST API once to avoid querying REST API repeatedly due to illiquid symbols.
+- Add milliseconds in the log.
 - Fixed unfilled LimitOrder treated as filled by Zorro. 
 
 v1.3.3
