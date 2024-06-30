@@ -41,8 +41,10 @@ namespace alpaca {
         uint32_t error_count_ = 0;
 
         struct Subscription {
-            std::unique_ptr<slick::SlickQueue<Trade>> tradeQueue = std::make_unique<slick::SlickQueue<Trade>>(8);
-            std::unique_ptr<slick::SlickQueue<Quote>> quoteQueue = std::make_unique<slick::SlickQueue<Quote>>(8);
+            std::unique_ptr<slick::SlickQueue<Trade>> tradeQueue = std::make_unique<slick::SlickQueue<Trade>>(256);
+            std::unique_ptr<slick::SlickQueue<Quote>> quoteQueue = std::make_unique<slick::SlickQueue<Quote>>(256);
+            bool quoteSubscribed{ false };
+            bool tradeSubscribed{ false };
         };
 
         std::unordered_map<std::string, Subscription> subscriptions_;
@@ -120,7 +122,7 @@ namespace alpaca {
             if (iter == subscriptions_.end()) {
                 iter = subscriptions_.emplace(asset, Subscription()).first;
             }
-            else if (!force) {
+            else if (!force && ((Config::get().priceType == 2 && iter->second.tradeSubscribed) || iter->second.quoteSubscribed)) {
                 return true;
             }
 
@@ -131,15 +133,21 @@ namespace alpaca {
             writer.StartObject();
             writer.Key("action");
             writer.String("subscribe");
-            writer.Key("trades");
-            writer.StartArray();
-            writer.String(asset.c_str());
-            writer.EndArray();
+            if (Config::get().priceType == 2)
+            {
+                writer.Key("trades");
+                writer.StartArray();
+                writer.String(asset.c_str());
+                writer.EndArray();
+                subscription.tradeSubscribed = true;
+            }
             writer.Key("quotes");
             writer.StartArray();
             writer.String(asset.c_str());
             writer.EndArray();
             writer.EndObject();
+            subscription.quoteSubscribed = true;
+
             auto data = s.GetString();
 
             pending_subscription_ = asset;
@@ -149,6 +157,7 @@ namespace alpaca {
 
             bool existing = false;
             if (!subscribe(id, asset, data, s.GetSize(), existing)) {
+                subscriptions_.erase(iter);
                 return false;
             }
             if (existing) {
@@ -168,7 +177,7 @@ namespace alpaca {
             }
 
             auto it = subscriptions_.find(asset);
-            if (it == subscriptions_.end()) {
+            if (it == subscriptions_.end() || !it->second.tradeSubscribed) {
                 return nullptr;
             }
 
@@ -182,7 +191,7 @@ namespace alpaca {
             }
 
             auto it = subscriptions_.find(asset);
-            if (it == subscriptions_.end()) {
+            if (it == subscriptions_.end() || !it->second.quoteSubscribed) {
                 return nullptr;
             }
 
@@ -399,7 +408,7 @@ namespace alpaca {
             if (it != subscriptions_.end()) {
                 auto& queue = it->second.tradeQueue;
                 auto index = queue->reserve();
-                auto trade = (*queue.get())[index];
+                auto trade = (*queue)[index];
                 parser.get<double>("p", trade->price);
                 parser.get<int>("s", trade->size);
                 queue->publish(index);
@@ -415,7 +424,7 @@ namespace alpaca {
             if (it != subscriptions_.end()) {
                 auto& queue = it->second.quoteQueue;
                 auto index = queue->reserve();
-                auto quote = (*queue.get())[index];
+                auto quote = (*queue)[index];
                 parser.get<double>("ap", quote->ask_price);
                 parser.get<int>("as", quote->ask_size);
                 parser.get<double>("bp", quote->bid_price);

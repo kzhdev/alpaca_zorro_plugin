@@ -206,15 +206,14 @@ namespace alpaca {
             return response.onError("Invalid url - empty");
         }
 
-        LOG_DEBUG("--> %s\n", url.c_str());
-
-        if (!s_throttler->waitForSending(logLevel)) {
+        if (!Config::get().alpacaPaidPlan && !s_throttler->waitForSending()) {
             // reached throttle limit
             return response.onError("Brokerprogress returned zero. Aborting...");
         }
 
-        int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
+        LOG_DEBUG("--> %s\n", url.c_str());
 
+        int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
         if (!id) {
             return response.onError("Cannot connect to server");
         }
@@ -227,9 +226,6 @@ namespace alpaca {
                 return response.onError("Brokerprogress returned zero. Aborting...");
             }
             std::this_thread::yield();
-            //using namespace std::chrono_literals;
-            //std::this_thread::sleep_for(100us);
-            // print dots, abort if returns zero.
         }
 
         if (n > 0) {

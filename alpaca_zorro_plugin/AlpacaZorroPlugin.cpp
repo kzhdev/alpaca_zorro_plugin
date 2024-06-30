@@ -17,10 +17,10 @@
 #include <memory>
 #include <fstream>
 #include <type_traits>
+#include <unordered_set>
 
 #include "alpaca/client.h"
 #include "logger.h"
-#include "include/functions.h"
 #include "market_data/alpaca_market_data.h"
 #include "config.h"
 #include "websockets/alpaca_md_ws.h"
@@ -42,17 +42,21 @@ namespace {
     std::string s_asset;
     int s_multiplier = 1;
     std::string s_nextOrderText;
-    int s_priceType = 0;
     std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
     Config &s_config = Config::get();
     uint32_t alpaca_md_ws_id = 0;
     double s_amount = 1;
     std::unordered_map<std::string, Asset> s_mapAssets;
+    std::unordered_set<char*> s_activeAssets;
     std::string s_subscribedAssets;
-    uint64_t s_lastQuotesRequestTime = 0;
-    uint64_t s_lastTradesRequestTime = 0;
+    uint64_t s_lastRequestTime = 0;
     Response<LastQuotes> s_lastQuotes{ 1, "No Data"};
     Response<LastTrades> s_lastTrades{ 1, "No Data"};
+    constexpr uint64_t REQUEST_BANNING_TIME = 333;  // 333 ms;
+    constexpr double EPSILON = 0.000000001;
+    bool isZero(double val) noexcept {
+        return val > 0 ? val < EPSILON : val > -EPSILON;
+    }
 }
 
 namespace alpaca
@@ -98,10 +102,11 @@ namespace alpaca
 
         s_tif = TimeInForce::FOK;
         s_nextOrderText = "";
-        s_priceType = 0;
+        s_config.priceType = 0;
         s_amount = 1.;
         s_subscribedAssets = "";
         s_config.adjustment = Adjustment::all;
+        s_activeAssets.clear();
        
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
@@ -124,14 +129,22 @@ namespace alpaca
             }
         }
 
-        LOG_INFO("In %s mode\n", (isPaperTrading ? "Paper" : "Live"));
+        if (isPaperTrading)
+        {
+            BrokerError("Paper mode");
+            LOG_INFO("Paper mode\n");
+        }
+        else
+        {
+            BrokerError("Live mode");
+            LOG_INFO("Live mode\n");
+        }
 
         //attempt login
         if (wsClient)
         {
             if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
                 BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
-                wsClient.reset();
             }
         }
 
@@ -181,231 +194,227 @@ namespace alpaca
 
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
-        if (!pPrice) { // this is subscribe
+        auto iter = s_activeAssets.find(Asset);
+        if (iter == s_activeAssets.end())
+        {
             BrokerError(("Subscribe " + std::string(Asset)).c_str());
-            if (s_subscribedAssets.empty()) {
+            s_activeAssets.emplace(Asset);
+            if (s_subscribedAssets.empty())
+            {
                 s_subscribedAssets.append(Asset);
             }
-            else {
+            else
+            {
                 s_subscribedAssets.append(",").append(Asset);
             }
 
-            if (!wsClient || !wsClient->authenticated()) {
-                // not using websocket
-                return 1;
-            }
+            if (wsClient && wsClient->authenticated() && !wsClient->isSubscribed(Asset))
+            {
+                if (wsClient->subscribeAsset(Asset))
+                {
+                    LOG_DEBUG("%s subscribed\n", Asset);
 
-            if (wsClient->subscribeAsset(Asset)) {
-                LOG_DEBUG("%s subscribed\n", Asset);
+                    // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
+                    if (s_config.priceType == 2)
+                    {
+                        auto last_trade = pMarketData->getLastTrade(Asset);
+                        if (last_trade)
+                        {
+                            wsClient->setLastTrade(last_trade.content());
+                        }
+                    }
+                    else
+                    {
+                        auto last_quote = pMarketData->getLastQuote(Asset);
+                        if (last_quote)
+                        {
+                            wsClient->setLastQuote(last_quote.content());
+                        }
+                    }
+                }
+                else 
+                {
+                    LOG_DEBUG("Failed to subscribed %s\n", Asset);
+                    BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
+                    wsClient.reset();
+                }
             }
-            else {
-                LOG_DEBUG("Failed to subscribed %s\n", Asset);
-                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
-            }
+        }
+
+        if (!pPrice)
+        {
             return 1;
         }
 
-        if (wsClient && wsClient->authenticated() && !wsClient->isSubscribed(Asset)) {
-            // When strategy logged out and re-logged in after market close re-open, Zorro does not 
-            // pass the NULL pPrice to subscribe.
-            //
-            // Need to resubscribe Websocket price update
-            if (wsClient->subscribeAsset(Asset)) {
-                LOG_DEBUG("%s subscribed\n", Asset);
-            }
-            else {
-                LOG_DEBUG("Failed to subscribed %s\n", Asset);
-                BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
-            }
-        }
-
-        if (s_priceType == 2) {
+        if (s_config.priceType == 2)
+        {
             Trade* trade = nullptr;
-            if (wsClient && wsClient->authenticated()) {
+            if (wsClient && wsClient->authenticated())
+            {
                 trade = wsClient->getLastTrade(Asset);
             }
-            if (trade) {
-                if (pPrice) {
-                    *pPrice = trade->price;
-                }
+            if (trade)
+            {
+                *pPrice = trade->price;
             }
-            else {
+            else 
+            {
                 auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                if (!s_lastTrades || (now - s_lastTradesRequestTime) > 333) {
+                if (!s_lastTrades || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME)
+                {
                     s_lastTrades = pMarketData->getLastTrades(s_subscribedAssets);
                     if (!s_lastTrades) {
                         BrokerError(("Failed to get lastTrades for " + std::string(s_subscribedAssets) +
                             " error: " + s_lastTrades.what()).c_str());
                         return 0;
                     }
-                    s_lastTradesRequestTime = now;
+                    s_lastRequestTime = now;
                 }
                 
-                if (s_lastTrades) {
+                if (s_lastTrades)
+                {
                     auto& lastTrades = s_lastTrades.content().trades;
                     auto it = lastTrades.find(Asset);
-                    if (it != lastTrades.end()) {
-                        if (pPrice) {
-                            *pPrice = it->second.price;
-                        }
+                    if (it != lastTrades.end())
+                    {
+                        *pPrice = it->second.price;
                     }
-                    else {
+                    else
+                    {
                         assert(false);
                         auto response = pMarketData->getLastTrade(Asset);
-                        if (!response) {
+                        if (!response)
+                        {
                             BrokerError(("Failed to get lastTrade " + std::string(Asset) +
                                 " error: " + response.what()).c_str());
                             return 0;
                         }
 
                         auto& lastTrade = response.content();
-
-                        if (pPrice) {
-                            *pPrice = lastTrade.trade.price;
-                        }
-                    }
-                }
-            }
-
-            if (pSpread) {
-                Quote* quote = nullptr;
-                if (wsClient && wsClient->authenticated()) {
-                    quote = wsClient->getLastQuote(Asset);
-                }
-                if (quote) {
-                    *pSpread = quote->ask_price - quote->bid_price;
-                }
-                else {
-                    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                    if (!s_lastQuotes || (now - s_lastQuotesRequestTime) > 1) {
-                        s_lastQuotes = pMarketData->getLastQuotes(s_subscribedAssets);
-                        if (s_lastQuotes) {
-                            s_lastQuotesRequestTime = now;
-                        }
-                        else {
-                            BrokerError(("Failed to get lastQuotes for " + std::string(s_subscribedAssets) +
-                                " error: " + s_lastQuotes.what()).c_str());
-                        }
-                    }
-
-                    if (s_lastQuotes) {
-                        auto& lastQuotes = s_lastQuotes.content().quotes;
-                        auto it = lastQuotes.find(Asset);
-                        if (it != lastQuotes.end()) {
-                            *pSpread = it->second.ask_price - it->second.bid_price;
-                        }
-                        else {
-                            assert(false);
-                            auto response = pMarketData->getLastQuote(Asset);
-                            if (response) {
-                                auto& lastQuote = response.content();
-                                *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
-                            }
-                            else
-                            {
-                                BrokerError(("Failed to get lastQuote " + std::string(Asset) +
-                                    " error: " + response.what()).c_str());
-                            }
-                        }
+                        *pPrice = lastTrade.trade.price;
                     }
                 }
             }
         }
-        else {
+        else
+        {
             Quote* quote = nullptr;
-            if (wsClient && wsClient->authenticated()) {
+            if (wsClient && wsClient->authenticated())
+            {
                 quote = wsClient->getLastQuote(Asset);
             }
-            if (quote) {
-                if (pPrice) {
+            if (quote)
+            {
+                if (!isZero(quote->ask_price))
+                {
                     *pPrice = quote->ask_price;
-                }
 
-                if (pSpread) {
-                    *pSpread = quote->ask_price - quote->bid_price;
+                    if (pSpread)
+                    {
+                        *pSpread = quote->ask_price - quote->bid_price;
+                    }
                 }
             }
             else {
                 auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                if (!s_lastQuotes || (now - s_lastQuotesRequestTime) > 1) {
+                if (!s_lastQuotes || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME)
+                {
                     s_lastQuotes = pMarketData->getLastQuotes(s_subscribedAssets);
-                    if (!s_lastQuotes) {
+                    if (!s_lastQuotes)
+                    {
                         BrokerError(("Failed to get lastQuotes for " + std::string(s_subscribedAssets) +
                             " error: " + s_lastQuotes.what()).c_str());
                         return 0;
                     }
-                    s_lastQuotesRequestTime = now;
+                    s_lastRequestTime = now;
                 }
 
-                if (s_lastQuotes) {
+                if (s_lastQuotes)
+                {
                     auto& lastQuotes = s_lastQuotes.content().quotes;
                     auto it = lastQuotes.find(Asset);
-                    if (it != lastQuotes.end()) {
-                        if (pPrice) {
+                    if (it != lastQuotes.end())
+                    {
+                        if (!isZero(it->second.ask_price))
+                        {
                             *pPrice = it->second.ask_price;
-                        }
 
-                        if (pSpread) {
-                            *pSpread = it->second.ask_price - it->second.bid_price;
+                            if (pSpread) 
+                            {
+                                *pSpread = it->second.ask_price - it->second.bid_price;
+                            }
                         }
                     }
-                    else {
+                    else 
+                    {
                         assert(false);
                         auto response = pMarketData->getLastQuote(Asset);
-                        if (!response) {
+                        if (!response)
+                        {
                             BrokerError(("Failed to get lastQuote " + std::string(Asset) +
                                 " error: " + response.what()).c_str());
                             return 0;
                         }
 
                         auto& lastQuote = response.content();
-
-                        if (pPrice) {
+                        if (!isZero(lastQuote.quote.ask_price))
+                        {
                             *pPrice = lastQuote.quote.ask_price;
-                        }
 
-                        if (pSpread) {
-                            *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
+                            if (pSpread) {
+                                *pSpread = lastQuote.quote.ask_price - lastQuote.quote.bid_price;
+                            }
                         }
                     }
                 }
             }
         }
 
-        if (pLotAmount) {
+        if (pLotAmount)
+        {
             auto iter = s_mapAssets.find(Asset);
-            if (iter == s_mapAssets.end()) {
+            if (iter == s_mapAssets.end())
+            {
                 auto response = client->getAsset(Asset);
-                if (response) {
+                if (response)
+                {
                     auto& asset = response.content();
                     s_mapAssets.emplace(Asset, asset);
-                    if (asset.fractionable) {
+                    if (asset.fractionable)
+                    {
                         *pLotAmount = s_config.fractionalLotAmount;
                     }
-                    else {
+                    else
+                    {
                         *pLotAmount = 1;
                     }
                 }
-                else {
+                else
+                {
                     *pLotAmount = 1;
                 }
             }
-            else {
+            else
+            {
                 auto& asset = iter->second;
-                if (asset.fractionable) {
+                if (asset.fractionable)
+                {
                     *pLotAmount = s_config.fractionalLotAmount;
                 }
-                else {
+                else
+                {
                     *pLotAmount = 1;
                 }
             }
         }
 
-        if (pRollLong) {
+        if (pRollLong)
+        {
             *pRollLong = 0.;
         }
 
-        if (pRollShort) {
+        if (pRollShort)
+        {
             *pRollShort = 0.;
         }
 
@@ -427,7 +436,7 @@ namespace alpaca
         int barsDownloaded = 0;
 
         auto populateTicks = [&barsDownloaded, nTickMinutes, &end, &ticks, nTicks](std::vector<Bar>& bars) {
-            for (int i = bars.size() - 1; i >= 0 && barsDownloaded < nTicks; --i) {
+            for (auto i = 0u; i < bars.size() && barsDownloaded < nTicks; ++i) {
                 auto& bar = bars[i];
                 auto& tick = ticks[barsDownloaded++];
                 tick.time = convertTime(static_cast<__time32_t>(bar.time));
@@ -451,10 +460,9 @@ namespace alpaca
         while(true) {
             LOG_DEBUG("BrokerHistory %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
 
-            auto response = pMarketData->getBars(Asset, start, end, nTickMinutes, nTicks, s_priceType);
+            auto response = pMarketData->getBars(Asset, start, end, nTickMinutes, nTicks, s_config.priceType);
             if (!response) {
-                if (response.getCode() == 40010001 && response.what() == "end is too late for subscription" &&
-                    pMarketData->name() == "Alpaca") {
+                if (response.getCode() == 40010001 && response.what() == "end is too late for subscription") {
                     // Alpaca V2 Basic Plan has 15 min delay. Retry to find the last data allowed.
                     end = (end - end % 60) - 60;
                     continue;
@@ -541,6 +549,11 @@ namespace alpaca
             // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
             s_amount = 1.;
             return internalOrdId;
+        }
+        
+        if (pFill)
+        {
+            *pFill = 0;
         }
 
         if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
@@ -648,10 +661,10 @@ namespace alpaca
             }
             else {
                 auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                if (!s_lastQuotes || (now - s_lastQuotesRequestTime) > 250) {
+                if (!s_lastQuotes || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME) {
                     s_lastQuotes = pMarketData->getLastQuotes(s_subscribedAssets);
                     if (s_lastQuotes) {
-                        s_lastQuotesRequestTime = now;
+                        s_lastRequestTime = now;
                     }
                     else {
                         BrokerError(("Failed to get lastQuotes for " + std::string(s_subscribedAssets) +
@@ -721,7 +734,7 @@ namespace alpaca
             // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
             s_amount = 1.;
             BrokerError(("Close working order " + std::to_string(nTradeID)).c_str());
-            if (std::abs(qty) == order.qty) {
+            if (!qty) {
                 auto response = client->cancelOrder(iter->second.id);
                 if (response) {
                     return nTradeID;
@@ -876,8 +889,13 @@ namespace alpaca
             return 9999;
 
         case GET_MAXREQUESTS:
+        {
             // Alpaca rate limit is 200 requests per minutes for Free plan.
-            return s_config.alpacaPaidPlan ? 0 : 200;
+            // GET_MAXREQUESTS: maximum number of requests per second allowed by the broker API
+            auto rt = s_config.alpacaPaidPlan ? 0 : 3;
+            LOG_DEBUG("GET_MAXREQUESTS %d\n", rt);
+            return rt;
+        }
 
         case GET_LOCK:
             return 1;
@@ -933,12 +951,44 @@ namespace alpaca
         }
 
         case GET_PRICETYPE:
-            return s_priceType;
+            return s_config.priceType;
 
         case SET_PRICETYPE:
-            s_priceType = (int)dwParameter;
-            LOG_DEBUG("SET_PRICETYPE: %d\n", s_priceType);
+        {
+            auto price_type = (int)dwParameter;
+            bool resubscribe = s_config.priceType != price_type;
+            s_config.priceType = (int)dwParameter;
+            LOG_DEBUG("SET_PRICETYPE: %d resubscribe: %d\n", s_config.priceType, resubscribe);
+            if (resubscribe && wsClient && wsClient->authenticated()) {
+                // price type changed. 
+                // change websocket subscription
+                for (auto asset : s_activeAssets) {
+                    if (wsClient->subscribeAsset(asset))
+                    {
+                        LOG_DEBUG("%s subscribed\n", asset);
+
+                        // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
+                        if (s_config.priceType == 2)
+                        {
+                            auto last_trade = pMarketData->getLastTrade(asset);
+                            if (last_trade)
+                            {
+                                wsClient->setLastTrade(last_trade.content());
+                            }
+                        }
+                        else
+                        {
+                            auto last_quote = pMarketData->getLastQuote(asset);
+                            if (last_quote)
+                            {
+                                wsClient->setLastQuote(last_quote.content());
+                            }
+                        }
+                    }
+                }
+            }
             return dwParameter;
+        }
 
         case GET_VOLTYPE:
           return 0;
@@ -1058,7 +1108,6 @@ namespace alpaca
             BrokerError(("Set Adjustment to " + std::string(to_string(s_config.adjustment))).c_str());
             break;
         }
-
 
         default:
             LOG_DEBUG("Unhandled command: %d %lu\n", Command, dwParameter);

@@ -315,9 +315,12 @@ Response<std::vector<Bar>> AlpacaMarketData::downloadBars(
     };
 
     auto lmt = 10000 * granularity;
-
+    std::string sStart = timeToString(start);
     do {
-        std::string sStart = timeToString(start);
+        if (e < start)
+        {
+            break;
+        }
         std::string sEnd = timeToString(e);
         std::stringstream url;
         url << baseUrl_ << "/v2/stocks/" << symbol << "/bars?start=" << sStart

@@ -1,9 +1,8 @@
-//////////////////////////////////////////////////////////////////////
-// Zorro-specific variables & functions
-// for use by lite-C scripts & Zorro program
-// (c) oP group 2014, 2021
+/////////////////////////////////////////////////////////////////////
+// Zorro-specific structs & variables for scripts
+// (c) oP group 2014 - 2022
 // Do not modify this file
-//////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////
 #ifndef trading_h
 #define trading_h
 
@@ -12,7 +11,9 @@
 typedef double var;
 typedef var* vars;
 typedef char* string;
-typedef long function;
+#ifndef _WIN32
+#define function long
+#endif
 
 #define and &&
 #define or ||
@@ -25,6 +26,7 @@ typedef long function;
 // constant limits (don't change!)
 #define NAMESIZE		16		// asset and algo names
 #define NAMESIZE2		40		// broker and account names
+#define PATHSIZE		512	// file names with path
 #define UUIDSIZE		256
 #define NUM_SKILLS	8
 #define NUM_SKILLS2	16
@@ -33,9 +35,9 @@ typedef long function;
 #define MAX_STEPS		1000	// max optimize() steps
 #define MAX_CORES		72		// max cores for WFO training
 #define MAX_ASSETS	8000	// max assets in list
-#define MAX_CONTRACTS 20000 // max size of CONTRACTS chain
+#define MAX_CONTRACTS 25000 // max CONTRACTs in chain
 #define MAX_QUOTES	5000	// size of T2 orderbook list
-#define MAX_BUFFER	20000	// size of text buffers
+#define MAX_BUFFER	20000	// size of text and printf buffers
 
 /////////////////////////////////////////////////////////////////////
 // trading structs
@@ -64,12 +66,12 @@ typedef struct CONTRACT
 {
 	DATE	time;			// hist: timestamp; live: trading class string
 	float fAsk, fBid; // premium without multiplier (f1,f2)
-	float fVal;			// script dependent - bid volume, IV, delta... (f3)
-	float fVol;			// trade volume, ask volume, or open interest (f4)
+	float fVal;			// multiplier, open interest, bid volume, IV, delta... (f3)
+	float fVol;			// trade volume, ask volume  (f4)
 	float fUnl;			// unadjusted underlying price (f5)
 	float fStrike;		// (f6)
-	long	Expiry;		// YYYYMMDD (i7)
-	long	Type;			// PUT, CALL, FUTURE, EUROPEAN, BINARY (s8)
+	int	Expiry;		// YYYYMMDD (i7)
+	int	Type;			// PUT, CALL, |FUTURE, |EUROPEAN, |BINARY (i8)
 } CONTRACT; // options, futures, FOPs, .t8 file content
 
 typedef struct COMBO
@@ -80,7 +82,7 @@ typedef struct COMBO
 
 typedef struct BAR
 {
-	DATE	time_base,time_span;		// start and duration of the bar in GMT time zone
+	DATE	time;	// at close
 } BAR;
 
 typedef struct DATA
@@ -128,32 +130,32 @@ typedef struct ASSET
 	var	vCommission;	// commission per 10K, in account currency
 	var	vSlipPerSec;	// price difference per second by slippage
 	var	vInitialPrice;	// from the asset parameters
-	var	vStrength;		// currency strength difference
+	var	vUnused1;			
 	var	vVal,vVol;		// volume data or quote frequencies
 	var	tAsk,tBid;		// time stamp of last quote
 	var	vEntryLimit,vExitLimit;	// for adaptive algos
 	var	vWinPayout,vLossPayout;	// payouts in percent for binary trading
 	var	*pOpen,*pClose,*pHigh,*pLow,*pPrice;	// price history data array
 	var	*pVal,*pVol;	// additional price data lists, f.i. spread and volume
-	CONTRACT *pContracts;	// contract chain
+	CONTRACT *pContracts;	//. contract chain
 	void	*tick_current;		// tick pointer of the current bar
 	void	*tick_start,*tick_end;	// tick list in T2 or T6 format, dependent on LEAN
-	void	*tick_mem;		// allocated tick memory
+	void	*tick_mem;		//. allocated tick memory
 	int	nTotalTicks;	// number of ticks in tick_mem
-	int	nFirstPriceBar; // first simulation bar for this asset
-	int	nLastPriceBar;	// last simulation bar for this asset
+	int	nFirstPriceBar; // first valid bar for this asset
+	int	nLastPriceBar;	// last valid bar for this asset
 	int	nBar,nCounter,nOffset;
 	int	nMaxLots;		// Max # of lots per trade
-	int	flags;
+	int	flags;			//.
 	int	nSkipped,nFrame;	// distance to the last bar with a price quote
-	int	nNetSum,nVirtualSum; // number of lots of all open pool and virtual trades
+	int	nNetSum,nVirtualSum; //. number of lots of all open pool and virtual trades
 	int	nExtSum;			// number of lots of externally closed trades
 	int	nPhantomSum;	// number of lots of open phantom trades
-	int	nZone,nHour;	// asset time zone
-	int	nMarket;			// timezone for not trading outside market hours
+	int	nZone,nHour;	//. asset time zone for AssetFrame, trading once per day
+	int	nMarket;			// asset time zone for AssetFrame, trading inside market hours
 	int	nMultiplier;	// options multiplier
 	int	numContracts;	// number of contracts
-	int	nHandle;			// handle of options/futures dataset, + year <<16
+	int	nHandle;			//. handle of options/futures dataset, + year <<16
 	int	nContractRow,nContractOffs;	// dataset numbers of the found contract
 	T6		Tick;				// current tick of the asset in the backtest
 	char	sName[NAMESIZE];	// short name of the asset
@@ -171,6 +173,8 @@ typedef struct ASSET
 	int	nCache;			// Number of memory pool
 	var	vBarAvg,vValAvg,vVolAvg;	// Average price, vol, val of one bar, intermediate value
 	var	vBack[8];		// price backup for intrabar simulation
+	int	nMarketZone,nStartMarket,nEndMarket; // from asset list
+	var	vStrength;		// currency strength difference by ccy functions	
 } ASSET;
 
 typedef struct TRADE
@@ -178,19 +182,19 @@ typedef struct TRADE
 	float	fEntryPrice;	// buy price, or premium without multiplicator
 	float	fExitPrice;	// sell price per unit, without spread
 	float fResult;		// current profit of the trade
-	float	fEntryLimit;	// buy entry limit
+	float	fEntryLimit;	// entry limit or entry stop
 	float	fProfitLimit;	// profit limit price
 	float fTrailLock;	// profit target distance to initial price, positive (long) or negative (short)
 	float	fStopLimit;	// stop loss limit price
 	float	fStopDiff;	// signed stop loss distance to initial price, positive (short) or negative (long)
 	float	fTrailLimit;	// trail limit price
-	float	fTrailDiff;	// signed stop loss adaption distance, positive (short) or negative (long)
+	float	fTrailDiff;	// signed stop loss adaption distance, negative (short) or positive (long)
 	float	fTrailSlope;	// stop loss adaption factor, 0..1
 	float	fTrailStep;	// stop loss bar step factor, 0..1
 	float	fSpread;		// spread at entry for short, current spread for long trades
-	float	fMAE,fMFE;	// Max adverse excursion, max favorite excursion without slippage, spread etc.
-	float fRoll;		// accumulated rollover, < 0
-	float fSlippage;	// Slippage, < 0
+	float	fMAE,fMFE;	// max adverse excursion, max favorite excursion without slippage, spread etc.
+	float fRoll;		// accumulated rollover, positive or negative
+	float fSlippage;	// accumulated slippage, or total Penalty
 	float	fUnits;		// conversion factor asset price -> account currency per lot. fUnits = vPIPCost/vPIP or Multiplier.
 	float	fTrailSpeed;	// break even speed factor 
 	int	nExitTime;	// sell at market after this number of bars
@@ -201,7 +205,7 @@ typedef struct TRADE
 	int	nID;			// active trade id / order id; can change when trades are partially closed
 	DATE	tEntryDate;	// entry time target
 	DATE	tExitDate;	// exit time target
-	DWORD flags;		// trade flags, see below
+	int	flags;		// trade flags, see below
 	float	fArg[8];		// TMF arguments
 	var	Skill[NUM_SKILLS];	// general purpose variables for TMF
 	int	nContract;	// contract type & exchange code
@@ -210,7 +214,7 @@ typedef struct TRADE
 	char	sInfo[8];	// contract class
 	float	fMarginCost;	// margin cost at entering the trade
 	float	fCommission;	// commission at entering the trade
-	DWORD	flags2;		// internal flags
+	int	flags2;		// internal flags
 	int	nLotsTarget;	// original lots
 	int	nAttempts;	// close attempts counter
 	int	pad[1];
@@ -257,7 +261,10 @@ typedef struct TRADE
 #define TR_REVERSED	(1<<30)  // indicate exit by reversal
 
 #define TR_AON			1			// TradeMode all-or-nothing
-#define TR_FILLED		(1<<1)	// TradeMode, assume complete fill
+#define TR_FILLED		(1<<1)	// assume complete fill
+#define TR_ORPHAN		(1<<2)	// don't register the trade
+#define TR_FRC			(1<<3)	// don't round limits to 1 PIP
+#define TR_POS			(1<<4)	// check position before closing
 
 ///////////////////////////////////////////////////////////////
 // algo specific parameters & statistics
@@ -272,13 +279,13 @@ typedef struct STATUS {
 	int	numWin,numLoss;	// number of won and lost trades	
 	int	nWinStreak,nLossStreak; // length of current win and loss streak
 	int	numWinning,numLosing;	// number of winning and losing open trades, test/trade mode only
-	DWORD	dwWin,dwLoss;		// WFO win/loss flags 
-	DWORD	dwColorWin,dwColorLoss;	// trade colors in chart
+	int	dwWin,dwLoss;		// WFO win/loss flags 
+	int	dwColorWin,dwColorLoss;	// trade colors in chart
 // clear statistics until this position
-	DWORD	flags;
+	int	flags;
 	int	nModel;				// model number for prediction
 	int	nComponent;			// component number
-	DWORD	pad[1];
+	int	pad[1];
 	var	vPad[4];
 	var	Skill[NUM_SKILLS];	// general purpose variables
 	var	Result[NUM_RESULTS];	// last 20 trade results
@@ -352,9 +359,10 @@ typedef struct PERFORMANCE
 	int	nSessionEndBar;	// bar number of the last bar
 	int	nPad;
 	var	vSemiDev;			// semideviation
-} PERFORMANCE;
+	var	vLinResult;			// End result by linear regression
+} PERFORMANCE; // size affects GLOBALS; change "TRD" header when changed
 
-// global variables
+// singleton with global variables
 typedef struct GLOBALS
 {
 // trade parameters (r/w)
@@ -390,7 +398,7 @@ typedef struct GLOBALS
 
 	int	nMonteCarlo;	// Monte Carlo iterations
 	int	nConfidence;	// Monte Carlo confidence level
-	long	pad1[10];
+	int	pad1[10];
 
 	var	vStopFactor;	// for sending the stop to the broker
 	var	vOrderLimit;	// for sending limit orders to the broker
@@ -419,13 +427,14 @@ typedef struct GLOBALS
 	int	nComboLeg;		// Number of the current combo leg, 1..4
 	COMBO	*combo;			// current selected combo
 	var	vScholzBrake;	// Olaf Scholz tax limit
-	var	vPad2;			// 
-	long	pad2[4];
+	var	vPenalty;		// fill price offset 
+	int	nLogZone;			// Time zone for log and chart
+	int	pad2[3];
 
 // simulation performance (r/o)
 	STATUS	*statLong,*statShort;	// component statistics, set up by asset() and algo()
 	PERFORMANCE	w;			// overall win and loss statistics
-	int	pad20[6];
+	int	pad20[4];
 
 	DATE	tCurrentTime;	// current time
 	DATE	tStartTime;		// session start time
@@ -439,7 +448,7 @@ typedef struct GLOBALS
 	int	nPriceEvent;	// Outlier (1) or Split (2..10)
 	int	nAssets;			// number of used assets
 	int	nLocks;			//. number of locks
-	DWORD	nUniqueNumber;	// for generating unique file names
+	int	nUniqueNumber;	// for generating unique file names
 	int	nHistoryZone;	// convert local time in history downloads
 	int	nBrokerZone;	// convert local time in broker plugin
 	int	numTicks;		// total historical ticks processed
@@ -459,7 +468,10 @@ typedef struct GLOBALS
 	int	numShort,numLong;	//. number of open long or short positions
 	int	numWinning,numLosing,numEven;	// # of trades winning, losing, break even
 	int	numWFOWin,numWFOLoss;	//. number of won or lost WFO cycles
-	long	pad4[8];
+	int	numOutliers;	// number of detected outliers
+	long	pad41[2];
+	var	vPipVal,vPipPeak;		// current open win/loss in pips
+	long	pad42[1];
 
 // simulation/optimization parameters (r/w)
 	int	nBarZone;		// DST zone for local time bars
@@ -504,7 +516,9 @@ typedef struct GLOBALS
 	int	nExpiryTime;	//. UTC HHMM, time of day for contract expiration
 	int	nCommand[4];	//. command line numbers
 	int	nTradeRate;		// BrokerTrade update rate
-	long	pad5[7];
+	int	nErrorMode;		// error simulation
+	int	nLookBackResolution;	// Lookback period resolution in minutes
+	long	pad5[5];
 
 	var	vSlider[4]; // current values from the sliders, in the range defined by slider()
 	int	nProgress1,nProgress2;	// progress bar
@@ -552,17 +566,20 @@ typedef struct GLOBALS
 	int	nOrderRow;		// row number in order list
 	int	nSeries;			//. current series number
 	int	nTest;			// test modes
-	long	pad62[7];
+	int	nDaysPassed;	// days passed since last bar
+	int	nLookBackNeeded; // max lookback period of used indicators
+	int	nSeriesLength;	// # of elements of last series() call
+	int	pad62[4];
 
 	var	*pSeriesBuffer;	// pointer of the last/next series
 	var	*pPrevCurve;	// daily balance/equity curve from previous backtest
-	long	nPrevLength;	// length of the balance/equity curve
+	int	nPrevLength;	// length of the balance/equity curve
 	T6		*pTick;			// current tick for TMF and tick functions
 	int	nLastPeriod;	// last time period passed to an indicator
 	var	*pLastSeries;	// last series passed to an indicator
 	var	*pTime;		// daily date 
-	var	*pCurve;		// daily balance/equity curve from
-	long	RHandle;		// handle of the R Bridge
+	var	*pCurve;		// daily balance/equity curve, from 0 to g->nDay
+	int	RHandle;		// handle of the R Bridge
 	string sParameters; // content of the parameter file
 	string sFactors;	// content of the OptimalF factor file
 	string sRules;		// content of the rule file
@@ -592,8 +609,8 @@ typedef struct GLOBALS
 	string sCurves;	// file name for daily balance curves
 	string *pAssets;	// list of asset names
 	string sMessage;	// last critical message f.i. for possible orphans
-	string sAccount;	// Account number from the scrollbox
-	string sContractSymbol;		// selected option or future underlying
+	string sAccount;	// Account name from the scrollbox
+	char *sExchanges; // List of exchange names 
 	string sButton;	// Text for the Result button
 	const char *sError;		// Error string for identifying code positions
 	string sAssetBox; // Asset name from the scrollbox
@@ -602,8 +619,9 @@ typedef struct GLOBALS
 	const char *sAccountName;	// from the account list
 	var*	pShape;		// price curve bending array
 	PARAMETER* pParameters;	// list of parameters in a training run
-
-	long	pad7[13];
+	const char *sAssetPrev;	// previous asset
+	var	vFix;			// for fix0()
+	int	pad7[10];
 
 // chart/log parameters (r/w)
 	int	nPlotLabels; // # of x axis labels to skip in histograms
@@ -612,14 +630,14 @@ typedef struct GLOBALS
 	int	nPlotHeight1,nPlotHeight2;	// Main chart and additional chart height in pixels
 	int	nPlotDate;	// start date of the plot (default = 0 = plot all)
 	int	nPlotBars;	// number of bars to plot (default = 0 = all)
-	DWORD	dwColorCandle;
-	DWORD dwColorUp,dwColorDn;	// color of white / black candles
-	DWORD	dwColorEquity,dwColorDD;
-	DWORD	dwColorWin,dwColorLoss;
+	int	dwColorCandle;
+	int	dwColorUp,dwColorDn;	// color of white / black candles
+	int	dwColorEquity,dwColorDD;
+	int	dwColorWin,dwColorLoss;
 	string sPlotLabelFormat;
 	int	nPlotBorder;
-	DWORD	dwColorBars[3];
-	DWORD	dwColorPanel[6];
+	int	dwColorBars[3];
+	int	dwColorPanel[6];
 	int	nPlotPeriod;	// Chart update period in minutes
 	int	nPlotMode;
 	int	nPlotStart;		// start bar of the plot
@@ -634,25 +652,26 @@ typedef struct GLOBALS
 	int	nExitCode;		// Exit code
 	long	pad8[8];
 
-	DWORD	nPin;
-	DWORD	nSaveMode;	// load/save flags
-	DWORD	dwBrokerPatch;	// work around API bugs
-	DWORD	dwMode;		// mode switches
-	DWORD dwStatus;	// status flags
+	int	nPin;
+	int	nSaveMode;	// load/save flags
+	int	dwBrokerPatch;	// work around API bugs
+	int	dwMode;		// mode switches
+	int	dwStatus;	// status flags
 	int	nState;		// training machine state
-	DWORD	flags;		// internal flags
+	int	flags;		// internal flags
 	int	nFuncId;		// identifier for function list
-	DWORD* Functions;	// null terminated function list
+	intptr_t* Functions;	// null terminated function list
 	HINSTANCE RLib;	// R DLL Handle
 	ASSET* BarAsset;	// First asset that was used for bar generation
 	HWND	hWnd;			// Zorro's Window handle
 	int	nPriceType;	// current price type, 4 = suppress requests
 	ASSET* PrevAsset;	// Global asset in a trade loop
-	DWORD	flags2;		// more internal flags
-	DWORD	dwFlags2;	// more mode switches
-	DWORD	flags3;		// more internal flags
+	int	flags2;		// more internal flags
+	int	dwFlags2;	// more mode switches
+	int	flags3;		// more internal flags
 	var	vTemp;		// for macros
-	long	pad9[6];
+	int	nUpdateTime; // for retrieving asset data 
+	int	pad9[5];
 
 // Indicator return variables
 	var vAroonDown,vAroonUp;
@@ -674,7 +693,7 @@ typedef struct GLOBALS
 	var vTenkan,vKijun,vSenkouA,vSenkouB;
 	var vTest;
 	int nHHBar,nLLBar;
-	long	pad10[10];
+	int	pad10[10];
 
 } GLOBALS;
 
@@ -697,11 +716,11 @@ typedef struct GLOBALS
 #define PLOTNOW	(1<<7)	// create a chart automatically after test
 #define LOGFILE	(1<<8)	// store log file - also for assetHistory
 #define LEANER		(1<<9)	// don't use OHLP data, only pClose
-#define LEAN		(1<<10)	// don't use volume & spread data
+#define LEAN		(1<<10)	// 400, don't use volume & spread data
 #define EXE			(1<<11)	// generate EXE (Zorro S)
-#define RULES		(1<<12)	// generate/use advise rules
+#define RULES		(1<<12)	// 1000, generate/use advise rules
 #define FACTORS	(1<<13)	// generate reinvestment factors
-#define PARAMETERS (1<<14)	// generate/use strategy parameters
+#define PARAMETERS (1<<14)	// 4000, generate/use strategy parameters
 #define OPENEND	(1<<15)	// ignore open trades at the end of the test
 #define PEEK		(1<<16)	// allow peeking into the future
 #define RISKLIMIT	(1<<17)	// don't trade when trade risk > 2*Risk
@@ -711,7 +730,7 @@ typedef struct GLOBALS
 #define RECALCULATE (1<<21) // recreate series after parameter loading
 #define COMMONSTART (1<<22) // delay start until all assets are available 
 #define NOLOCK		(1<<23)	// don't sychronize API access
-#define FAST		(1<<24)	// ticks in FAST mode - also for advise()
+//#define FAST		(1<<24)	// deprecated
 #define NFA			(1<<25)	// NFA compliant account: no "hard" stop loss, no hedging, no position closing
 #define NF			(1<<26)	// for all new flags
 #define TICKS		(1<<27)	// simulate trades every tick (slow)
@@ -741,7 +760,7 @@ typedef struct GLOBALS
 #define ASSETS		(NF|(1<<17))	// asset() function called
 #define SELECTED	(NF|(1<<18))	// asset is same as [Asset] Scrollbox (not in loops)
 #define PLOTSTATS	(NF|(1<<19))	// plot histogram rather than price chart
-//#define FLAG(N)	(NF|(1<<20)|(N<<4))
+//#define FLAG(N)	(NF|(1<<20)|(N<<4)) // marker for new type flags
 #define SPECIALBAR (NF|(1<<21))	// user-defined bar length
 #define MARGINCALL (NF|(1<<22))	// Margin + Loss exceeds Capital
 #define NEWDAY		(NF|(1<<23))	// Day change after last bar 
@@ -760,6 +779,12 @@ typedef struct GLOBALS
 #define SLIDERS		FLAG(4)	// slider was moved
 #define NOWATCH		FLAG(5)	// ignore watch() statements
 #define NOSHIFT		FLAG(6)	// prevent shifting series
+#define NOFACTORS		FLAG(7)	// no OptimalF factors
+#define PIPRETURN		FLAG(8)	// volume independent profit
+#define STRUNC			FLAG(9)	// truncate indicator series
+#define EXPORTED		FLAG(10)	// export plots and training equity curves
+#define VCPP			FLAG(11) // compile rules with VC++
+#define STRAIGHT		FLAG(12) // don't preprocess indicators
 
 // defines for functions and parameters
 #define NOW		-999999
@@ -775,7 +800,7 @@ typedef struct GLOBALS
 #define DTREE		(1<<21)	// use a decision tree
 #define PERCEPTRON (1<<22)	// use a perceptron
 #define PATTERN	(1<<23)	// use pattern match
-//#define FAST		(1<<24)	// match fast
+#define FAST		(1<<24)	// match fast
 #define FUZZY		(1<<25)	// match fuzzy
 #define SIGNALS	(1<<26)	// export signals + objective to .csv
 #define BALANCED	(1<<28)	// balance positive and negative results
@@ -805,17 +830,20 @@ typedef struct GLOBALS
 #define FROM_CRYPTOC	(1<<19)
 #define FROM_IEX		(1<<20)
 #define FROM_SOURCE	(1<<21)
+#define FROM_MSTOCK	(1<<22)
+#define FROM_EOD		(1<<23)
 
 #define FOREX		1
 #define INDEX		2	
 //#define STOCK	3 
+#define CURRENCY	4	
 
 #define TRADES		(1<<0)	// Detrend, randomize, predict, TrainMode etc
 #define PRICES		(1<<1) 
 #define CURVE		(1<<2)
 #define DETREND	(1<<2)
 #define INVERT		(1<<3)
-#define NOPRICE	(1<<4)
+#define NOPRICE	(1<<4)	// also a->flags
 #define SHUFFLE	(1<<5)
 #define BOOTSTRAP	(1<<6)
 #define RECIPROCAL (1<<7)
@@ -831,8 +859,9 @@ typedef struct GLOBALS
 #define BRUTE		(1<<26)	// use brute force optimization
 #define SETFACTORS (1<<27)	// store script-set factors
 //#define ALLCYCLES	(1<<30)	// Factor generation per cycle
+#define SOFTSWAP	(1<<22)	// a->flags, start accumulating rollover immediately
 
-#define UTC		24	// Coordinated Universal Time
+#define UTC		24	// Coordinated Universal Time, no dayiight saving
 #define WET		0	// Western European Time (London)
 #define CET		1	// European time zone (Frankfurt)
 #define ET		-5	// Eastern Time (New York)
@@ -854,7 +883,7 @@ typedef struct GLOBALS
 #define BAND1	(1<<2)	// upper band
 #define BAND2	(BAND1+1)	// lower band
 #define MAIN	(1<<3)	// print in main window
-#define STATS	(1<<4)	// print histogram
+#define STATS	(1<<4)	// plot a histogram or scatter plot
 #define AXIS2	(1<<5)	// plot on 2nd axis
 #define SUM		(1<<6)	// add values; fill skipped bars
 #define AVG		(1<<7)	// calculate average
@@ -869,18 +898,20 @@ typedef struct GLOBALS
 #define LINE	(1<<17)	// plot a straight line
 #define END		(1<<18)	// line end point
 #define DOT		(1<<19)	// plot a colored symbol
-#define SQUARE	(DOT+(1<<20))
-#define DIAMOND (DOT+(2<<20))
-#define TRIANGLE (DOT+(3<<20))
-#define TRIANGLE2 (DOT+(4<<20))
-#define TRIANGLE3 (DOT+(5<<20))
-#define TRIANGLE4 (DOT+(6<<20))
-#define CROSS	(DOT+(8<<20))
-#define CROSS2	(DOT+(9<<20))
-#define ALL		(1<<24)
-#define TXT		(1<<25)
-#define DSET	(1<<26)
-#define CONTOUR (1<<27)
+#define SQUARE	(DOT|(1<<20))
+#define DIAMOND (DOT|(2<<20))
+#define TRIANGLE (DOT|(3<<20))
+#define TRIANGLE2 (DOT|(4<<20))
+#define TRIANGLE3 (DOT|(5<<20))
+#define TRIANGLE4 (DOT|(6<<20))
+#define CROSS	(DOT|(8<<20))
+#define CROSS2	(DOT|(9<<20))
+#define HIST	(1<<24)	// histogram bar
+#define TXT		(1<<25)	// plot text
+#define DSET	(1<<26)	// plot dataset
+#define CONTOUR (1<<6)
+#define HEATMAP (2<<6)
+#define SPLINE	(1<<28)
 #define MULTICOLOR (1<<30)
 
 #define PL_ALL		(1<<6)
@@ -891,6 +922,8 @@ typedef struct GLOBALS
 #define PL_FILE	(1<<11)
 #define PL_BENCHMARK	(1<<12)
 #define PL_TITLE	(1<<13)
+#define PL_HLOC	(1<<14)
+#define PL_DARK	(1<<15)
 
 #define RED			0xff0000
 #define GREEN		0x00ff00
@@ -917,6 +950,7 @@ typedef struct GLOBALS
 #define TO_REPORT	4
 #define TO_HTML	5
 #define TO_FILE	6
+#define TO_OUT		9
 #define TO_CSV		10
 #define TO_CSVHDR	11
 #define TO_ALERT	13
@@ -937,9 +971,11 @@ typedef struct GLOBALS
 #define BR_FLAT		(1<<0)	// BarMode
 #define BR_WEEKEND	(1<<1)
 #define BR_MARKET		(1<<2)
+#define BR_NOSHIFT	(1<<3)
 #define BR_LEISURE	(1<<4)
 #define BR_SLEEP		(1<<5)
 #define BR_LOGOFF		(1<<6)
+#define BR_LOCAL		(1<<7)
 
 #define GET_TIME			5	// brokerCommand, last incoming tick time
 #define GET_DIGITS		12	// Count of digits after decimal point 
@@ -968,6 +1004,7 @@ typedef struct GLOBALS
 #define GET_POSITION		53	// Open net lots per asset 
 #define GET_ACCOUNT		54	// Account number (string)
 #define GET_AVGENTRY		55	// Average entry price 
+#define GET_FILL			56 // return filled lots, or -1 when order not found
 #define GET_BOOK			62	// Order book
 #define GET_OPTIONS		64 // Option chain
 #define GET_FUTURES		65	
@@ -978,6 +1015,8 @@ typedef struct GLOBALS
 #define GET_LOOPS			70	// return # of wait loops of last command, for diagnostics 
 #define GET_TRADES		71 // list of positions
 #define GET_DATA			72 // direct response from REST API
+#define GET_EXCHANGES	73 // get a list of exchanges
+#define SET_EXCHANGES	74 // set a list of exchanges
 
 #define SET_PATCH			128 // Work around broker API bugs
 #define SET_SLIPPAGE		129 // Max adverse slippage for orders
@@ -1005,6 +1044,7 @@ typedef struct GLOBALS
 #define SET_HWND			172
 #define SET_MAXTICKS		173 // max history ticks
 #define GET_CALLBACK		174 // plugin supplied callback function 
+#define SET_FUNCTIONS	175
 #define SET_COMMENT		180 // Comment on the chart window
 #define SET_BROKER		181 // Set broker/exchange for aggregators
 #define SET_SERVER		182 // Send ':' content of Server field

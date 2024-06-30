@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <ctime>
 #include <string>
+#include <chrono>
 
 namespace alpaca {
 
@@ -27,8 +28,8 @@ namespace alpaca {
         LT_HISTORY = 1 << 4,
         LT_MD = 1 << 5,
         LT_WEB_SOCKET_DATA = 1 << 6,
-        LT_MISC = 7,
-        LT_ALL_WITHOUT_WEB_SOCKET = LT_MISC | LT_ACCOUNT | LT_BALANCE | LT_POSITION | LT_ORDER | LT_HISTORY | LT_MD,
+        LT_MISC = 1 << 7,
+        LT_ALL_WITHOUT_WEB_SOCKET = LT_ACCOUNT | LT_BALANCE | LT_POSITION | LT_ORDER | LT_HISTORY | LT_MD | LT_MISC,
         LT_ALL = LT_ALL_WITHOUT_WEB_SOCKET | LT_WEB_SOCKET_DATA,
     };
 
@@ -73,7 +74,14 @@ namespace alpaca {
             if (!log_ && !open_log()) {
                 return;
             }
-            std::time_t t = std::time(nullptr);
+
+            using Clock = std::chrono::system_clock;
+
+            auto now = Clock::now();
+            auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
+            auto fraction = now - seconds;
+            auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(fraction).count();
+            time_t t = Clock::to_time_t(now);
             struct tm _tm;
             localtime_s(&_tm, &t);
             //if (_tm.tm_isdst > 0)
@@ -82,7 +90,7 @@ namespace alpaca {
             //}
             char buf[25];
             std::strftime(buf, sizeof(buf), "%F %T", &_tm);
-
+            sprintf(&buf[19], ".%03lli", milliseconds);
             fprintf(log_, "%s | %s | ", buf, to_string(level));
             fprintf(log_, format, std::forward<Args>(args)...);
             fflush(log_);

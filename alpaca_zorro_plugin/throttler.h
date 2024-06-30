@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <chrono>
 #include "logger.h"
+#include "config.h"
 
 namespace alpaca {
     extern int(__cdecl* BrokerError)(const char* txt);
@@ -73,11 +74,15 @@ namespace alpaca {
             }
         }
 
-        bool waitForSending(LogLevel logLevel = LogLevel::L_TRACE) const noexcept {
+        bool waitForSending() const noexcept {
+            if (Config::get().alpacaPaidPlan) {
+                return true;
+            }
+
+            auto timestamp = get_timestamp();
             while (true) {
-                auto timestamp = get_timestamp();
                 auto data = data_->load(std::memory_order_relaxed);
-                if ((timestamp - data.start_timestamp_) >= 1000) {
+                if ((timestamp - data.start_timestamp_) >= 60000) {
                     throttler_info new_data;
                     new_data.start_timestamp_ = timestamp;
                     new_data.count_ = 1;
@@ -86,7 +91,7 @@ namespace alpaca {
                     }
                 }
 
-                while (data.count_ < 3) {
+                while (data.count_ < 200) {
                     throttler_info new_data = data;
                     ++new_data.count_;
                     if (data_->compare_exchange_strong(data, new_data, std::memory_order_release, std::memory_order_relaxed)) {
@@ -95,12 +100,12 @@ namespace alpaca {
                     LOG_TRACE("compare_exchange_strong failed. %d -> %d\n", new_data.count_, data.count_);
                 }
 
-                if (!BrokerProgress(1)) {
-                    return false;
-                }
-                LOG_TRACE("waitForSending...\n");
-                while ((get_timestamp() - data.start_timestamp_) < 1000)
+                LOG_DEBUG_EXT(LogType::LT_MISC, "waitForSending...\n");
+                while (((timestamp = get_timestamp()) - data.start_timestamp_) < 60000 && data.count_ >= 200)
                 {
+                    if (!BrokerProgress(1)) {
+                        return false;
+                    }
                     std::this_thread::yield();
                 }
             }
