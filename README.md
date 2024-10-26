@@ -7,9 +7,9 @@ an institutional-grade development tool for financial research and automated tra
 
 To install the plugin, follow these steps:
 
-1. download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip).
+1. Download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip).
 2. Unzip the file.
-3. Copy teh `Alpca.dll` and the `websocket_proxy` folder into the `plugin` folder under Zorro's root path.
+3. Copy the `Alpca.dll` and the `websocket_proxy` folder into the `plugin` folder under Zorro's root path.
 4. Copy the `AlpacaBrokderCommands.h` file into the `include` folder under Zorro's root path.
 
 ## Usage
@@ -64,7 +64,7 @@ The Configurations are:
 
   ```C++
   // By default, enterLong/enterShort places an order with FOK TimeInfoForce type
-  // Use borkerCommand(SET_ORDERTYPE, tif) to change TimeInForce.
+  // Use brokerCommand(SET_ORDERTYPE, tif) to change TimeInForce.
   // Valid TimeInForce value is
   //  ORDERTYPE_IOC - ICO
   //  ORDERTYPE_GTC - GTC
@@ -97,7 +97,7 @@ The Configurations are:
 * Support custom order text
 
   ```C++
-  // Use borkderCommand(SET_ORDERTEXT, xxxx) to set a custom order text
+  // Use brokerCommand(SET_ORDERTEXT, xxxx) to set a custom order text
   brokerCommand(SET_ORDERTEXT, "MyAlpacaOrder");  // "MyAlpacaOrder" will be added into ClientOrderId
   enterLong(5);
   ```
@@ -110,7 +110,7 @@ The Configurations are:
   ```
 
 * Support Fractional Quantity
-  To enable Franction Quantity support, add the AlpacaFractionalLotAmount config in Zorro.ini or ZorroFix.ini
+  To enable Fractional Quantity support, add the AlpacaFractionalLotAmount config in Zorro.ini or ZorroFix.ini
   ``` C++
   // AlpacaFractionalLotAmount = 0.001 in ZorroFix.ini
   #include <AlpacaBrokerCommands.h>
@@ -121,7 +121,7 @@ The Configurations are:
   enterLong();      // Buy 0.005 shares TLSA
   ```
 
-* Generate AssetList file through custom borkerCommand
+* Generate AssetList file through custom brokerCommand
   
   ``` C++
   #include <AlpacaBrokerCommands.h>
@@ -132,7 +132,7 @@ The Configurations are:
   An AssetAlpaca.csv file will be generated in the Log directory.
 
   ``` C++
-  Exemple:
+  Example:
   // GenerateAlpacaAssetList.c
   #include <AlpacaBrokerCommands.h>
   function main() {
@@ -145,10 +145,10 @@ The Configurations are:
   ``` C++
   #include <AlpacaBrokerCommands.h>
   ....
-  int fractionable = borkerCommand(IS_ASSERT_FRACTIONABLE, Asset);
-  int shortable = borkerCommand(IS_ASSERT_SHORTABLE, Asset);
-  int easyToBorrow = borkerCommand(IS_ASSERT_EASY_TO_BORROW, Asset);
-  int marginable = borkerCommand(IS_ASSERT_EASY_TO_MARGINABLE, Asset);
+  int fractionable = brokerCommand(IS_ASSERT_FRACTIONABLE, Asset);
+  int shortable = brokerCommand(IS_ASSERT_SHORTABLE, Asset);
+  int easyToBorrow = brokerCommand(IS_ASSERT_EASY_TO_BORROW, Asset);
+  int marginable = brokerCommand(IS_ASSERT_EASY_TO_MARGINABLE, Asset);
   ```
 
 * Set Historical Bar Adjustment 
@@ -164,7 +164,7 @@ The Configurations are:
   //  ADJUSTMENT_ALL      - 3
   ```
 
-* Following Zorro Broker API functions has been implemented:
+* Following Zorro Broker API functions have been implemented:
 
   * BrokerOpen
   * BrokerHTTP
