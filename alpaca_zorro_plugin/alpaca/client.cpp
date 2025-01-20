@@ -10,18 +10,16 @@
 #include "rapidjson/writer.h"
 #include "date/date.h"
 #include "alpaca/client_order_id_generator.h"
-#include "market_data/alpaca_market_data.h"
-#include "zorro_websocket_proxy_client.h"
+#include "market_data/market_data.h"
+#include "websocket_proxy/websocket_proxy_client.h"
 #include "account.h"
 
 namespace {
     /// The base URL for API calls to the live trading API
-    constexpr const char* s_APIBaseURLLive = "https://api.alpaca.markets";
+    constexpr const char* s_APIBaseURLLive = "https://api.alpaca.markets/v2/";
     /// The base URL for API calls to the paper trading API
-    constexpr const char* s_APIBaseURLPaper = "https://paper-api.alpaca.markets";
+    constexpr const char* s_APIBaseURLPaper = "https://paper-api.alpaca.markets/v2/";
     std::unique_ptr<alpaca::ClientOrderIdGenerator> s_orderIdGen;
-
-    std::unique_ptr<alpaca::AlpacaMarketData> alpacaMarketData;
 
     constexpr double epsilon = 1e-9;
     constexpr uint64_t default_norm_factor = 100000000llu;
@@ -55,18 +53,51 @@ namespace alpaca {
         , isLiveMode_(!isPaperTrading)
     {
         s_orderIdGen = std::make_unique<ClientOrderIdGenerator>(*this);
+        getAllAssets();
+    }
+
+    void Client::getAllAssets()
+    {
+        auto asset_rsp = getAssets();
+        if (asset_rsp)
+        {
+            assets_ = std::move(asset_rsp.content());
+        }
+        else
+        {
+            LOG_ERROR("Failed to get assets %s\n", asset_rsp.what());
+        }
+        //auto option_contracts_rsp = getOptionContracts();
+        //if (option_contracts_rsp)
+        //{
+        //    option_contracts_ = std::move(option_contracts_rsp.content().contracts);
+        //}
+        //else
+        //{
+        //    LOG_ERROR("Failed to get option contracts %s\n", option_contracts_rsp.what());
+        //}
+
+        all_assets_.reserve(assets_.size() + option_contracts_.size());
+        for (auto& asset : assets_)
+        {
+            all_assets_.emplace(asset.symbol, &asset);
+        }
+        for (auto& option : option_contracts_)
+        {
+            all_assets_.emplace(option.symbol, &option);
+        }
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account, Client>(baseUrl_ + "/v2/account", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ACCOUNT);
+        return request<Account>(baseUrl_ + "account", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ACCOUNT);
     }
 
     Response<Balance> Client::getBalance() const {
-        return request<Balance, Client>(baseUrl_ + "/v2/account", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_BALANCE);
+        return request<Balance>(baseUrl_ + "account", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_BALANCE);
     }
 
     Response<Clock> Client::getClock() const {
-        auto rsp = request<Clock, Client>(baseUrl_ + "/v2/clock", headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_MISC);
+        auto rsp = request<Clock>(baseUrl_ + "clock", headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_MISC);
         if (rsp)
         {
             is_open_ = rsp.content().is_open;
@@ -76,12 +107,33 @@ namespace alpaca {
 
     Response<std::vector<Asset>> Client::getAssets(bool active_only) const {
         return active_only 
-            ? request<std::vector<Asset>, Client>(baseUrl_ + "/v2/assets?asset_class=us_equity&status=active", headers_.c_str()) 
-            : request<std::vector<Asset>, Client>(baseUrl_ + "/v2/assets?asset_class=us_equity", headers_.c_str());
+            ? request<std::vector<Asset>>(baseUrl_ + "assets?status=active", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC)
+            : request<std::vector<Asset>>(baseUrl_ + "assets", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
     }
 
     Response<Asset> Client::getAsset(const std::string& symbol) const {
-        return request<Asset, Client>(baseUrl_ + "/v2/assets/" + symbol, headers_.c_str());
+        return request<Asset>(baseUrl_ + "assets/" + symbol, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
+    }
+
+    Response<OptionContracts> Client::getOptionContracts(const std::string &symbols, bool active_only) const {
+        if (symbols.empty()) {
+            return { 1, "No underlying symbols specified." };
+        }
+        Response<OptionContracts> rsp;
+        do {
+            if (active_only) {
+                request<OptionContracts>(rsp, baseUrl_ + "options/contracts?status=active&limit=10000&underlying_symbols=" + symbols
+                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
+            }
+            request<OptionContracts>(rsp, baseUrl_ + "options/contracts&limit=10000&underlying_symbols=" + symbols
+                + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
+            BrokerProgress(0);
+        } while (!rsp.content().next_page_token.empty());
+        return rsp;
+    }
+
+    Response<OptionContract> Client::getOptionContract(const std::string& symbol) const {
+        return request<OptionContract>(baseUrl_ + "options/contracts/" + symbol, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
     }
 
     Response<std::vector<Order>> Client::getOrders(
@@ -112,7 +164,7 @@ namespace alpaca {
         }
 
         std::stringstream url;
-        url << baseUrl_ << "/v2/orders";
+        url << baseUrl_ << "orders";
         if (!queries.empty()) {
             url << "?";
             int32_t i = 0;
@@ -121,46 +173,50 @@ namespace alpaca {
             }
             url << queries[i];
         }
-        return request<std::vector<Order>, Client>(url.str(), headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_ORDER);
+        return request<std::vector<Order>>(url.str(), headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_ORDER);
     }
 
     Response<Order> Client::getOrder(const std::string& id, const bool nested) const {
-        auto url = baseUrl_ + "/v2/orders/" + id;
+        auto url = baseUrl_ + "orders/" + id;
         if (nested) {
             url += "?nested=true";
         }
 
         Response<Order> response;
-        return request<Order, Client>(url, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ORDER);
+        return request<Order>(url, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ORDER);
     }
 
     Response<Order> Client::getOrderByClientOrderId(const std::string& clientOrderId) const {
-        return request<Order, Client>(baseUrl_ + "/v2/orders:by_client_order_id?client_order_id=" + clientOrderId, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ORDER);
+        return request<Order>(baseUrl_ + "orders:by_client_order_id?client_order_id=" + clientOrderId, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ORDER);
     }
 
     Response<Order> Client::submitOrder(
-        const std::string& symbol,
+        const AssetBase* asset,
         const double quantity,
         const OrderSide side,
         const OrderType type,
-        const TimeInForce tif,
+        TimeInForce tif,
         const double limit_price,
         const double stop_price,
-        bool extended_hours,
         const std::string& client_order_id,
         double minFractionalQty,
         const OrderClass order_class,
         TakeProfitParams* take_profit_params,
         StopLossParams* stop_loss_params) const {
 
-        if (!is_open_ && !extended_hours) {
+        bool extended_hours = false;
+        if (!is_open_ && asset->asset_class == AssetClass::CRYPTO)
+        {
             return Response<Order>(1, "Market Close.");
         }
 
-        if (std::floor(quantity) != quantity) {
-            if (type != OrderType::Market || (tif != TimeInForce::Day)) {
+        if (asset->asset_class != AssetClass::CRYPTO) {
+            if (std::floor(quantity) != quantity && (type != OrderType::Market || tif != TimeInForce::Day)) {
                 return Response<Order>(1, "Fractional qty only for Market and Day order type");
             }
+        }
+        else if (tif != TimeInForce::GTC) {
+            tif = TimeInForce::IOC;
         }
 
         Response<Order> response;
@@ -173,7 +229,7 @@ namespace alpaca {
             writer.StartObject();
 
             writer.Key("symbol");
-            writer.String(symbol.c_str());
+            writer.String(asset->symbol.c_str());
 
             writer.Key("qty");
             if (std::floor(quantity) == quantity) {
@@ -185,7 +241,6 @@ namespace alpaca {
                 q.precision(compute_number_decimals(minFractionalQty));
                 q << std::fixed << fix_floating_error(quantity);
                 writer.String(q.str().c_str());
-                //writer.Double(fix_floating_error(quantity));
             }
 
             writer.Key("side");
@@ -207,9 +262,9 @@ namespace alpaca {
                 writer.String(std::to_string(stop_price).c_str());
             }
 
-            if (extended_hours) {
+            if (!is_open_) {
                 writer.Key("extended_hours");
-                writer.Bool(extended_hours);
+                writer.Bool(true);
             }
 
             internalOrderId = s_orderIdGen->nextOrderId();
@@ -261,11 +316,11 @@ namespace alpaca {
             writer.EndObject();
             auto data = s.GetString();
 
-            LOG_DEBUG_EXT(LogType::LT_ORDER, "--> POST %s/v2/orders\n", baseUrl_.c_str());
+            LOG_DEBUG_EXT(LogType::LT_ORDER, "--> POST %sorders\n", baseUrl_.c_str());
             if (data) {
                 LOG_TRACE_EXT(LogType::LT_ORDER, "Data:\n%s\n", data);
             }
-            response = request<Order, Client>(baseUrl_ + "/v2/orders", headers_.c_str(), data, LogLevel::L_DEBUG, LT_ORDER);
+            response = request<Order>(baseUrl_ + "orders", headers_.c_str(), data, LogLevel::L_DEBUG, LT_ORDER);
             if (!response && response.what() == "client_order_id must be unique") {
                 // clinet order id has been used.
                 // increment conflict count and try again.
@@ -327,12 +382,12 @@ namespace alpaca {
         std::string body("#PATCH ");
         body.append(s.GetString());
 
-        return request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), body.c_str(), LogLevel::L_DEBUG, LogType::LT_ORDER);
+        return request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), body.c_str(), LogLevel::L_DEBUG, LogType::LT_ORDER);
     }
 
     Response<Order> Client::cancelOrder(const std::string& id) const {
-        LOG_DEBUG("--> DELETE %s/v2/orders/%s\n", baseUrl_.c_str(), id.c_str());
-        auto response = request<Order, Client>(baseUrl_ + "/v2/orders/" + id, headers_.c_str(), "#DELETE", LogLevel::L_DEBUG, LogType::LT_ORDER);
+        LOG_DEBUG("--> DELETE %sorders/%s\n", baseUrl_.c_str(), id.c_str());
+        auto response = request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), "#DELETE", LogLevel::L_DEBUG, LogType::LT_ORDER);
         if (!response) {
             // Alpaca cancelOrder not return a object
             Order* order;
@@ -352,10 +407,10 @@ namespace alpaca {
     }
 
     Response<Position> Client::getPosition(const std::string& symbol) const {
-        return request<Position, Client>(baseUrl_ + "/v2/positions/" + symbol, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_POSITION);
+        return request<Position>(baseUrl_ + "positions/" + symbol, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_POSITION);
     }
 
     Response<std::vector<Position>> Client::getPositions() const {
-        return request<std::vector<Position>, Client>(baseUrl_ + "/v2/positions", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_POSITION);
+        return request<std::vector<Position>>(baseUrl_ + "positions", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_POSITION);
     }
 } // namespace alpaca

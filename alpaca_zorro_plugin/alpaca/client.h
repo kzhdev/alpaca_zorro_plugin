@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "alpaca/account.h"
 #include "alpaca/asset.h"
+#include "alpaca/option_contract.h"
 #include "market_data/bars.h"
 #include "market_data/quote.h"
 #include "alpaca/clock.h"
@@ -16,9 +17,7 @@
 
 namespace alpaca {
 
-    class MarketData;
-
-    double fix_floating_error(double value, int32_t norm_factor = 1e8);
+    extern double fix_floating_error(double value, int32_t norm_factor = 1e9);
 
     class Client final {
     public:
@@ -34,6 +33,11 @@ namespace alpaca {
             return apiKey_;
         }
 
+        const std::unordered_map<std::string, AssetBase*> allAssets() const noexcept
+        {
+            return all_assets_;
+        }
+
         Response<Account> getAccount() const;
         Response<Balance> getBalance() const;
 
@@ -41,6 +45,9 @@ namespace alpaca {
 
         Response<std::vector<Asset>> getAssets(bool active_only = true) const;
         Response<Asset> getAsset(const std::string& symbol) const;
+
+        Response<OptionContracts> getOptionContracts(const std::string &symbols = "", bool active_only = true) const;
+        Response<OptionContract> getOptionContract(const std::string& symbol) const;
 
         Response<std::vector<Order>> getOrders(
             const ActionStatus status = ActionStatus::Open,
@@ -54,14 +61,13 @@ namespace alpaca {
         Response<Order> getOrderByClientOrderId(const std::string& clientOrderId) const;
 
         Response<Order> submitOrder(
-            const std::string& symbol,
+            const AssetBase* asset,
             const double quantity,
             const OrderSide side,
             const OrderType type,
             const TimeInForce tif,
             const double limit_price = NAN,
             const double stop_price = NAN,
-            bool extended_hours = false,
             const std::string& client_order_id = "",
             double minFractionalQty = 1,
             const OrderClass order_class = OrderClass::Simple,
@@ -82,11 +88,17 @@ namespace alpaca {
         Response<std::vector<Position>> getPositions() const;
 
     private:
+        void getAllAssets();
+
+    private:
         const std::string baseUrl_;
         const std::string apiKey_;
         const std::string headers_;
         mutable bool is_open_ = true;
         const bool isLiveMode_;
+        std::vector<Asset> assets_;
+        std::vector<OptionContract> option_contracts_;
+        std::unordered_map<std::string, AssetBase*> all_assets_;
     };
 
 } // namespace alpaca

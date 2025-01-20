@@ -33,8 +33,8 @@ namespace alpaca {
         LT_ALL = LT_ALL_WITHOUT_WEB_SOCKET | LT_WEB_SOCKET_DATA,
     };
 
-    static constexpr char* to_string(LogLevel level) {
-        constexpr char* s_levels[] = {
+    static constexpr const char* const to_string(LogLevel level) {
+        constexpr const char* const s_levels[] = {
             "OFF", "ERROR", "WARNING", "INFO", "DEBUG", "TRACE"
         };
         return s_levels[level];

@@ -45,7 +45,7 @@ namespace alpaca {
 	private:
 		template<typename> friend class Response;
 
-		template<typename CallerT, typename T>
+		template<typename T>
 		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<double>("avg_entry_price", avg_entry_price);
 			parser.get<double>("change_today", change_today);
@@ -58,7 +58,7 @@ namespace alpaca {
 			parser.get<double>("unrealized_pl", unrealized_pl);
 			parser.get<double>("unrealized_pl", unrealized_plpc);
 			parser.get<int32_t>("qty", qty);
-			asset_class = to_assetClass(parser.get<std::string>("asset_class"));
+			asset_class = toAssetClass(parser.get<std::string>("asset_class"));
 			side = to_positionSide(parser.get<std::string>("side"));
 			parser.get<std::string>("asset_id", asset_id);
 			parser.get<std::string>("exchange", exchange);

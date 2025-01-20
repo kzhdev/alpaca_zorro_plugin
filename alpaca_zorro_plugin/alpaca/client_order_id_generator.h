@@ -80,18 +80,14 @@ namespace alpaca {
                                     continue;
                                 }
 
-                                LOG_DEBUG("cleintOrderId=%s\n", order.client_order_id.c_str());
+                                LOG_DEBUG("clientOrderId=%s\n", order.client_order_id.c_str());
 
                                 if (order.internal_id) {
                                     int32_t base = order.internal_id / 100000;
-                                    if (base != newBase) {
-                                        // New day reset counter
-                                        last_order_id = 1;
-                                        conflict_count = 0;
-                                    }
-                                    else {
-                                        conflict_count = (order.internal_id % 100000) / 10000;
-                                        last_order_id = order.internal_id % 10000;
+                                    if (base == newBase)
+                                    {
+                                        conflict_count = std::max<int32_t>(conflict_count, (order.internal_id % 100000) / 10000);
+                                        last_order_id = std::max<int32_t>(last_order_id, order.internal_id % 10000);
                                     }
                                     break;
                                 }

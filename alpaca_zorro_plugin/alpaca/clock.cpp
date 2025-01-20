@@ -24,6 +24,13 @@ namespace alpaca{
         return static_cast<__time32_t>(tp.time_since_epoch().count());
     }
 
+    int64_t parseDate(const std::string& str_date) {
+        std::istringstream iss{ str_date };
+        date::sys_seconds tp;
+        iss >> date::parse("%F", tp);
+        return static_cast<int64_t>(tp.time_since_epoch().count());
+    }
+
     int32_t getTimeZoneOffset(const std::string& timestamp) {
         using namespace date;
         if (timestamp.size() > 19) {
@@ -43,8 +50,7 @@ namespace alpaca{
     }
 
     std::string timeToString(__time32_t time) {
-        using namespace date;
-        return format("%FT%TZ", date::sys_seconds{ std::chrono::seconds{ time } });
+        return date::format("%FT%TZ", date::sys_seconds{ std::chrono::seconds{ time } });
     }
 
 }

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "rapidjson/document.h"
 #include <vector>
 
@@ -53,6 +55,7 @@ namespace alpaca {
                 }
                 if (json[name].IsString()) {
                     value = atoi(json[name].GetString());
+                    return true;
                 }
             }
             return false;
@@ -177,11 +180,46 @@ namespace alpaca {
         }
 
         template<typename U>
-        U get(const char* name) const {
-            if (json.HasMember(name) && json[name].IsString()) {
-                return json[name].GetString();
-            }
-            return "";
+        U get(const char* name) const;
+
+        template<>
+        std::string get<std::string>(const char* name) const {
+            return json[name].GetString();
+        }
+
+        template<>
+        int32_t get<int32_t>(const char* name) const {
+            return json[name].GetInt();
+        }
+
+        template<>
+        uint32_t get<uint32_t>(const char* name) const {
+            return json[name].GetUint();
+        }
+
+        template<>
+        int64_t get<int64_t>(const char* name) const {
+            return json[name].GetInt64();
+        }
+
+        template<>
+        uint64_t get<uint64_t>(const char* name) const {
+            return json[name].GetUint64();
+        }
+
+        template<>
+        bool get<bool>(const char* name) const {
+            return json[name].GetBool();
+        }
+
+        template<>
+        double get<double>(const char* name) const {
+            return json[name].GetDouble();
+        }
+
+        template<>
+        float get<float>(const char* name) const {
+            return json[name].GetFloat();
         }
     };
 }

@@ -29,8 +29,8 @@ namespace alpaca {
 		friend struct Snapshot;
 		friend struct LastQuotes;
 
-		template<typename CallerT, typename T>
-		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
+		template<typename T>
+		std::pair<int, std::string> fromJSON(const T& parser) {
 			// TODO: Fix exchange parsing
 			parser.get<double>("ap", ask_price);
 			parser.get<int>("as", ask_size);
@@ -38,18 +38,6 @@ namespace alpaca {
 			parser.get<int>("bs", bid_size);
 			parser.get<std::string>("t", sTime);
 			timestamp = parseTimeStamp2(sTime);
-			return std::make_pair(0, "OK");
-		}
-
-		template<typename CallerT, typename T>
-		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class Polygon>::value>::type* = 0) {
-			parser.get<double>("askprice", ask_price);
-			parser.get<int>("asksize", ask_size);
-			//parser.get<int>("askexchange", ask_exchange);
-			parser.get<double>("bidprice", bid_price);
-			parser.get<int>("bidsize", bid_size);
-			//parser.get<int>("bidexchange", bid_exchange);
-			parser.get<uint64_t>("timestamp", timestamp);
 			return std::make_pair(0, "OK");
 		}
 	};
@@ -62,14 +50,14 @@ namespace alpaca {
 	private:
 		template<typename> friend class Response;
 		
-		template<typename CallerT, typename T> 
-		std::pair<int, std::string> fromJSON(const T& parser/*, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0*/) {
+		template<typename T> 
+		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<std::string>("symbol", symbol);
 
 			if (parser.json.HasMember("quote") && parser.json["quote"].IsObject()) {
 				auto obj = parser.json["quote"].GetObject();
 				Parser<decltype(parser.json["quote"].GetObject())> p(obj);
-				quote.fromJSON<CallerT>(p);
+				quote.fromJSON(p);
 			}
 			return std::make_pair(0, "OK");
 		}
@@ -83,7 +71,7 @@ namespace alpaca {
 	private:
 		template <typename> friend class Response;
 
-		template <typename CallerT, typename T>
+		template <typename T>
 		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<std::string>("symbol", symbol);
 
@@ -93,7 +81,7 @@ namespace alpaca {
 					auto tradeJson = trade.GetObject();
 					Parser<decltype(tradeJson)> p(tradeJson);
 					Quote t;
-					t.fromJSON<CallerT>(p);
+					t.fromJSON(p);
 					quotes.emplace_back(std::move(t));
 				}
 			}
@@ -107,14 +95,14 @@ namespace alpaca {
 	private:
 		template <typename> friend class Response;
 
-		template <typename CallerT, typename T>
+		template <typename T>
 		std::pair<int, std::string> fromJSON(const T& parser) {
 			if (parser.json.HasMember("quotes")) {
 				for (const auto& quoteJson : parser.json["quotes"].GetObject()) {
 					auto quoteObj = quoteJson.value.GetObject();
 					Parser<decltype(quoteObj)> p(quoteObj);
 					Quote quote;
-					quote.fromJSON<CallerT>(p);
+					quote.fromJSON(p);
 					quotes.emplace(quoteJson.name.GetString(), std::move(quote));
 				}
 			}

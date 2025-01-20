@@ -34,8 +34,8 @@ namespace alpaca {
         friend struct Trades;
         friend struct LastTrades;
 
-        template<typename CallerT, typename T>
-        std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
+        template<typename T>
+        std::pair<int, std::string> fromJSON(const T& parser) {
             parser.get<double>("p", price);
             parser.get<int>("s", size);
             parser.get<int>("i", trade_id);
@@ -43,14 +43,6 @@ namespace alpaca {
             parser.get<std::string>("t", sTime);
             timestamp = parseTimeStamp2(sTime);
             parser.get<std::string>("z", z);
-            return std::make_pair(0, "OK");
-        }
-
-        template<typename CallerT, typename T>
-        std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class Polygon>::value>::type* = 0) {
-            parser.get<double>("price", price);
-            parser.get<int>("size", size);
-            parser.get<uint64_t>("timestamp", timestamp);
             return std::make_pair(0, "OK");
         }
     };
@@ -62,14 +54,14 @@ namespace alpaca {
     private:
         template <typename> friend class Response;
 
-        template <typename CallerT, typename T>
+        template <typename T>
         std::pair<int, std::string> fromJSON(const T& parser) {
             parser.get<std::string>("symbol", symbol);
 
             if (parser.json.HasMember("trade") && parser.json["trade"].IsObject()) {
                 auto obj = parser.json["trade"].GetObject();
                 Parser<decltype(parser.json["trade"].GetObject())> p(obj);
-                trade.fromJSON<CallerT>(p);
+                trade.fromJSON(p);
             }
 
             return std::make_pair(0, "OK");
@@ -84,7 +76,7 @@ namespace alpaca {
     private:
         template <typename> friend class Response;
 
-        template <typename CallerT, typename T>
+        template <typename T>
         std::pair<int, std::string> fromJSON(const T& parser) {
             parser.get<std::string>("symbol", symbol);
 
@@ -94,7 +86,7 @@ namespace alpaca {
                     auto tradeJson = trade.GetObject();
                     Parser<decltype(tradeJson)> p(tradeJson);
                     Trade t;
-                    t.fromJSON<CallerT>(p);
+                    t.fromJSON(p);
                     trades.emplace_back(std::move(t));
                 }
             }
@@ -108,14 +100,14 @@ namespace alpaca {
     private:
         template <typename> friend class Response;
 
-        template <typename CallerT, typename T>
+        template <typename T>
         std::pair<int, std::string> fromJSON(const T& parser) {
             if (parser.json.HasMember("trades")) {
                 for (auto& tradeJson : parser.json["trades"].GetObject()) {
                     auto tradeObj = tradeJson.value.GetObject();
                     Parser<decltype(tradeObj)> p(tradeObj);
                     Trade t;
-                    t.fromJSON<CallerT>(p);
+                    t.fromJSON(p);
                     trades.emplace(tradeJson.name.GetString(), std::move(t));
                 }
             }

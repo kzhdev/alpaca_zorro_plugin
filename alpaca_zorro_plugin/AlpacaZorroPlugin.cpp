@@ -18,10 +18,14 @@
 #include <fstream>
 #include <type_traits>
 #include <unordered_set>
+#include <array>
 
 #include "alpaca/client.h"
+#include "alpaca/asset.h"
 #include "logger.h"
-#include "market_data/alpaca_market_data.h"
+#include "market_data/stock_market_data.h"
+#include "market_data/option_market_data.h"
+#include "market_data/crypto_market_data.h"
 #include "config.h"
 #include "websockets/alpaca_md_ws.h"
 #include "AlpacaBrokerCommands.h"
@@ -29,12 +33,8 @@
 #define PLUGIN_VERSION	2
 
 using namespace alpaca;
-using namespace zorro::websocket;
+using namespace websocket_proxy;
 
-#define ALPACA_PAPER_BASIC_DATA_WS_URL "wss://stream.data.sandbox.alpaca.markets/v2/iex"
-#define ALPACA_PAPER_PRO_DATA_WS_URL "wss://stream.data.sandbox.alpaca.markets/v2/sip"
-#define ALPACA_BASIC_DATA_WS_URL "wss://stream.data.alpaca.markets/v2/iex"
-#define ALPACA_PRO_DATA_WS_URL "wss://stream.data.alpaca.markets/v2/sip"
 #define ALPACA_STREAM_URL "wss://api.alpaca.markets/stream"
 
 namespace {
@@ -42,30 +42,44 @@ namespace {
     std::string s_asset;
     int s_multiplier = 1;
     std::string s_nextOrderText;
-    std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
+    //std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
+    std::unordered_map<std::string, Order> s_mapOrderByUUID;
     Config &s_config = Config::get();
     uint32_t alpaca_md_ws_id = 0;
     double s_amount = 1;
-    std::unordered_map<std::string, Asset> s_mapAssets;
-    std::unordered_set<char*> s_activeAssets;
-    std::string s_subscribedAssets;
+    std::unordered_set<AssetBase*> s_activeAssets;
+    std::array<std::string, AssetClass::__count__> s_subscribedAssets;
     uint64_t s_lastRequestTime = 0;
-    Response<LastQuotes> s_lastQuotes{ 1, "No Data"};
-    Response<LastTrades> s_lastTrades{ 1, "No Data"};
+    std::array<Response<LastQuotes>, AssetClass::__count__> s_lastQuotes{ Response<LastQuotes>{1, "No Data"}, Response<LastQuotes>{1, "No Data"}, Response<LastQuotes>{1, "No Data"} };
+    std::array<Response<LastTrades>, AssetClass::__count__> s_lastTrades{ Response<LastTrades>{1, "No Data"}, Response<LastTrades>{1, "No Data"}, Response<LastTrades>{1, "No Data"} };
     constexpr uint64_t REQUEST_BANNING_TIME = 333;  // 333 ms;
     constexpr double EPSILON = 0.000000001;
     bool isZero(double val) noexcept {
         return val > 0 ? val < EPSILON : val > -EPSILON;
     }
+    std::string s_lastOrderUUID;
+    std::string s_nextOrderUUID;
 }
 
 namespace alpaca
 {
     std::unique_ptr<Client> client = nullptr;
-    std::unique_ptr<AlpacaMarketData> pMarketData = nullptr;
-    std::unique_ptr<AlpacaMdWs> wsClient = nullptr;
-    std::unique_ptr<AlpacaMdWs> wsCryptoClient = nullptr;
+    std::array<std::unique_ptr<MarketData>, AssetClass::__count__> pMarketData;
+    std::unique_ptr<OptionMarketData> pOptionMarketData = nullptr;
+    std::unique_ptr<AlpacaMdWs> wsClient;
     std::unique_ptr<Throttler> s_throttler;
+    std::string account_number;
+
+    inline AssetBase* getAsset(const std::string &symbol)
+    {
+        auto& assets = client->allAssets();
+        auto iter = assets.find(symbol);
+        if (iter != assets.end())
+        {
+            return iter->second;
+        }
+        return nullptr;
+    }
     
     ////////////////////////////////////////////////////////////////
     DLLFUNC_C int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress)
@@ -74,6 +88,9 @@ namespace alpaca
         (FARPROC&)BrokerError = fpError;
         (FARPROC&)BrokerProgress = fpProgress;
         Logger::instance().init("Alpaca");
+        if (s_config.useWebsocket) {
+            wsClient = std::make_unique<AlpacaMdWs>();
+        }
         return PLUGIN_VERSION;
     }
 
@@ -83,10 +100,6 @@ namespace alpaca
         (FARPROC&)http_status = fpStatus;
         (FARPROC&)http_result = fpResult;
         (FARPROC&)http_free = fpFree;
-
-        if (s_config.useWebsocket) {
-            wsClient = std::make_unique<AlpacaMdWs>();
-        }
     }
 
     DLLFUNC_C int BrokerLogin(char* User, char* Pwd, char* Type, char* Account)
@@ -94,7 +107,7 @@ namespace alpaca
         if (!User) // log out
         {
             if (wsClient) {
-                wsClient->logout();
+                wsClient->logoutAll();
             }
             alpaca_md_ws_id = 0;
             return 0;
@@ -104,10 +117,9 @@ namespace alpaca
         s_nextOrderText = "";
         s_config.priceType = 0;
         s_amount = 1.;
-        s_subscribedAssets = "";
+        s_subscribedAssets = { "", "", "" };
         s_config.adjustment = Adjustment::all;
-        s_activeAssets.clear();
-       
+        s_activeAssets.clear();        
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
         Logger::instance().setLevel(static_cast<LogLevel>(s_config.logLevel));
@@ -117,7 +129,9 @@ namespace alpaca
             s_throttler = std::make_unique<Throttler>(User);
             client = std::make_unique<Client>(User, Pwd, isPaperTrading);
 
-            pMarketData = std::make_unique<AlpacaMarketData>(client->headers(), s_config.alpacaPaidPlan);
+            pMarketData[AssetClass::US_EQUITY] = std::make_unique<StockMarketData>(client->headers());
+            pMarketData[AssetClass::CRYPTO] = std::make_unique<CryptoMarketData>(client->headers());
+            pMarketData[AssetClass::OPTIONS] = std::make_unique<OptionMarketData>(client->headers());
 
             if (s_config.alpacaPaidPlan) {
                 BrokerError("Use Alpaca Pro Market Data");
@@ -140,11 +154,22 @@ namespace alpaca
             LOG_INFO("Live mode\n");
         }
 
-        //attempt login
-        if (wsClient)
-        {
-            if (!wsClient->login(User, Pwd, s_config.alpacaPaidPlan ? ALPACA_PRO_DATA_WS_URL : ALPACA_BASIC_DATA_WS_URL)) {
-                BrokerError("Unable to open Alpaca websocket. Prices will be pulled from REST API.");
+        if (s_config.useWebsocket) {
+            try
+            {
+                if (!wsClient)
+                {
+                    wsClient = std::make_unique<AlpacaMdWs>();
+                }
+                wsClient->init(User, Pwd);
+            }
+            catch (std::runtime_error& err)
+            {
+                BrokerError(err.what());
+                LOG_ERROR(err.what());
+            }
+            catch (...)
+            {
             }
         }
 
@@ -160,10 +185,9 @@ namespace alpaca
             BrokerError(("Fractional qty disabled. Invalid config: AlpacaFranctionalLotAmount must be less than 1. AlpacaFranctionalLotAmount=" + std::to_string(s_config.fractionalLotAmount)).c_str());
         }
 
-        const auto& account = response.content().account_number;
-        BrokerError(("Account " + account).c_str());
-        memcpy(Account, account.c_str(), 1024);
-        sprintf_s(Account, 1024, account.c_str());
+        account_number = response.content().account_number;
+        BrokerError(("Account " + account_number).c_str());
+        sprintf_s(Account, 1024, account_number.c_str());
         return 1;
     }
 
@@ -189,54 +213,82 @@ namespace alpaca
 
         auto& clock = response.content();
         *pTimeGMT = convertTime(clock.timestamp);
+        if (!s_subscribedAssets[AssetClass::CRYPTO].empty())
+        {
+            // crypto trading open 24 hours
+            return 2;
+        }
         return clock.is_open ? 2 : 1;
     }
 
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
-        auto iter = s_activeAssets.find(Asset);
+        AssetBase* asset = nullptr;
+
+        {
+            auto &assets = client->allAssets();
+            auto iter = assets.find(Asset);
+            if (iter == assets.end())
+            {
+                return 0;
+            }
+            asset = iter->second;
+        }
+        auto asset_class = asset->asset_class;
+
+        auto iter = s_activeAssets.find(asset);
         if (iter == s_activeAssets.end())
         {
             BrokerError(("Subscribe " + std::string(Asset)).c_str());
-            s_activeAssets.emplace(Asset);
-            if (s_subscribedAssets.empty())
+            s_activeAssets.emplace(asset);
+            if (s_subscribedAssets[asset_class].empty())
             {
-                s_subscribedAssets.append(Asset);
+                s_subscribedAssets[asset_class].append(Asset);
             }
             else
             {
-                s_subscribedAssets.append(",").append(Asset);
+                s_subscribedAssets[asset_class].append(",").append(Asset);
             }
 
-            if (wsClient && wsClient->authenticated() && !wsClient->isSubscribed(Asset))
+            if (wsClient && !wsClient->isSubscribed(asset))
             {
-                if (wsClient->subscribeAsset(Asset))
+                if (!wsClient->authenticated(asset_class))
                 {
-                    LOG_DEBUG("%s subscribed\n", Asset);
-
-                    // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
-                    if (s_config.priceType == 2)
-                    {
-                        auto last_trade = pMarketData->getLastTrade(Asset);
-                        if (last_trade)
-                        {
-                            wsClient->setLastTrade(last_trade.content());
-                        }
-                    }
-                    else
-                    {
-                        auto last_quote = pMarketData->getLastQuote(Asset);
-                        if (last_quote)
-                        {
-                            wsClient->setLastQuote(last_quote.content());
-                        }
+                    if (!wsClient->open(asset_class)) {
+                        BrokerError(("Unable to open Alpaca websocket " + wsClient->url(asset_class) + ". Prices will be pulled from REST API.").c_str());
                     }
                 }
-                else 
+
+                if (wsClient->authenticated(asset_class))
                 {
-                    LOG_DEBUG("Failed to subscribed %s\n", Asset);
-                    BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
-                    wsClient.reset();
+                    if (wsClient->subscribeAsset(asset))
+                    {
+                        LOG_DEBUG("%s subscribed\n", Asset);
+
+                        // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
+                        if (s_config.priceType == 2)
+                        {
+                            auto last_trade = pMarketData[asset_class]->getLastTrade(Asset);
+                            if (last_trade)
+                            {
+                                wsClient->setLastTrade(asset, last_trade.content());
+                            }
+                        }
+                        else
+                        {
+                            auto last_quote = pMarketData[asset_class]->getLastQuote(Asset);
+                            if (last_quote)
+                            {
+                                wsClient->setLastQuote(asset, last_quote.content());
+                            }
+                        }
+                    }
+                    else 
+                    {
+                        LOG_DEBUG("Failed to subscribed %s\n", Asset);
+                        BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
+                        wsClient.reset();
+                    }
                 }
             }
         }
@@ -249,9 +301,9 @@ namespace alpaca
         if (s_config.priceType == 2)
         {
             Trade* trade = nullptr;
-            if (wsClient && wsClient->authenticated())
+            if (wsClient && wsClient->authenticated(asset_class))
             {
-                trade = wsClient->getLastTrade(Asset);
+                trade = wsClient->getLastTrade(asset);
             }
             if (trade)
             {
@@ -260,20 +312,20 @@ namespace alpaca
             else 
             {
                 auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                if (!s_lastTrades || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME)
+                if (!s_lastTrades[asset_class] || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME)
                 {
-                    s_lastTrades = pMarketData->getLastTrades(s_subscribedAssets);
-                    if (!s_lastTrades) {
-                        BrokerError(("Failed to get lastTrades for " + std::string(s_subscribedAssets) +
-                            " error: " + s_lastTrades.what()).c_str());
+                    s_lastTrades[asset_class] = pMarketData[asset->asset_class]->getLastTrades(s_subscribedAssets[asset_class]);
+                    if (!s_lastTrades[asset_class]) {
+                        BrokerError(("Failed to get lastTrades for " + std::string(s_subscribedAssets[asset_class]) +
+                            " error: " + s_lastTrades[asset_class].what()).c_str());
                         return 0;
                     }
                     s_lastRequestTime = now;
                 }
                 
-                if (s_lastTrades)
+                if (s_lastTrades[asset_class])
                 {
-                    auto& lastTrades = s_lastTrades.content().trades;
+                    auto& lastTrades = s_lastTrades[asset_class].content().trades;
                     auto it = lastTrades.find(Asset);
                     if (it != lastTrades.end())
                     {
@@ -282,7 +334,7 @@ namespace alpaca
                     else
                     {
                         assert(false);
-                        auto response = pMarketData->getLastTrade(Asset);
+                        auto response = pMarketData[asset->asset_class]->getLastTrade(Asset);
                         if (!response)
                         {
                             BrokerError(("Failed to get lastTrade " + std::string(Asset) +
@@ -299,9 +351,9 @@ namespace alpaca
         else
         {
             Quote* quote = nullptr;
-            if (wsClient && wsClient->authenticated())
+            if (wsClient && wsClient->authenticated(asset_class))
             {
-                quote = wsClient->getLastQuote(Asset);
+                quote = wsClient->getLastQuote(asset);
             }
             if (quote)
             {
@@ -317,21 +369,21 @@ namespace alpaca
             }
             else {
                 auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                if (!s_lastQuotes || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME)
+                if (!s_lastQuotes[asset_class] || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME)
                 {
-                    s_lastQuotes = pMarketData->getLastQuotes(s_subscribedAssets);
-                    if (!s_lastQuotes)
+                    s_lastQuotes[asset_class] = pMarketData[asset_class]->getLastQuotes(s_subscribedAssets[asset_class]);
+                    if (!s_lastQuotes[asset_class])
                     {
-                        BrokerError(("Failed to get lastQuotes for " + std::string(s_subscribedAssets) +
-                            " error: " + s_lastQuotes.what()).c_str());
+                        BrokerError(("Failed to get lastQuotes for " + std::string(s_subscribedAssets[asset_class]) +
+                            " error: " + s_lastQuotes[asset_class].what()).c_str());
                         return 0;
                     }
                     s_lastRequestTime = now;
                 }
 
-                if (s_lastQuotes)
+                if (s_lastQuotes[asset_class])
                 {
-                    auto& lastQuotes = s_lastQuotes.content().quotes;
+                    auto& lastQuotes = s_lastQuotes[asset_class].content().quotes;
                     auto it = lastQuotes.find(Asset);
                     if (it != lastQuotes.end())
                     {
@@ -347,8 +399,7 @@ namespace alpaca
                     }
                     else 
                     {
-                        assert(false);
-                        auto response = pMarketData->getLastQuote(Asset);
+                        auto response = pMarketData[asset_class]->getLastQuote(Asset);
                         if (!response)
                         {
                             BrokerError(("Failed to get lastQuote " + std::string(Asset) +
@@ -372,32 +423,10 @@ namespace alpaca
 
         if (pLotAmount)
         {
-            auto iter = s_mapAssets.find(Asset);
-            if (iter == s_mapAssets.end())
+            if (asset_class == AssetClass::US_EQUITY)
             {
-                auto response = client->getAsset(Asset);
-                if (response)
-                {
-                    auto& asset = response.content();
-                    s_mapAssets.emplace(Asset, asset);
-                    if (asset.fractionable)
-                    {
-                        *pLotAmount = s_config.fractionalLotAmount;
-                    }
-                    else
-                    {
-                        *pLotAmount = 1;
-                    }
-                }
-                else
-                {
-                    *pLotAmount = 1;
-                }
-            }
-            else
-            {
-                auto& asset = iter->second;
-                if (asset.fractionable)
+                auto* equity = reinterpret_cast<alpaca::Asset*>(asset);
+                if (equity->fractionable)
                 {
                     *pLotAmount = s_config.fractionalLotAmount;
                 }
@@ -405,6 +434,11 @@ namespace alpaca
                 {
                     *pLotAmount = 1;
                 }
+            }
+            else if (asset_class == AssetClass::CRYPTO)
+            {
+                auto* crypto = reinterpret_cast<alpaca::Asset*>(asset);
+                *pLotAmount = crypto->min_order_size;
             }
         }
 
@@ -424,6 +458,15 @@ namespace alpaca
     DLLFUNC_C int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd, int nTickMinutes, int nTicks, T6* ticks)
     {
         if (!client || !Asset || !ticks || !nTicks) return 0;
+
+        auto& assets = client->allAssets();
+        auto iter = assets.find(Asset);
+        if (iter == assets.end())
+        {
+            return 0;
+        }
+
+        auto asset_class = iter->second->asset_class;
 
         if (!nTickMinutes) {
             BrokerError("Tick data download is not supported by Alpaca.");
@@ -460,7 +503,7 @@ namespace alpaca
         while(true) {
             LOG_DEBUG("BrokerHistory %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
 
-            auto response = pMarketData->getBars(Asset, start, end, nTickMinutes, nTicks, s_config.priceType);
+            auto response = pMarketData[asset_class]->getBars(Asset, start, end, nTickMinutes, nTicks, s_config.priceType);
             if (!response) {
                 if (response.getCode() == 40010001 && response.what() == "end is too late for subscription") {
                     // Alpaca V2 Basic Plan has 15 min delay. Retry to find the last data allowed.
@@ -516,8 +559,8 @@ namespace alpaca
         }
         else {
             dLimit = NAN;
-            qty *= s_amount;
         }
+        qty *= s_amount;
 
         if (dStopDist) {
 
@@ -526,7 +569,8 @@ namespace alpaca
 
         LOG_DEBUG("BrokerBuy2 %s orderText=%s nAmount=%d qty=%f dStopDist=%f limit=%f\n", Asset, s_nextOrderText.c_str(), nAmount, qty, dStopDist, dLimit);
 
-        auto response = client->submitOrder(Asset, qty, side, type, s_tif, dLimit, NAN, false, s_nextOrderText, s_config.fractionalLotAmount);
+        auto asset = client->allAssets().at(Asset);
+        auto response = client->submitOrder(asset, qty, side, type, s_tif, dLimit, NAN, s_nextOrderText, asset->asset_class == AssetClass::US_EQUITY ? s_config.fractionalLotAmount : s_amount);
         if (!response) {
             BrokerError(response.what().c_str());
             // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
@@ -536,8 +580,10 @@ namespace alpaca
 
         auto* order = &response.content();
         auto exchOrdId = order->id;
-        auto internalOrdId = order->internal_id;
-        s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
+        //auto internalOrdId = order->internal_id;
+        //s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
+        s_mapOrderByUUID.emplace(exchOrdId, *order);
+        s_lastOrderUUID = exchOrdId;
 
         if (order->filled_qty) {
             if (pPrice) {
@@ -548,7 +594,8 @@ namespace alpaca
             }
             // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
             s_amount = 1.;
-            return internalOrdId;
+            //return internalOrdId;
+            return -1;
         }
         
         if (pFill)
@@ -557,7 +604,8 @@ namespace alpaca
         }
 
         if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
-            return internalOrdId;
+            //return internalOrdId;
+            return -1;
         }
 
         // Limit order has not accepted by Exchange yet
@@ -569,7 +617,8 @@ namespace alpaca
                 break;
             }
             order = &response2.content();
-            s_mapOrderByClientOrderId[internalOrdId] = *order;
+            //s_mapOrderByClientOrderId[internalOrdId] = *order;
+            s_mapOrderByUUID[exchOrdId] = *order;
 
             LOG_DEBUG_EXT(LT_ORDER, "Order status: %s\n", order->status.c_str());
 
@@ -605,7 +654,8 @@ namespace alpaca
         } while (!order->filled_qty);
         // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
         s_amount = 1.;
-        return internalOrdId;
+        //return internalOrdId;
+        return -1;
     }
 
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
@@ -617,34 +667,67 @@ namespace alpaca
         
         Response<Order> response;
         Order* order = nullptr;
-        auto iter = s_mapOrderByClientOrderId.find(nTradeID);
-        if (iter == s_mapOrderByClientOrderId.end()) {
+        //auto iter = s_mapOrderByClientOrderId.find(nTradeID);
+        //if (iter == s_mapOrderByClientOrderId.end()) {
+        //    // unknown order?
+        //    std::stringstream clientOrderId;
+        //    clientOrderId << "ZORRO_";
+        //    if (!s_nextOrderText.empty()) {
+        //        clientOrderId << s_nextOrderText << "_";
+        //    }
+        //    clientOrderId << nTradeID;
+        //    response = client->getOrderByClientOrderId(clientOrderId.str());
+        //    if (!response) {
+        //        BrokerError(response.what().c_str());
+        //        return NAY;
+        //    }
+        //    order = &response.content();
+        //    s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
+        //}
+        //else {
+        //    order = &iter->second;
+        //    if (order->status != "filled" && order->status != "canceled" && order->status != "expired") {
+        //        response = client->getOrder(iter->second.id);
+        //        if (!response) {
+        //            BrokerError(response.what().c_str());
+        //            return NAY;
+        //        }
+        //        order = &response.content();
+        //        s_mapOrderByClientOrderId[nTradeID] = *order;
+        //    }
+        //}
+        
+        if (s_nextOrderUUID.empty())
+        {
+            BrokerError("BrokerTrade: Order UUID not specifid");
+            return NAY;
+        }
+        auto iter = s_mapOrderByUUID.find(s_nextOrderUUID);
+        if (iter == s_mapOrderByUUID.end()) {
             // unknown order?
-            std::stringstream clientOrderId;
-            clientOrderId << "ZORRO_";
-            if (!s_nextOrderText.empty()) {
-                clientOrderId << s_nextOrderText << "_";
-            }
-            clientOrderId << nTradeID;
-            response = client->getOrderByClientOrderId(clientOrderId.str());
+            response = client->getOrder(s_nextOrderUUID, false);
             if (!response) {
                 BrokerError(response.what().c_str());
                 return NAY;
             }
             order = &response.content();
-            s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
+            iter = s_mapOrderByUUID.emplace(s_nextOrderUUID, response.content()).first;
         }
-        else {
-            order = &iter->second;
-            if (order->status != "filled" && order->status != "canceled" && order->status != "expired") {
-                response = client->getOrder(iter->second.id);
-                if (!response) {
-                    BrokerError(response.what().c_str());
-                    return NAY;
-                }
-                order = &response.content();
-                s_mapOrderByClientOrderId[nTradeID] = *order;
+
+        order = &iter->second;
+        if (order->status == "canceled" && order->status == "expired")
+        {
+            return NAY - 1;
+        }
+
+        if (order->status != "filled" || order->filled_qty != order->qty) {
+            response = client->getOrder(iter->second.id);
+            if (!response) {
+                BrokerError(response.what().c_str());
+                return NAY;
             }
+            order = &response.content();
+            s_mapOrderByUUID[s_nextOrderUUID] = *order;
         }
 
         if (pOpen) {
@@ -654,41 +737,51 @@ namespace alpaca
         if (pProfit && order->filled_qty) {
             Quote* quote = nullptr;
             if (wsClient) {
-                quote = wsClient->getLastQuote(order->symbol);
+                auto* asset = getAsset(order->symbol);
+                if (asset)
+                {
+                    quote = wsClient->getLastQuote(asset);
+                }
             }
             if (quote) {
                 *pProfit = order->side == OrderSide::Buy ? ((quote->ask_price - order->filled_avg_price) * order->filled_qty) : (order->filled_avg_price - quote->bid_price) * order->filled_qty;
             }
             else {
-                auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                if (!s_lastQuotes || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME) {
-                    s_lastQuotes = pMarketData->getLastQuotes(s_subscribedAssets);
-                    if (s_lastQuotes) {
-                        s_lastRequestTime = now;
-                    }
-                    else {
-                        BrokerError(("Failed to get lastQuotes for " + std::string(s_subscribedAssets) +
-                            " error: " + s_lastQuotes.what()).c_str());
-                    }
-                }
-
-                if (s_lastQuotes) {
-                    auto& lastQuotes = s_lastQuotes.content().quotes;
-                    auto it = lastQuotes.find(order->symbol);
-                    if (it != lastQuotes.end()) {
-                        *pProfit = order->side == OrderSide::Buy ? ((it->second.ask_price - order->filled_avg_price) * order->filled_qty) : (order->filled_avg_price - it->second.bid_price) * order->filled_qty;
-                    }
-                    else {
-                        assert(false);
-                        auto response = pMarketData->getLastQuote(order->symbol);
-                        if (response) {
-                            auto& quote = response.content().quote;
-                            *pProfit = order->side == OrderSide::Buy ? ((quote.ask_price - order->filled_avg_price) * order->filled_qty) : (order->filled_avg_price - quote.bid_price) * order->filled_qty;
+                auto& assets = client->allAssets();
+                auto iter = assets.find(order->symbol);
+                if (iter != assets.end())
+                {
+                    auto asset_class = iter->second->asset_class;
+                    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                    if (!s_lastQuotes[asset_class] || s_config.alpacaPaidPlan || (now - s_lastRequestTime) > REQUEST_BANNING_TIME) {
+                        s_lastQuotes[asset_class] = pMarketData[asset_class]->getLastQuotes(s_subscribedAssets[asset_class]);
+                        if (s_lastQuotes[asset_class]) {
+                            s_lastRequestTime = now;
                         }
-                        else
-                        {
-                            BrokerError(("Failed to get lastQuote " + std::string(order->symbol) +
-                                " error: " + response.what()).c_str());
+                        else {
+                            BrokerError(("Failed to get lastQuotes for " + std::string(s_subscribedAssets[asset_class]) +
+                                " error: " + s_lastQuotes[asset_class].what()).c_str());
+                        }
+                    }
+
+                    if (s_lastQuotes[asset_class]) {
+                        auto& lastQuotes = s_lastQuotes[asset_class].content().quotes;
+                        auto it = lastQuotes.find(order->symbol);
+                        if (it != lastQuotes.end()) {
+                            *pProfit = order->side == OrderSide::Buy ? ((it->second.ask_price - order->filled_avg_price) * order->filled_qty) : (order->filled_avg_price - it->second.bid_price) * order->filled_qty;
+                        }
+                        else {
+                            assert(false);
+                            auto response = pMarketData[asset_class]->getLastQuote(order->symbol);
+                            if (response) {
+                                auto& quote = response.content().quote;
+                                *pProfit = order->side == OrderSide::Buy ? ((quote.ask_price - order->filled_avg_price) * order->filled_qty) : (order->filled_avg_price - quote.bid_price) * order->filled_qty;
+                            }
+                            else
+                            {
+                                BrokerError(("Failed to get lastQuote " + std::string(order->symbol) +
+                                    " error: " + response.what()).c_str());
+                            }
                         }
                     }
                 }
@@ -697,64 +790,64 @@ namespace alpaca
         return static_cast<int>(order->filled_qty / s_config.fractionalLotAmount);
     }
 
-    DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
-        LOG_DEBUG("BrokerSell2 nTradeID=%d nAmount=%d limit=%f\n", nTradeID,nAmount, Limit);
+    //DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
+    //    LOG_DEBUG("BrokerSell2 nTradeID=%d nAmount=%d limit=%f\n", nTradeID,nAmount, Limit);
 
-        auto iter = s_mapOrderByClientOrderId.find(nTradeID);
-        if (iter == s_mapOrderByClientOrderId.end()) {
-            BrokerError(("Order " + std::to_string(nTradeID) + " not found.").c_str());
-            return 0;
-        }
+    //    auto iter = s_mapOrderByClientOrderId.find(nTradeID);
+    //    if (iter == s_mapOrderByClientOrderId.end()) {
+    //        BrokerError(("Order " + std::to_string(nTradeID) + " not found.").c_str());
+    //        return 0;
+    //    }
 
-        auto& order = iter->second;
-        if (order.status == "filled") {
-            // order has been filled
-            auto closeTradeId = BrokerBuy2((char*)order.symbol.c_str(), -nAmount, 0, Limit, pProfit, pFill);
-            if (closeTradeId) {
-                auto iter2 = s_mapOrderByClientOrderId.find(closeTradeId);
-                if (iter2 != s_mapOrderByClientOrderId.end()) {
-                    auto& closeTrade = iter2->second;
-                    if (pClose) {
-                        *pClose = closeTrade.filled_avg_price;
-                    }
-                    if (pFill) {
-                        *pFill = static_cast<int>(closeTrade.filled_qty);
-                    }
-                    if (pProfit) {
-                        *pProfit = (closeTrade.filled_avg_price - order.filled_avg_price) * closeTrade.filled_qty;
-                    }
-                }
-                return nTradeID;
-            }
-            return 0;
-        }
-        else {
-            // close working order?
-            auto qty = nAmount * s_amount;
-            // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
-            s_amount = 1.;
-            BrokerError(("Close working order " + std::to_string(nTradeID)).c_str());
-            if (!qty) {
-                auto response = client->cancelOrder(iter->second.id);
-                if (response) {
-                    return nTradeID;
-                }
-                BrokerError(("Failed to close trade " + std::to_string(nTradeID) + " " + response.what()).c_str());
-                return 0;
-            }
-            else {
-                auto response = client->replaceOrder(order.id, iter->second.qty - qty, order.tif, (Limit ? std::to_string(Limit) : ""), "", iter->second.client_order_id);
-                if (response) {
-                    auto& replacedOrder = response.content();
-                    uint32_t orderId = replacedOrder.internal_id;
-                    s_mapOrderByClientOrderId.emplace(orderId, std::move(replacedOrder));
-                    return orderId;
-                }
-                BrokerError(("Failed to modify trade " + std::to_string(nTradeID) + " " + response.what()).c_str());
-                return 0;
-            }
-        }
-    }
+    //    auto& order = iter->second;
+    //    if (order.status == "filled") {
+    //        // order has been filled
+    //        auto closeTradeId = BrokerBuy2((char*)order.symbol.c_str(), -nAmount, 0, Limit, pProfit, pFill);
+    //        if (closeTradeId) {
+    //            auto iter2 = s_mapOrderByClientOrderId.find(closeTradeId);
+    //            if (iter2 != s_mapOrderByClientOrderId.end()) {
+    //                auto& closeTrade = iter2->second;
+    //                if (pClose) {
+    //                    *pClose = closeTrade.filled_avg_price;
+    //                }
+    //                if (pFill) {
+    //                    *pFill = static_cast<int>(closeTrade.filled_qty);
+    //                }
+    //                if (pProfit) {
+    //                    *pProfit = (closeTrade.filled_avg_price - order.filled_avg_price) * closeTrade.filled_qty;
+    //                }
+    //            }
+    //            return nTradeID;
+    //        }
+    //        return 0;
+    //    }
+    //    else {
+    //        // close working order?
+    //        auto qty = nAmount * s_amount;
+    //        // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+    //        s_amount = 1.;
+    //        BrokerError(("Close working order " + std::to_string(nTradeID)).c_str());
+    //        if (!qty) {
+    //            auto response = client->cancelOrder(iter->second.id);
+    //            if (response) {
+    //                return nTradeID;
+    //            }
+    //            BrokerError(("Failed to close trade " + std::to_string(nTradeID) + " " + response.what()).c_str());
+    //            return 0;
+    //        }
+    //        else {
+    //            auto response = client->replaceOrder(order.id, iter->second.qty - qty, order.tif, (Limit ? std::to_string(Limit) : ""), "", iter->second.client_order_id);
+    //            if (response) {
+    //                auto& replacedOrder = response.content();
+    //                uint32_t orderId = replacedOrder.internal_id;
+    //                s_mapOrderByClientOrderId.emplace(orderId, std::move(replacedOrder));
+    //                return orderId;
+    //            }
+    //            BrokerError(("Failed to modify trade " + std::to_string(nTradeID) + " " + response.what()).c_str());
+    //            return 0;
+    //        }
+    //    }
+    //}
 
     int32_t getPosition(const std::string& asset) {
         auto response = client->getPosition(asset);
@@ -788,78 +881,183 @@ namespace alpaca
         BrokerError("Generating Asset List...");
         fprintf(f, "Name,Price,Spread,RollLong,RollShort,PIP,PIPCost,MarginCost,Leverage,LotAmount,Commission,Symbol,Type,Description\n");
 
-        auto getAsset = [f](const alpaca::Asset& asset, LastQuotes lastQuotes) -> bool {
-            BrokerError(("Asset " + asset.symbol).c_str());
+        auto getAsset = [f](const alpaca::AssetBase *asset, LastQuotes lastQuotes) -> bool {
+            BrokerError(("Asset " + asset->symbol).c_str());
             auto rt = BrokerProgress(0);
             if (!rt) {
                 return false;
             }
 
-            auto iter = lastQuotes.quotes.find(asset.symbol);
+            auto iter = lastQuotes.quotes.find(asset->symbol);
             if (iter == lastQuotes.quotes.end()) {
-                BrokerError(("no quote found for " + asset.symbol).c_str());
-                if (!asset.fractionable) {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,1,0.000,%s,0,\"%s\"\n", asset.symbol.c_str(), 0., 0., asset.symbol.c_str(), asset.name.c_str());
+                BrokerError(("no quote found for " + asset->symbol).c_str());
+                if (asset->asset_class == AssetClass::OPTIONS || !reinterpret_cast<const Asset*>(asset)->fractionable) {
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,1,0.000,%s,0,\"%s\"\n", asset->symbol.c_str(), 0., 0., asset->symbol.c_str(), asset->name.c_str());
+                }
+                else if (asset->asset_class == AssetClass::US_EQUITY) {
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,%f,0.000,%s,0,\"%s\"\n", asset->symbol.c_str(), 0., 0., s_config.fractionalLotAmount, asset->symbol.c_str(), asset->name.c_str());
                 }
                 else {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,%f,0.000,%s,0,\"%s\"\n", asset.symbol.c_str(), 0., 0., s_config.fractionalLotAmount, asset.symbol.c_str(), asset.name.c_str());
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,%f,0.000,%s,0,\"%s\"\n", asset->symbol.c_str(), 0., 0., reinterpret_cast<const Asset*>(asset)->min_order_size, asset->symbol.c_str(), asset->name.c_str());
                 }
             }
             else {
                 auto& q = iter->second;
-                if (!asset.fractionable) {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,1,0.000,%s,0,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset.symbol.c_str(), asset.name.c_str());
+                if (asset->asset_class == AssetClass::OPTIONS || !reinterpret_cast<const Asset*>(asset)->fractionable) {
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,1,0.000,%s,0,\"%s\"\n", asset->symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), asset->symbol.c_str(), asset->name.c_str());
+                }
+                else if (asset->asset_class == AssetClass::US_EQUITY) {
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,%f,0.000,%s,0,\"%s\"\n", asset->symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), s_config.fractionalLotAmount, asset->symbol.c_str(), asset->name.c_str());
                 }
                 else {
-                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,%f,0.000,%s,0,\"%s\"\n", asset.symbol.c_str(), q.ask_price, (q.ask_price - q.bid_price), s_config.fractionalLotAmount, asset.symbol.c_str(), asset.name.c_str());
+                    fprintf(f, "%s,%f,%f,0.0,0.0,0.01,0.01,-100,1,%f,0.000,%s,0,\"%s\"\n", asset->symbol.c_str(), 0., 0., reinterpret_cast<const Asset*>(asset)->min_order_size, asset->symbol.c_str(), asset->name.c_str());
                 }
             }
             return true;
         };
 
-        static LastQuotes empty_quotes;
+        std::ostringstream equity_assets;
+        std::ostringstream crypto_assets;
+        std::ostringstream option_assets;
+        LastQuotes last_quotes[AssetClass::__count__];
         if (!symbols) {
-            auto assets = client->getAssets();
-            std::ostringstream oss;
-            for (auto& asset : assets.content()) {
-                if (!asset.tradable) {
+            auto &assets = client->allAssets();
+            for (auto &kvp : assets) {
+                auto *asset = kvp.second;
+                if (!asset->tradable) {
                     continue;
                 }
-                oss << asset.symbol << ',';
+
+                switch (asset->asset_class)
+                {
+                case AssetClass::US_EQUITY:
+                    equity_assets << asset->symbol << ',';
+                    break;
+                case AssetClass::CRYPTO:
+                    crypto_assets << asset->symbol << ',';
+                    break;
+                case AssetClass::OPTIONS:
+                    option_assets << asset->symbol << ',';
+                    break;
+                case AssetClass::__count__:
+                    break;
+                }
             }
 
-            auto last_quotes = pMarketData->getLastQuotes(oss.str());
-            for (auto& asset : assets.content()) {
-                if (!asset.tradable) {
+            if (equity_assets.tellp())
+            {
+                auto last_quotes_rsp = pMarketData[AssetClass::US_EQUITY]->getLastQuotes(equity_assets.str());
+                if (last_quotes_rsp)
+                {
+                    last_quotes[AssetClass::US_EQUITY] = std::move(last_quotes_rsp.content());
+                }
+            }
+            if (crypto_assets.tellp())
+            {
+                auto last_quotes_rsp = pMarketData[AssetClass::CRYPTO]->getLastQuotes(equity_assets.str());
+                if (last_quotes_rsp)
+                {
+                    last_quotes[AssetClass::CRYPTO] = std::move(last_quotes_rsp.content());
+                }
+            }
+            if (option_assets.tellp())
+            {
+                auto last_quotes_rsp = pMarketData[AssetClass::OPTIONS]->getLastQuotes(equity_assets.str());
+                if (last_quotes_rsp)
+                {
+                    last_quotes[AssetClass::OPTIONS] = std::move(last_quotes_rsp.content());
+                }
+            }
+            for (auto& kvp : assets) {
+                auto* asset = kvp.second;
+                if (!asset->tradable) {
                     continue;
                 }
                 try {
-                    if (!getAsset(asset, last_quotes ? last_quotes.content() : empty_quotes)) {
+                    if (!getAsset(asset, last_quotes[asset->asset_class])) {
                         break;
                     }
                 }
                 catch (...) {}
             }
+            
         }
         else {
-            auto last_quotes = pMarketData->getLastQuotes(symbols);
+            std::vector<AssetBase*> assets;
             const char* delim = ",";
             char* next_token;
             char* token = strtok_s(symbols, delim, &next_token);
+            auto& all_assets = client->allAssets();
             while (token != nullptr) {
                 try {
                     std::string symbol = token;
                     trim(symbol);
-                    auto response = client->getAsset(symbol);
-                    if (response) {
-                        if (!getAsset(response.content(), last_quotes ? last_quotes.content() : empty_quotes)) {
-                            break;
-                        }
+
+                    auto iter = all_assets.find(symbol);
+                    if (iter == all_assets.end())
+                    {
+                        LOG_ERROR("Asset %s invalid\n", symbol);
+                        BrokerError(("Asset " + symbol + " invalid").c_str());
                     }
-                    else {
-                        BrokerError(response.what().c_str());
-                    }
+                    assets.emplace_back(iter->second);
                     token = strtok_s(nullptr, delim, &next_token);
+                }
+                catch (...) {}
+            }
+
+            for (auto* asset : assets)
+            {
+                if (!asset->tradable) {
+                    continue;
+                }
+
+                switch (asset->asset_class)
+                {
+                case AssetClass::US_EQUITY:
+                    equity_assets << asset->symbol << ',';
+                    break;
+                case AssetClass::CRYPTO:
+                    crypto_assets << asset->symbol << ',';
+                    break;
+                case AssetClass::OPTIONS:
+                    option_assets << asset->symbol << ',';
+                    break;
+                case AssetClass::__count__:
+                    break;
+                }
+            }
+            if (equity_assets.tellp())
+            {
+                auto last_quotes_rsp = pMarketData[AssetClass::US_EQUITY]->getLastQuotes(equity_assets.str());
+                if (last_quotes_rsp)
+                {
+                    last_quotes[AssetClass::US_EQUITY] = std::move(last_quotes_rsp.content());
+                }
+            }
+            if (crypto_assets.tellp())
+            {
+                auto last_quotes_rsp = pMarketData[AssetClass::CRYPTO]->getLastQuotes(equity_assets.str());
+                if (last_quotes_rsp)
+                {
+                    last_quotes[AssetClass::CRYPTO] = std::move(last_quotes_rsp.content());
+                }
+            }
+            if (option_assets.tellp())
+            {
+                auto last_quotes_rsp = pMarketData[AssetClass::OPTIONS]->getLastQuotes(equity_assets.str());
+                if (last_quotes_rsp)
+                {
+                    last_quotes[AssetClass::OPTIONS] = std::move(last_quotes_rsp.content());
+                }
+            }
+            for (auto* asset : assets) {
+                if (!asset->tradable) {
+                    continue;
+                }
+                try {
+                    if (!getAsset(asset, last_quotes[asset->asset_class])) {
+                        break;
+                    }
                 }
                 catch (...) {}
             }
@@ -867,10 +1065,9 @@ namespace alpaca
         
         fflush(f);
         fclose(f);
-        LOG_DEBUG("close file\n");
     }
     
-    DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter)
+    DLLFUNC_C double BrokerCommand(int Command, intptr_t parameter)
     {
         static int SetMultiplier;
         std::string Data, response;
@@ -901,25 +1098,25 @@ namespace alpaca
             return 1;
 
         case GET_POSITION:
-            return getPosition((char*)dwParameter);
+            return getPosition((char*)(parameter));
 
         case SET_ORDERTEXT:
-            s_nextOrderText = (char*)dwParameter;
+            s_nextOrderText = (char*)parameter;
             LOG_DEBUG("SET_ORDERTEXT: %s\n", s_nextOrderText.c_str());
-            return dwParameter;
+            return (double)parameter;
 
         case SET_SYMBOL:
-            s_asset = (char*)dwParameter;
+            s_asset = (char*)parameter;
             LOG_DEBUG("SET_SYMBOL: %s\n", s_asset.c_str());
             return 1;
 
         case SET_MULTIPLIER:
-            s_multiplier = (int)dwParameter;
+            s_multiplier = (int)parameter;
             return 1;
 
         case SET_ORDERTYPE: {
            
-            switch ((int)dwParameter) {
+            switch ((int)parameter) {
             case 0:
                 return 0;
             case ORDERTYPE_IOC:
@@ -942,11 +1139,11 @@ namespace alpaca
                 break;
             }
 
-            if ((int)dwParameter >= 8) {
-                return (int)dwParameter;
+            if ((int)parameter >= 8) {
+                return (int)parameter;
             }
 
-            LOG_DEBUG("SET_ORDERTYPE: %d s_tif=%s\n", (int)dwParameter, to_string(s_tif));
+            LOG_DEBUG("SET_ORDERTYPE: %d s_tif=%s\n", (int)parameter, to_string(s_tif));
             return tifToZorroOrderType(s_tif);
         }
 
@@ -955,14 +1152,14 @@ namespace alpaca
 
         case SET_PRICETYPE:
         {
-            auto price_type = (int)dwParameter;
+            auto price_type = (int)parameter;
             bool resubscribe = s_config.priceType != price_type;
-            s_config.priceType = (int)dwParameter;
+            s_config.priceType = (int)parameter;
             LOG_DEBUG("SET_PRICETYPE: %d resubscribe: %d\n", s_config.priceType, resubscribe);
-            if (resubscribe && wsClient && wsClient->authenticated()) {
+            if (resubscribe && wsClient) {
                 // price type changed. 
                 // change websocket subscription
-                for (auto asset : s_activeAssets) {
+                for (auto* asset : s_activeAssets) {
                     if (wsClient->subscribeAsset(asset))
                     {
                         LOG_DEBUG("%s subscribed\n", asset);
@@ -970,38 +1167,46 @@ namespace alpaca
                         // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
                         if (s_config.priceType == 2)
                         {
-                            auto last_trade = pMarketData->getLastTrade(asset);
+                            auto last_trade = pMarketData[asset->asset_class]->getLastTrade(asset->symbol);
                             if (last_trade)
                             {
-                                wsClient->setLastTrade(last_trade.content());
+                                wsClient->setLastTrade(asset, last_trade.content());
                             }
                         }
                         else
                         {
-                            auto last_quote = pMarketData->getLastQuote(asset);
+                            auto last_quote = pMarketData[asset->asset_class]->getLastQuote(asset->symbol);
                             if (last_quote)
                             {
-                                wsClient->setLastQuote(last_quote.content());
+                                wsClient->setLastQuote(asset, last_quote.content());
                             }
                         }
                     }
                 }
             }
-            return dwParameter;
+            return (double)parameter;
         }
+
+        case GET_UUID:
+            snprintf((char*)parameter, s_lastOrderUUID.size(), s_lastOrderUUID.c_str());
+            break;
+
+        case SET_UUID:
+            s_nextOrderUUID = (char*)parameter;
+            break;
 
         case GET_VOLTYPE:
           return 0;
 
         case SET_AMOUNT:
-            s_amount = *(double*)dwParameter;
+            s_amount = *(double*)parameter;
             LOG_DIAG("SET_AMOUNT: %.8f\n", s_amount);
             break;
 
         case SET_DIAGNOSTICS:
-            if ((int)dwParameter == 1 || (int)dwParameter == 0) {
-                Logger::instance().setLevel((int)dwParameter ? LogLevel::L_TRACE : LogLevel::L_OFF);
-                return dwParameter;
+            if ((int)parameter == 1 || (int)parameter == 0) {
+                Logger::instance().setLevel((int)parameter ? LogLevel::L_TRACE : LogLevel::L_OFF);
+                return (double)parameter;
             }
             break;
 
@@ -1011,106 +1216,90 @@ namespace alpaca
             break;
 
         case CREATE_ASSETLIST: {
-            downloadAssets((char*)dwParameter);
+            downloadAssets((char*)parameter);
             break;
         }
 
         case IS_ASSET_FRACTIONABLE: {
-            auto asset_str = (char*)dwParameter;
-            auto iter = s_mapAssets.find(asset_str);
-            if (iter != s_mapAssets.end()) {
-                return (int)iter->second.fractionable;
-            }
-            else {
-                auto response = client->getAsset(asset_str);
-                if (response) {
-                    auto& asset = response.content();
-                    s_mapAssets.emplace(asset_str, asset);
-                    return (int)asset.fractionable;
+            auto asset_str = (char*)parameter;
+            auto& assets = client->allAssets();
+            auto iter = assets.find(asset_str);
+            if (iter != assets.end()) {
+                auto* asset = iter->second;
+                if (asset->asset_class != AssetClass::OPTIONS)
+                {
+                    return reinterpret_cast<Asset*>(iter->second)->fractionable;
                 }
-                BrokerError(response.what().c_str());
-                return 0;
             }
-            break;
+            return false;
         }
 
         case IS_ASSET_SHORTABLE: {
-            auto asset_str = (char*)dwParameter;
-            auto iter = s_mapAssets.find(asset_str);
-            if (iter != s_mapAssets.end()) {
-                return (int)iter->second.shortable;
-            }
-            else {
-                auto response = client->getAsset(asset_str);
-                if (response) {
-                    auto& asset = response.content();
-                    s_mapAssets.emplace(asset_str, asset);
-                    return (int)asset.shortable;
+            auto asset_str = (char*)parameter;
+            auto& assets = client->allAssets();
+            auto iter = assets.find(asset_str);
+            if (iter != assets.end()) {
+                auto* asset = iter->second;
+                if (asset->asset_class != AssetClass::OPTIONS)
+                {
+                    return reinterpret_cast<Asset*>(iter->second)->shortable;
                 }
-                BrokerError(response.what().c_str());
-                return 0;
             }
-            break;
+            return false;
         }
 
         case IS_ASSET_EASY_TO_BORROW: {
-            auto asset_str = (char*)dwParameter;
-            auto iter = s_mapAssets.find(asset_str);
-            if (iter != s_mapAssets.end()) {
-                return (int)iter->second.easy_to_borrow;
-            }
-            else {
-                auto response = client->getAsset(asset_str);
-                if (response) {
-                    auto& asset = response.content();
-                    s_mapAssets.emplace(asset_str, asset);
-                    return (int)asset.easy_to_borrow;
+            auto asset_str = (char*)parameter;
+            auto& assets = client->allAssets();
+            auto iter = assets.find(asset_str);
+            if (iter != assets.end()) {
+                auto* asset = iter->second;
+                if (asset->asset_class != AssetClass::OPTIONS)
+                {
+                    return reinterpret_cast<Asset*>(iter->second)->easy_to_borrow;
                 }
-                BrokerError(response.what().c_str());
-                return 0;
             }
-            break;
+            return false;
         }
 
         case IS_ASSET_MARGINABLE: {
-            auto asset_str = (char*)dwParameter;
-            auto iter = s_mapAssets.find(asset_str);
-            if (iter != s_mapAssets.end()) {
-                return (int)iter->second.marginable;
-            }
-            else {
-                auto response = client->getAsset(asset_str);
-                if (response) {
-                    auto& asset = response.content();
-                    s_mapAssets.emplace(asset_str, asset);
-                    return (int)asset.marginable;
+            auto asset_str = (char*)parameter;
+            auto& assets = client->allAssets();
+            auto iter = assets.find(asset_str);
+            if (iter != assets.end()) {
+                auto* asset = iter->second;
+                if (asset->asset_class != AssetClass::OPTIONS)
+                {
+                    return reinterpret_cast<Asset*>(iter->second)->marginable;
                 }
-                BrokerError(response.what().c_str());
-                return 0;
             }
-            break;
+            return false;
         }
 
         case SET_LOG_TYPE: {
-            BrokerError(("Set LogType to " + std::to_string((int)dwParameter)).c_str());
-            Logger::instance().setLogType((LogType)dwParameter);
+            BrokerError(("Set LogType to " + std::to_string((int)parameter)).c_str());
+            Logger::instance().setLogType((LogType)parameter);
             break;
         }
 
         case SET_LOG_LEVEL: {
-            BrokerError(("Set LogLevel to " + std::to_string((int)dwParameter)).c_str());
-            Logger::instance().setLevel((LogLevel)dwParameter);
+            BrokerError(("Set LogLevel to " + std::to_string((int)parameter)).c_str());
+            Logger::instance().setLevel((LogLevel)parameter);
             break;
         }
 
         case SET_ADJUSTMENT: {
-            s_config.adjustment = static_cast<Adjustment>((int)dwParameter);
+            s_config.adjustment = static_cast<Adjustment>((int)parameter);
             BrokerError(("Set Adjustment to " + std::string(to_string(s_config.adjustment))).c_str());
             break;
         }
 
+        case CREATE_OPTION_ASSETLIST: {
+            break;
+        }
+
         default:
-            LOG_DEBUG("Unhandled command: %d %lu\n", Command, dwParameter);
+            LOG_DEBUG("Unhandled command: %d %lu\n", Command, parameter);
             break;
         }
         return 0;
