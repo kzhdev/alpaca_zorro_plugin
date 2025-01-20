@@ -2,4 +2,6 @@
 .vscode
 Release
 Debug
+x64
 *.aps
+build/

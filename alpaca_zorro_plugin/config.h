@@ -118,8 +118,8 @@ namespace alpaca {
             LogType,
             UseWebsocket,
             FractionalLotAmount,
-            __end__,
+            __count__,  // for internal use only
         };
-        std::bitset<ConfigFound::__end__> configFound_ = 0;
+        std::bitset<ConfigFound::__count__> configFound_ = 0;
     };
 }

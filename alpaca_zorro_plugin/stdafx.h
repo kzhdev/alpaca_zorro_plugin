@@ -13,3 +13,10 @@
 #include <windows.h>
 
 // TODO: reference additional headers your program requires here
+#include <atomic>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <cstdlib>
+#include <memory>

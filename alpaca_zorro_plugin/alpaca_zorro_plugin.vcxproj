@@ -90,15 +90,15 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\third_party\rapidjson\include;..\third_party\date\include;..\third_party\zorro_websocket_proxy\dependencies\slick_queue\include;..\third_party\zorro_websocket_proxy\zorro_websocket_proxy_client\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>zorro_websocket_proxy_client.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -108,14 +108,14 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\third_party\rapidjson\include;..\third_party\date\include;..\third_party\zorro_websocket_proxy\dependencies\slick_queue\include;..\third_party\zorro_websocket_proxy\zorro_websocket_proxy_client\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>zorro_websocket_proxy_client.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -127,34 +127,30 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\third_party\rapidjson\include;..\third_party\date\include;..\third_party\zorro_websocket_proxy\dependencies\slick_queue\include;..\third_party\zorro_websocket_proxy\zorro_websocket_proxy_client\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>zorro_websocket_proxy_client.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutputPath)release\Plugin\websocket_proxy
+      <Command>mkdir $(OutputPath)release
 mkdir $(OutputPath)release\include
-mkdir $(OutputPath)pdb\websocket_proxy
 copy $(ProjectDir)AlpacaBrokerCommands.h  $(OutputPath)release\include\
-xcopy $(OutDir)websocket_proxy  $(OutputPath)release\Plugin\websocket_proxy\ /S /C
-del  $(OutputPath)release\Plugin\websocket_proxy\*.pdb
+xcopy $(ProjectDir)..\third_party\alpaca_websocket_proxy\bin\*.* $(OutputPath)release\Plugin\websocket_proxy\ /S /C
 copy $(OutDir)Alpaca.dll  $(OutputPath)release\Plugin\
-copy $(OutDir)websocket_proxy\zorro_websocket_proxy.pdb  $(OutputPath)pdb\websocket_proxy\
-copy $(OutDir)Alpaca.pdb $(OutputPath)pdb\</Command>
+EXIT 0</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>rmdir /S /Q $(SolutionDir)$(Configuration)\release
-rmdir /S /Q $(SolutionDir)$(Configuration)\pdb
 del $(SolutionDir)$(Configuration)\AlpacaZorroPlugin_v.zip
-del $(SolutionDir)$(Configuration)\AlpacaZorroPlugin_v_pdb.zip</Command>
+EXIT 0</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -165,53 +161,53 @@ del $(SolutionDir)$(Configuration)\AlpacaZorroPlugin_v_pdb.zip</Command>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\third_party\rapidjson\include;..\third_party\date\include;..\third_party\zorro_websocket_proxy\dependencies\slick_queue\include;..\third_party\zorro_websocket_proxy\zorro_websocket_proxy_client\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>zorro_websocket_proxy_client.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir $(OutputPath)release\Plugin\websocket_proxy
-mkdir $(OutputPath)release\include
-mkdir $(OutputPath)pdb\websocket_proxy
+      <Command>mkdir $(OutputPath)release\include
 copy $(ProjectDir)AlpacaBrokerCommands.h  $(OutputPath)release\include\
-xcopy $(OutDir)websocket_proxy  $(OutputPath)release\Plugin\websocket_proxy\ /S /C
-del  $(OutputPath)release\Plugin\websocket_proxy\*.pdb
-copy $(OutDir)Alpaca.dll  $(OutputPath)release\Plugin\
-copy $(OutDir)websocket_proxy\zorro_websocket_proxy.pdb  $(OutputPath)pdb\websocket_proxy\
-copy $(OutDir)Alpaca.pdb $(OutputPath)pdb\</Command>
+xcopy $(ProjectDir)..\third_party\alpaca_websocket_proxy\bin\*.* $(OutputPath)release\Plugin64\websocket_proxy\ /S /C
+copy $(OutDir)Alpaca.dll  $(OutputPath)release\Plugin64\
+EXIT 0</Command>
     </PostBuildEvent>
     <PreBuildEvent>
-      <Command>rmdir /S /Q $(SolutionDir)$(Configuration)\release
-rmdir /S /Q $(SolutionDir)$(Configuration)\pdb</Command>
+      <Command>del $(SolutionDir)$(Platform)\$(Configuration)\AlpacaZorroPlugin64_v.zip
+rmdir /S /Q $(SolutionDir)$(Platform)\$(Configuration)\release
+EXIT 0</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="AlpacaBrokerCommands.h" />
     <ClInclude Include="AlpacaZorroPlugin.h" />
     <ClInclude Include="alpaca\account.h" />
-    <ClInclude Include="alpaca\alpaca_websockets.h\Header.h" />
     <ClInclude Include="alpaca\asset.h" />
     <ClInclude Include="alpaca\balance.h" />
     <ClInclude Include="alpaca\client.h" />
     <ClInclude Include="alpaca\client_order_id_generator.h" />
     <ClInclude Include="alpaca\clock.h" />
     <ClInclude Include="alpaca\json.h" />
+    <ClInclude Include="alpaca\option_contract.h" />
     <ClInclude Include="alpaca\order.h" />
     <ClInclude Include="alpaca\position.h" />
     <ClInclude Include="config.h" />
     <ClInclude Include="logger.h" />
-    <ClInclude Include="market_data\alpaca_market_data.h" />
+    <ClInclude Include="market_data\crypto_market_data.h" />
+    <ClInclude Include="market_data\option_market_data.h" />
+    <ClInclude Include="market_data\market_data.h" />
     <ClInclude Include="market_data\bars.h" />
     <ClInclude Include="market_data\quote.h" />
     <ClInclude Include="market_data\snapshot.h" />
+    <ClInclude Include="market_data\stock_market_data.h" />
     <ClInclude Include="market_data\trade.h" />
     <ClInclude Include="request.h" />
     <ClInclude Include="resource.h" />
@@ -239,7 +235,7 @@ rmdir /S /Q $(SolutionDir)$(Configuration)\pdb</Command>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="market_data\alpaca_market_data.cpp" />
+    <ClCompile Include="market_data\market_data.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -260,6 +256,8 @@ rmdir /S /Q $(SolutionDir)$(Configuration)\pdb</Command>
   </ImportGroup>
   <Target Name="ZipRelease" AfterTargets="PostBuildEvent" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ZipDirectory SourceDirectory="$(OutputPath)release" DestinationFile="$(OutputPath)AlpacaZorroPlugin_v.zip" />
-    <ZipDirectory SourceDirectory="$(OutputPath)pdb" DestinationFile="$(OutputPath)AlpacaZorroPlugin_v_pdb.zip" />
+  </Target>
+  <Target Name="ZipRelease64" AfterTargets="PostBuildEvent" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ZipDirectory SourceDirectory="$(OutputPath)release" DestinationFile="$(OutputPath)AlpacaZorroPlugin64_v.zip" />
   </Target>
 </Project>
