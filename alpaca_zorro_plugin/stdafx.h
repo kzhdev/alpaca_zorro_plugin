@@ -20,3 +20,6 @@
 #include <vector>
 #include <cstdlib>
 #include <memory>
+#include <spdlog/spdlog.h>
+#include <spdlog/async.h>
+#include <spdlog/sinks/rotating_file_sink.h>

@@ -200,7 +200,7 @@ private:
                 NULL,                               // default security
                 PAGE_READWRITE,                     // read/write access
                 0,                                  // maximum object size (high-order DWORD)
-                (DWORD)BF_SZ,                              // maximum object size (low-order DWORD)
+                BF_SZ,                              // maximum object size (low-order DWORD)
                 (LPCWSTR)shm_name                   // name of mapping object
             );
 

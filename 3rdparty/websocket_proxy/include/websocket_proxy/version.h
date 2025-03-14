@@ -25,6 +25,6 @@
 #define WebsocketProxy_VERSION_MAJOR 1
 #define WebsocketProxy_VERSION_MINOR 0
 #define WebsocketProxy_VERSION_PATCH 0
-#define WebsocketProxy_VERSION_TWEAK 2
+#define WebsocketProxy_VERSION_TWEAK 3
 
-#define VERSION "1.0.0.2"
+#define VERSION "1.0.0.3"
