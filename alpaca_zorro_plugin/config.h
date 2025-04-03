@@ -25,7 +25,6 @@ namespace alpaca {
 
     struct Config {
         double fractionalLotAmount = 1;
-        int priceType = 0;
         uint8_t logLevel = 0;
         uint8_t logType = 1;
         bool alpacaPaidPlan = true;

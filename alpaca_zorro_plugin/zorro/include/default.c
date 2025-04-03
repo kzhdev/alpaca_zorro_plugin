@@ -2,7 +2,7 @@
 // Default trading headers and functions
 // (c) oP group 2018
 /////////////////////////////////////////////////////////////////////
-#ifndef WIN32
+#ifndef _WIN32
 #ifndef default_c
 #define default_c
 
@@ -24,7 +24,7 @@ void lcStructs()
 	T1* t1 = 0; t1->time = 0;
 	T2* t2 = 0; t2->time = 0;
 	T6* t6 = 0; t6->time = 0;
-	BAR* b = 0; b->time_base = 0;
+	BAR* b = 0; b->time = 0;
 	DATA* d = 0; d->Data = 0;
 	DATASET* ds = 0; ds->fData = 0;
 	MATRIX* m = 0; m->dat = 0;
@@ -44,7 +44,6 @@ var max(var a,var b);
 int max(int a,int b);
 var min(var a,var b);
 int min(int a,int b);
-int watch(string text,...);
 
 var round(var val,var step) { return roundto(val,step); }
 var round(var val) { return roundto(val,1.); }
@@ -56,11 +55,12 @@ var optimize(var val,var start,var end,var step) { return optimize(val,start,end
 var optimize(var val,var start,var end) { return optimize(val,start,end,0,0); }
 int DominantPeriod(int Period) {	return DominantPeriod(series(price()),Period); }
 int DominantPhase(int Period) {	return DominantPhase(series(price()),Period); }
-void assetAdd(string Name) { assetAdd(Name,0,0,0,0,0,0,0,0,0,0,0); }
-void assetAdd(string Name,string BrokerSymbol) { assetAdd(Name,0,0,0,0,0,0,0,0,0,0,BrokerSymbol); }
+int assetAdd(string Name) { return assetAdd(Name,0,0,0,0,0,0,0,0,0,0,0); }
+int assetAdd(string Name,string BrokerSymbol) { return assetAdd(Name,0,0,0,0,0,0,0,0,0,0,BrokerSymbol); }
 void plot(string name,int val,int type,int color) { plot(name,(var)val,type,color); }
 void plot(string name,vars data,int type,int color) { plot(name,data[0],type,color); }
 int memory() { return memory(0); }
+int stridx(string Name) { return stridx(Name,0); }
 var Ichimoku() { return Ichimoku(0,0,0,0); }
 var Chikou() { return Chikou(26); }
 var SAR(var AFstep,var AFmax) { return SAR(AFstep,AFstep,AFmax); }
@@ -69,9 +69,13 @@ var HH(int Period) { return HH(Period,0); }
 var LL(int Period) { return LL(Period,0); }
 int contractCheck(TRADE* tr) { return contractCheck(tr,3); }
 var diff(var x) { return diff(x,1); }
-
 var genSine(var Period) { return genSine(Period,Period); }
 var genSquare(var Period) { return genSquare(Period,Period); }
+int tradeUpdate() { return tradeUpdate(0,0,0,0,0); }
+int tradeUpdatePool() { return tradeUpdate(0,0,0,0,0); }
+int dataCompress(int Handle,const char* name,int fields)
+{ return dataCompress(Handle,name,fields,0.); }
+
 
 /////////////////////////////////////////////////////////////////////
 // user functions

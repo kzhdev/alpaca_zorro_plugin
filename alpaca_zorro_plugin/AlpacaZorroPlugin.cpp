@@ -29,6 +29,8 @@
 #include "config.h"
 #include "websockets/alpaca_md_ws.h"
 #include "AlpacaBrokerCommands.h"
+#include "global.h"
+#include <zorro/include/trading.h>
 
 #define PLUGIN_VERSION	2
 
@@ -39,14 +41,10 @@ using namespace websocket_proxy;
 
 namespace {
     TimeInForce s_tif = TimeInForce::FOK;
-    std::string s_asset;
-    int s_multiplier = 1;
-    std::string s_nextOrderText;
-    //std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
+    std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
     std::unordered_map<std::string, Order> s_mapOrderByUUID;
     Config &s_config = Config::get();
     uint32_t alpaca_md_ws_id = 0;
-    double s_amount = 1;
     std::unordered_set<AssetBase*> s_activeAssets;
     std::array<std::string, AssetClass::__count__> s_subscribedAssets;
     uint64_t s_lastRequestTime = 0;
@@ -59,6 +57,8 @@ namespace {
     }
     std::string s_lastOrderUUID;
     std::string s_nextOrderUUID;
+
+    auto &global = zorro::Global::get();
 }
 
 namespace alpaca
@@ -113,10 +113,8 @@ namespace alpaca
             return 0;
         }
 
+        global.reset();
         s_tif = TimeInForce::FOK;
-        s_nextOrderText = "";
-        s_config.priceType = 0;
-        s_amount = 1.;
         s_subscribedAssets = { "", "", "" };
         s_config.adjustment = Adjustment::all;
         s_activeAssets.clear();        
@@ -266,7 +264,7 @@ namespace alpaca
                         LOG_DEBUG("%s subscribed\n", Asset);
 
                         // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
-                        if (s_config.priceType == 2)
+                        if (global.price_type_ == 2)
                         {
                             auto last_trade = pMarketData[asset_class]->getLastTrade(Asset);
                             if (last_trade)
@@ -298,7 +296,7 @@ namespace alpaca
             return 1;
         }
 
-        if (s_config.priceType == 2)
+        if (global.price_type_ == 2)
         {
             Trade* trade = nullptr;
             if (wsClient && wsClient->authenticated(asset_class))
@@ -503,7 +501,7 @@ namespace alpaca
         while(true) {
             LOG_DEBUG("BrokerHistory %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
 
-            auto response = pMarketData[asset_class]->getBars(Asset, start, end, nTickMinutes, nTicks, s_config.priceType);
+            auto response = pMarketData[asset_class]->getBars(Asset, start, end, nTickMinutes, nTicks, global.price_type_);
             if (!response) {
                 if (response.getCode() == 40010001 && response.what() == "end is too late for subscription") {
                     // Alpaca V2 Basic Plan has 15 min delay. Retry to find the last data allowed.
@@ -560,28 +558,27 @@ namespace alpaca
         else {
             dLimit = NAN;
         }
-        qty *= s_amount;
+        qty *= global.amount_;
 
         if (dStopDist) {
 
         }
 
-
-        LOG_DEBUG("BrokerBuy2 %s orderText=%s nAmount=%d qty=%f dStopDist=%f limit=%f\n", Asset, s_nextOrderText.c_str(), nAmount, qty, dStopDist, dLimit);
+        LOG_DEBUG("BrokerBuy2 %s orderText=%s nAmount=%d qty=%f dStopDist=%f limit=%f\n", Asset, global.order_text_.c_str(), nAmount, qty, dStopDist, dLimit);
 
         auto asset = client->allAssets().at(Asset);
-        auto response = client->submitOrder(asset, qty, side, type, s_tif, dLimit, NAN, s_nextOrderText, asset->asset_class == AssetClass::US_EQUITY ? s_config.fractionalLotAmount : s_amount);
+        auto response = client->submitOrder(asset, qty, side, type, s_tif, dLimit, NAN, global.order_text_, asset->asset_class == AssetClass::US_EQUITY ? s_config.fractionalLotAmount : global.amount_);
         if (!response) {
             BrokerError(response.what().c_str());
-            // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
-            s_amount = 1.;
+            // reset amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+            global.amount_ = 1.;
             return 0;
         }
 
         auto* order = &response.content();
         auto exchOrdId = order->id;
-        //auto internalOrdId = order->internal_id;
-        //s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
+        auto internalOrdId = order->internal_id;
+        s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
         s_mapOrderByUUID.emplace(exchOrdId, *order);
         s_lastOrderUUID = exchOrdId;
 
@@ -590,12 +587,12 @@ namespace alpaca
                 *pPrice = response.content().filled_avg_price;
             }
             if (pFill) {
-                *pFill = static_cast<int>(alpaca::fix_floating_error(response.content().filled_qty / s_amount));
+                *pFill = static_cast<int>(alpaca::fix_floating_error(response.content().filled_qty / global.amount_));
             }
-            // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
-            s_amount = 1.;
-            //return internalOrdId;
-            return -1;
+            // reset amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+            global.amount_ = 1.;
+            return internalOrdId;
+            // return -1;
         }
         
         if (pFill)
@@ -604,8 +601,8 @@ namespace alpaca
         }
 
         if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
-            //return internalOrdId;
-            return -1;
+            return internalOrdId;
+            // return -1;
         }
 
         // Limit order has not accepted by Exchange yet
@@ -617,7 +614,7 @@ namespace alpaca
                 break;
             }
             order = &response2.content();
-            //s_mapOrderByClientOrderId[internalOrdId] = *order;
+            s_mapOrderByClientOrderId[internalOrdId] = *order;
             s_mapOrderByUUID[exchOrdId] = *order;
 
             LOG_DEBUG_EXT(LT_ORDER, "Order status: %s\n", order->status.c_str());
@@ -631,7 +628,7 @@ namespace alpaca
                     *pPrice = order->filled_avg_price;
                 }
                 if (pFill) {
-                    *pFill = (int)alpaca::fix_floating_error(order->filled_qty / s_amount);
+                    *pFill = (int)alpaca::fix_floating_error(order->filled_qty / global.amount_);
                 }
             }
 
@@ -652,67 +649,67 @@ namespace alpaca
                 return (s_tif == TimeInForce::IOC || s_tif == TimeInForce::FOK) ? 0 : -2;
             }
         } while (!order->filled_qty);
-        // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
-        s_amount = 1.;
-        //return internalOrdId;
-        return -1;
+        // reset amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+        global.amount_ = 1.;
+        return internalOrdId;
+        // return -1;
     }
 
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
         LOG_INFO("BrokerTrade: %d\n", nTradeID);
-       /* if (nTradeID != -1) {
-            BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
-            return NAY;
-        }*/
+        // if (nTradeID != -1) {
+        //     BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
+        //     return NAY;
+        // }
         
         Response<Order> response;
         Order* order = nullptr;
-        //auto iter = s_mapOrderByClientOrderId.find(nTradeID);
-        //if (iter == s_mapOrderByClientOrderId.end()) {
-        //    // unknown order?
-        //    std::stringstream clientOrderId;
-        //    clientOrderId << "ZORRO_";
-        //    if (!s_nextOrderText.empty()) {
-        //        clientOrderId << s_nextOrderText << "_";
-        //    }
-        //    clientOrderId << nTradeID;
-        //    response = client->getOrderByClientOrderId(clientOrderId.str());
-        //    if (!response) {
-        //        BrokerError(response.what().c_str());
-        //        return NAY;
-        //    }
-        //    order = &response.content();
-        //    s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
-        //}
-        //else {
-        //    order = &iter->second;
-        //    if (order->status != "filled" && order->status != "canceled" && order->status != "expired") {
-        //        response = client->getOrder(iter->second.id);
-        //        if (!response) {
-        //            BrokerError(response.what().c_str());
-        //            return NAY;
-        //        }
-        //        order = &response.content();
-        //        s_mapOrderByClientOrderId[nTradeID] = *order;
-        //    }
-        //}
+        auto iter = s_mapOrderByClientOrderId.find(nTradeID);
+        if (iter == s_mapOrderByClientOrderId.end()) {
+           // unknown order?
+           std::stringstream clientOrderId;
+           clientOrderId << "ZORRO_";
+           if (!global.order_text_.empty()) {
+               clientOrderId << global.order_text_ << "_";
+           }
+           clientOrderId << nTradeID;
+           response = client->getOrderByClientOrderId(clientOrderId.str());
+           if (!response) {
+               BrokerError(response.what().c_str());
+               return NAY;
+           }
+           order = &response.content();
+           s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
+        }
+        else {
+           order = &iter->second;
+           if (order->status != "filled" && order->status != "canceled" && order->status != "expired") {
+               response = client->getOrder(iter->second.id);
+               if (!response) {
+                   BrokerError(response.what().c_str());
+                   return NAY;
+               }
+               order = &response.content();
+               s_mapOrderByClientOrderId[nTradeID] = *order;
+           }
+        }
         
-        if (s_nextOrderUUID.empty())
-        {
-            BrokerError("BrokerTrade: Order UUID not specifid");
-            return NAY;
-        }
-        auto iter = s_mapOrderByUUID.find(s_nextOrderUUID);
-        if (iter == s_mapOrderByUUID.end()) {
-            // unknown order?
-            response = client->getOrder(s_nextOrderUUID, false);
-            if (!response) {
-                BrokerError(response.what().c_str());
-                return NAY;
-            }
-            order = &response.content();
-            iter = s_mapOrderByUUID.emplace(s_nextOrderUUID, response.content()).first;
-        }
+        // if (s_nextOrderUUID.empty())
+        // {
+        //     BrokerError("BrokerTrade: Order UUID not specifid");
+        //     return NAY;
+        // }
+        // auto iter = s_mapOrderByUUID.find(s_nextOrderUUID);
+        // if (iter == s_mapOrderByUUID.end()) {
+        //     // unknown order?
+        //     response = client->getOrder(s_nextOrderUUID, false);
+        //     if (!response) {
+        //         BrokerError(response.what().c_str());
+        //         return NAY;
+        //     }
+        //     order = &response.content();
+        //     iter = s_mapOrderByUUID.emplace(s_nextOrderUUID, response.content()).first;
+        // }
 
         order = &iter->second;
         if (order->status == "canceled" && order->status == "expired")
@@ -823,9 +820,9 @@ namespace alpaca
     //    }
     //    else {
     //        // close working order?
-    //        auto qty = nAmount * s_amount;
-    //        // reset s_amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
-    //        s_amount = 1.;
+    //        auto qty = nAmount * global.amount_;
+    //        // reset amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
+    //        global.amount_ = 1.;
     //        BrokerError(("Close working order " + std::to_string(nTradeID)).c_str());
     //        if (!qty) {
     //            auto response = client->cancelOrder(iter->second.id);
@@ -1101,17 +1098,17 @@ namespace alpaca
             return getPosition((char*)(parameter));
 
         case SET_ORDERTEXT:
-            s_nextOrderText = (char*)parameter;
-            LOG_DEBUG("SET_ORDERTEXT: %s\n", s_nextOrderText.c_str());
+            global.order_text_ = (char*)parameter;
+            LOG_DEBUG("SET_ORDERTEXT: %s\n", global.order_text_.c_str());
             return (double)parameter;
 
         case SET_SYMBOL:
-            s_asset = (char*)parameter;
-            LOG_DEBUG("SET_SYMBOL: %s\n", s_asset.c_str());
+            global.symbol_ = (char*)parameter;
+            LOG_DEBUG("SET_SYMBOL: %s\n", global.symbol_.c_str());
             return 1;
 
         case SET_MULTIPLIER:
-            s_multiplier = (int)parameter;
+            global.multiplier_ = (double)parameter;
             return 1;
 
         case SET_ORDERTYPE: {
@@ -1148,14 +1145,14 @@ namespace alpaca
         }
 
         case GET_PRICETYPE:
-            return s_config.priceType;
+            return global.price_type_;
 
         case SET_PRICETYPE:
         {
             auto price_type = (int)parameter;
-            bool resubscribe = s_config.priceType != price_type;
-            s_config.priceType = (int)parameter;
-            LOG_DEBUG("SET_PRICETYPE: %d resubscribe: %d\n", s_config.priceType, resubscribe);
+            bool resubscribe = global.price_type_ != price_type;
+            global.price_type_ = (int)parameter;
+            LOG_DEBUG("SET_PRICETYPE: %d resubscribe: %d\n", global.price_type_, resubscribe);
             if (resubscribe && wsClient) {
                 // price type changed. 
                 // change websocket subscription
@@ -1165,7 +1162,7 @@ namespace alpaca
                         LOG_DEBUG("%s subscribed\n", asset);
 
                         // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
-                        if (s_config.priceType == 2)
+                        if (global.price_type_ == 2)
                         {
                             auto last_trade = pMarketData[asset->asset_class]->getLastTrade(asset->symbol);
                             if (last_trade)
@@ -1188,19 +1185,18 @@ namespace alpaca
         }
 
         case GET_UUID:
+            LOG_TRACE("GET_UUID: %s\n", s_lastOrderUUID.c_str());
             snprintf((char*)parameter, s_lastOrderUUID.size(), s_lastOrderUUID.c_str());
             break;
 
         case SET_UUID:
             s_nextOrderUUID = (char*)parameter;
+            LOG_TRACE("SET_UUID: %s, %s\n", s_nextOrderUUID.c_str(), std::string((char*)parameter, s_nextOrderUUID.size() + 1).c_str());
             break;
 
-        case GET_VOLTYPE:
-          return 0;
-
         case SET_AMOUNT:
-            s_amount = *(double*)parameter;
-            LOG_DIAG("SET_AMOUNT: %.8f\n", s_amount);
+            global.amount_ = *(double*)parameter;
+            LOG_TRACE("SET_AMOUNT: %.8f\n", global.amount_);
             break;
 
         case SET_DIAGNOSTICS:
@@ -1210,9 +1206,37 @@ namespace alpaca
             }
             break;
 
+        case GET_VOLTYPE:
+        {
+            auto rt = global.price_type_ == 2 ? 4 : 3;
+            SPDLOG_TRACE("GET_VOLTYPE: {}", rt);
+            return rt;
+        }
+
+        case SET_VOLTYPE:
+            SPDLOG_TRACE("SET_VOLTYPE: {}", (int)parameter);
+            global.vol_type_ = (int)parameter;
+            return parameter;
+
         case SET_HWND:
+        {
+            SPDLOG_TRACE("SET_HWND: 0x{:x}", parameter);
+            global.handle_ = (HWND)parameter;
+            return parameter;
+        }
+
         case GET_CALLBACK:
         case SET_CCY:
+            break;
+
+        case GET_VOLUME:
+            switch ((int)parameter)
+            {
+            case 5:
+                break;
+            case 6:
+                break;
+            }
             break;
 
         case CREATE_ASSETLIST: {

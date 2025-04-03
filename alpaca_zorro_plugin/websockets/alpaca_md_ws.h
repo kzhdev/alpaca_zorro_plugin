@@ -9,6 +9,7 @@
 #include "rapidjson/writer.h"
 #include <atomic>
 #include "config.h"
+#include "global.h"
 
 #ifdef _WIN32
 // Remove GetObject definition from windows.h, which prevents calls to
@@ -163,6 +164,7 @@ namespace alpaca {
         }
 
         bool subscribeAsset(const AssetBase* asset, bool force = false) {
+            auto &global = zorro::Global::get();
             if (!authenticated(asset->asset_class)) {
                 return false;
             }
@@ -171,7 +173,7 @@ namespace alpaca {
             if (iter == subscriptions_.end()) {
                 iter = subscriptions_.emplace(asset, Subscription()).first;
             }
-            else if (!force && ((Config::get().priceType == 2 && (iter->second.subscriptionType & SubscriptionType::Trades)) || (Config::get().priceType != 2 && (iter->second.subscriptionType & SubscriptionType::Quotes)))) {
+            else if (!force && ((global.price_type_ == 2 && (iter->second.subscriptionType & SubscriptionType::Trades)) || (global.price_type_ != 2 && (iter->second.subscriptionType & SubscriptionType::Quotes)))) {
                 return true;
             }
 
@@ -182,7 +184,7 @@ namespace alpaca {
             writer.StartObject();
             writer.Key("action");
             writer.String("subscribe");
-            if (Config::get().priceType == 2) {
+            if (global.price_type_ == 2) {
                 if (!Config::get().alpacaPaidPlan && (subscription.subscriptionType & SubscriptionType::Quotes))
                 {
                     unsubscribeAsset(asset);
@@ -193,7 +195,7 @@ namespace alpaca {
                 writer.EndArray();
                 subscription.subscriptionType |= SubscriptionType::Trades;
             }
-            if (Config::get().alpacaPaidPlan || Config::get().priceType != 2)
+            if (Config::get().alpacaPaidPlan || global.price_type_ != 2)
             {
                 writer.Key("quotes");
                 writer.StartArray();
@@ -545,6 +547,12 @@ namespace alpaca {
                 parser.get<int>("s", trade->size);
                 queue->publish(index);
             }
+
+            auto &global = zorro::Global::get();
+            if (global.handle_ && global.price_type_ == 2)
+            {
+                PostMessage(global.handle_, WM_APP + 1, 0, 0);
+            }
         }
 
         template<typename T>
@@ -564,6 +572,12 @@ namespace alpaca {
                 parser.get<double>("bp", quote->bid_price);
                 parser.get<int>("bs", quote->bid_size);
                 queue->publish(index);
+            }
+
+            auto &global = zorro::Global::get();
+            if (global.handle_ && global.price_type_ != 2)
+            {
+                PostMessage(global.handle_, WM_APP + 1, 0, 0);
             }
         }
     };
