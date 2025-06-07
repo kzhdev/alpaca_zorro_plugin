@@ -9,8 +9,8 @@ To install the plugin, follow these steps:
 
 1. Download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip).
 2. Unzip the file.
-3. Copy the `Alpca.dll` and the `websocket_proxy` folder into the `plugin` folder under Zorro's root path.
-4. Copy the `AlpacaBrokderCommands.h` file into the `include` folder under Zorro's root path.
+3. Copy the `Alpaca.dll` and the `websocket_proxy` folder into the `plugin` folder under Zorro's root path.
+4. Copy the `AlpacaBrokerCommands.h` file into the `include` folder under Zorro's root path.
 
 ## Usage
 
