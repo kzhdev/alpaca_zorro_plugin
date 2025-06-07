@@ -145,10 +145,10 @@ The Configurations are:
   ``` C++
   #include <AlpacaBrokerCommands.h>
   ....
-  int fractionable = brokerCommand(IS_ASSERT_FRACTIONABLE, Asset);
-  int shortable = brokerCommand(IS_ASSERT_SHORTABLE, Asset);
-  int easyToBorrow = brokerCommand(IS_ASSERT_EASY_TO_BORROW, Asset);
-  int marginable = brokerCommand(IS_ASSERT_EASY_TO_MARGINABLE, Asset);
+  int fractionable = brokerCommand(IS_ASSET_FRACTIONABLE, Asset);
+  int shortable = brokerCommand(IS_ASSET_SHORTABLE, Asset);
+  int easyToBorrow = brokerCommand(IS_ASSET_EASY_TO_BORROW, Asset);
+  int marginable = brokerCommand(IS_ASSET_EASY_TO_MARGINABLE, Asset);
   ```
 
 * Set Historical Bar Adjustment 
