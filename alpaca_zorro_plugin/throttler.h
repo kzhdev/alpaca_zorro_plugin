@@ -29,7 +29,7 @@ namespace alpaca {
         Throttler(const std::string& account) {
             std::string shmName("AlpacaThrottler");
             shmName.append(account);
-            HANDLE hMapFile = CreateFileMapping(
+            hMapFile_ = CreateFileMapping(
                 INVALID_HANDLE_VALUE,   // use paging file
                 NULL,                   // default security
                 PAGE_READWRITE,         // read/write access
@@ -39,7 +39,7 @@ namespace alpaca {
             );
 
             bool own = false;
-            if (hMapFile == NULL) {
+            if (hMapFile_ == NULL) {
                 throw std::runtime_error("Failed to create shm. err=" + std::to_string(GetLastError()));
             }
 
@@ -47,7 +47,7 @@ namespace alpaca {
                 own = true;
             }
 
-            lpvMem_ = MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, BF_SZ);
+            lpvMem_ = MapViewOfFile(hMapFile_, FILE_MAP_ALL_ACCESS, 0, 0, BF_SZ);
             if (!lpvMem_) {
                 throw std::runtime_error("Failed to create shm. err=" + std::to_string(GetLastError()));
             }
