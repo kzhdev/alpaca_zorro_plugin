@@ -20,8 +20,8 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
     add_definitions(-DNDEBUG)
 endif()
 
-set(RELEASE_DIR "${CMAKE_CURRENT_BINARY_DIR}/release")
 configure_file(alpaca_zorro_plugin/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/version.h)
+configure_file(resources/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
 # Enable precompiled headers
 # set(CMAKE_CXX_PCH_ENABLED TRUE)
@@ -30,7 +30,11 @@ add_definitions(-DSPDLOG_USE_STD_FORMAT -DSPDLOG_USE_STD_FORMAT_HO)
 
 file(GLOB_RECURSE SOURCE_FILES alpaca_zorro_plugin/*.cpp alpaca/*.cpp market_data/*.cpp websocket/*.cpp)
 
-add_library(alpaca_zorro_plugin SHARED ${SOURCE_FILES})
+set(RESOURCES
+    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+)
+
+add_library(alpaca_zorro_plugin SHARED ${SOURCE_FILES} ${RESOURCES})
 target_include_directories(alpaca_zorro_plugin PUBLIC 
     alpaca_zorro_plugin
     alpaca_zorro_plugin/zorro
@@ -66,17 +70,22 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
     if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "win32")
         add_custom_command(TARGET alpaca_zorro_plugin
             POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/Release/ ${CMAKE_BINARY_DIR}/bin/Release/websocket_proxy
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/dist"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/Release/include"
+            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/alpaca_zorro_plugin/AlpacaBrokerCommands.h" "${CMAKE_BINARY_DIR}/bin/Release/include/"
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/websocket_proxy/bin ${CMAKE_BINARY_DIR}/bin/Release/websocket_proxy
-            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "alpaca_zorro_plugin_${BUILD_VERSION}.zip" --format=zip "${CMAKE_BINARY_DIR}/bin/Release"
+            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/AlpacaZorroPlugin_${BUILD_VERSION}.zip" --format=zip "./"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Release"
             COMMENT "Creating zip archive"
         )
     else()
         add_custom_command(TARGET alpaca_zorro_plugin
             POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/dist"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/Release/include"
+            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/alpaca_zorro_plugin/AlpacaBrokerCommands.h" "${CMAKE_BINARY_DIR}/bin/Release/include/"
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/websocket_proxy/bin ${CMAKE_BINARY_DIR}/bin/Release/websocket_proxy
-            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "AlpacaZorroPlugin64_${BUILD_VERSION}.zip" --format=zip "${CMAKE_BINARY_DIR}/bin/Release"
+            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/AlpacaZorroPlugin64_${BUILD_VERSION}.zip" --format=zip "./"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Release"
             COMMENT "Creating zip archive 64bit"
         )
