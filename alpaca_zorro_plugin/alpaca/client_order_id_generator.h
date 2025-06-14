@@ -39,7 +39,7 @@ namespace alpaca {
         static constexpr uint32_t BF_SZ = 64;
     public:
         ClientOrderIdGenerator(Client& client) {
-            HANDLE hMapFile = CreateFileMapping(
+            hMapFile_ = CreateFileMapping(
                 INVALID_HANDLE_VALUE,   // use paging file
                 NULL,                   // default security
                 PAGE_READWRITE,         // read/write access
@@ -49,7 +49,7 @@ namespace alpaca {
             );
 
             bool own = false;
-            if (hMapFile == NULL) {
+            if (hMapFile_ == NULL) {
                 throw std::runtime_error("Failed to create shm. err=" + std::to_string(GetLastError()));
             }
 
@@ -57,7 +57,7 @@ namespace alpaca {
                 own = true;
             }
 
-            lpvMem_ = MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, BF_SZ);
+            lpvMem_ = MapViewOfFile(hMapFile_, FILE_MAP_ALL_ACCESS, 0, 0, BF_SZ);
             if (!lpvMem_) {
                 throw std::runtime_error("Failed to create shm. err=" + std::to_string(GetLastError()));
             }
@@ -80,18 +80,14 @@ namespace alpaca {
                                     continue;
                                 }
 
-                                LOG_DEBUG("cleintOrderId=%s\n", order.client_order_id.c_str());
+                                SPDLOG_DEBUG("clientOrderId={}", order.client_order_id);
 
                                 if (order.internal_id) {
                                     int32_t base = order.internal_id / 100000;
-                                    if (base != newBase) {
-                                        // New day reset counter
-                                        last_order_id = 1;
-                                        conflict_count = 0;
-                                    }
-                                    else {
-                                        conflict_count = (order.internal_id % 100000) / 10000;
-                                        last_order_id = order.internal_id % 10000;
+                                    if (base == newBase)
+                                    {
+                                        conflict_count = std::max<int32_t>(conflict_count, (order.internal_id % 100000) / 10000);
+                                        last_order_id = std::max<int32_t>(last_order_id, order.internal_id % 10000);
                                     }
                                     break;
                                 }
@@ -107,7 +103,7 @@ namespace alpaca {
                 next_order_id_ = reinterpret_cast<std::atomic<NextId>*>(lpvMem_);
             }
             auto next = next_order_id_->load(std::memory_order_relaxed);
-            LOG_INFO("last_order_id_: conflit_cout=%d, id=%d\n", next.conflict_count, next.next_id);
+            SPDLOG_INFO("last_order_id_: conflit_cout={}, id={}", next.conflict_count, next.next_id);
         }
 
         ~ClientOrderIdGenerator() {

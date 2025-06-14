@@ -13,6 +13,21 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\market_data">
+      <UniqueIdentifier>{8b852d4c-c792-4f64-a975-9008fac18c75}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\alpaca">
+      <UniqueIdentifier>{2ab955a9-11b2-4ac7-b024-bbcc0af82a44}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\websockets">
+      <UniqueIdentifier>{c4040fe0-6cb9-4f54-95fa-fb7b77e5bb71}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\alpaca">
+      <UniqueIdentifier>{a04f610e-ede1-4801-89c0-d508aea31dd3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\market_data">
+      <UniqueIdentifier>{4a2afa22-b662-4acb-aa52-fe1a1a2da39c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -27,43 +42,10 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="alpaca\client.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\account.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\order.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\clock.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\json.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\position.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\client_order_id_generator.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="alpaca\asset.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="request.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="market_data\bars.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="market_data\quote.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="logger.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="market_data\alpaca_market_data.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="throttler.h">
@@ -72,26 +54,68 @@
     <ClInclude Include="config.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="alpaca\alpaca_websockets.h\Header.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="websockets\alpaca_md_ws.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="market_data\trade.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="market_data\snapshot.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="AlpacaBrokerCommands.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="market_data\market_data.h">
+      <Filter>Header Files\market_data</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\option_market_data.h">
+      <Filter>Header Files\market_data</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\account.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="websockets\alpaca_md_ws.h">
+      <Filter>Header Files\websockets</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\asset.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
     <ClInclude Include="alpaca\balance.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\bars.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\client.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\client_order_id_generator.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\clock.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\json.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\order.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\position.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\quote.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\snapshot.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\trade.h">
+      <Filter>Header Files\alpaca</Filter>
     </ClInclude>
     <ClInclude Include="websockets\alpaca_trade_streaming.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\websockets</Filter>
+    </ClInclude>
+    <ClInclude Include="alpaca\option_contract.h">
+      <Filter>Header Files\alpaca</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\crypto_market_data.h">
+      <Filter>Header Files\market_data</Filter>
+    </ClInclude>
+    <ClInclude Include="market_data\stock_market_data.h">
+      <Filter>Header Files\market_data</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -105,13 +129,13 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="alpaca\client.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\alpaca</Filter>
     </ClCompile>
     <ClCompile Include="alpaca\clock.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\alpaca</Filter>
     </ClCompile>
-    <ClCompile Include="market_data\alpaca_market_data.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="market_data\market_data.cpp">
+      <Filter>Source Files\market_data</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

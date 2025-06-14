@@ -1,6 +1,5 @@
 #pragma once
 
-#include <windows.h>
 #include <tchar.h>
 #include <atomic>
 #include <cstdint>
@@ -53,11 +52,11 @@ namespace alpaca {
             }
 
             if (own) {
-                LOG_DEBUG(" %d create shm %s\n", _getpid(), shmName.c_str());
+                SPDLOG_DEBUG(" {} create shm {}", _getpid(), shmName);
                 data_ = new (lpvMem_) std::atomic<throttler_info>;
             }
             else {
-                LOG_DEBUG(" %d open shm %s\n", _getpid(), shmName.c_str());
+                SPDLOG_DEBUG(" {} open shm {}", _getpid(), shmName);
                 data_ = reinterpret_cast<std::atomic<throttler_info>*>(lpvMem_);
             }
         }
@@ -97,10 +96,10 @@ namespace alpaca {
                     if (data_->compare_exchange_strong(data, new_data, std::memory_order_release, std::memory_order_relaxed)) {
                         return true;
                     }
-                    LOG_TRACE("compare_exchange_strong failed. %d -> %d\n", new_data.count_, data.count_);
+                    SPDLOG_TRACE("compare_exchange_strong failed. {} -> {}", new_data.count_, data.count_);
                 }
 
-                LOG_DEBUG_EXT(LogType::LT_MISC, "waitForSending...\n");
+                SPDLOG_TRACE("waitForSending...");
                 while (((timestamp = get_timestamp()) - data.start_timestamp_) < 60000 && data.count_ >= 200)
                 {
                     if (!BrokerProgress(1)) {

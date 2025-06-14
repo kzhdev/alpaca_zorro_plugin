@@ -179,7 +179,7 @@ namespace alpaca {
         double qty = 0.;
         double filled_qty = 0.;
         int32_t internal_id = 0;
-        AssetClass asset_class = AssetClass::USEquity;
+        AssetClass asset_class = AssetClass::US_EQUITY;
         OrderSide side;
         TimeInForce tif;
         OrderType type;
@@ -202,7 +202,7 @@ namespace alpaca {
     private:
         template<typename> friend class Response;
 
-        template<typename CallerT, typename T>
+        template<typename T>
         std::pair<int, std::string> fromJSON(const T& parser) {
             parser.get("id", id);
             parser.get("client_order_id", client_order_id);
@@ -215,7 +215,7 @@ namespace alpaca {
             parser.get("failed_at", failed_at);
             parser.get("asset_id", asset_id);
             parser.get("symbol", symbol);
-            asset_class = to_assetClass(parser.get<std::string>("asset_class"));
+            asset_class = toAssetClass(parser.get<std::string>("asset_class"));
             parser.get("qty", qty);
             parser.get("filled_qty", filled_qty);
             type = to_orderType(parser.get<std::string>("type"));

@@ -3,7 +3,7 @@
 #include <windows.h>  // FARPROC
 
 typedef double DATE;			//prerequisite for using trading.h
-#include "include\trading.h"	// enter your path to trading.h (in your Zorro folder)
+#include <include\trading.h>	// enter your path to trading.h (in your Zorro folder)
 //#include "include\functions.h"	// <- some #define's copied from functions.h
 
 #ifdef ALPACA_EXPORTS 
@@ -22,6 +22,7 @@ namespace alpaca
     long(__cdecl* http_status)(int id);
     long(__cdecl* http_result)(int id, char* content, long size);
     void(__cdecl* http_free)(int id);
+    const char* (__cdecl* report)(int Mode);
 
     // zorro functions
     DLLFUNC_C int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress);
@@ -33,11 +34,5 @@ namespace alpaca
     DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill);
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double* pProfit);
     DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill);
-    DLLFUNC_C double BrokerCommand(int Command, DWORD dwParameter);
-
-    //// WebsocketsProxyClient functions
-    //DLLFUNC_C void onWebsocketConnected();
-    //DLLFUNC_C void onWebsocketDisconnected();
-    //DLLFUNC_C void onWebsocketError(const char* msg, int len);
-    //DLLFUNC_C void onWebsocketData(const char* msg, int len, int remainging);
+    DLLFUNC_C double BrokerCommand(int Command, intptr_t parameter);
 }

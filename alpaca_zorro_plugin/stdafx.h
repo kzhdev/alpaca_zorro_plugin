@@ -13,3 +13,15 @@
 #include <windows.h>
 
 // TODO: reference additional headers your program requires here
+#include <atomic>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <cstdlib>
+#include <memory>
+
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#include <spdlog/spdlog.h>
+#include <spdlog/async.h>
+#include <spdlog/sinks/rotating_file_sink.h>

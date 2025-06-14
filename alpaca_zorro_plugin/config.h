@@ -25,9 +25,7 @@ namespace alpaca {
 
     struct Config {
         double fractionalLotAmount = 1;
-        int priceType = 0;
         uint8_t logLevel = 0;
-        uint8_t logType = 1;
         bool alpacaPaidPlan = true;
         bool useWebsocket = true;
         Adjustment adjustment = Adjustment::all;
@@ -61,7 +59,6 @@ namespace alpaca {
             while (getline(config, line)) {
                 getConfig(line, ConfigFound::PaidPlan,  "AlpacaPaidDataPlan", alpacaPaidPlan);
                 getConfig(line, ConfigFound::LogLevel, "AlpacaLogLevel", logLevel);
-                getConfig(line, ConfigFound::LogType, "AlpacaLogType", logType);
                 getConfig(line, ConfigFound::UseWebsocket, "AlpacaUseWebsocket", useWebsocket);
                 getConfig(line, ConfigFound::FractionalLotAmount, "AlpacaFractionalLotAmount", fractionalLotAmount);
             }
@@ -115,11 +112,10 @@ namespace alpaca {
         enum ConfigFound : uint8_t {
             PaidPlan,
             LogLevel,
-            LogType,
             UseWebsocket,
             FractionalLotAmount,
-            __end__,
+            __count__,  // for internal use only
         };
-        std::bitset<ConfigFound::__end__> configFound_ = 0;
+        std::bitset<ConfigFound::__count__> configFound_ = 0;
     };
 }

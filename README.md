@@ -7,17 +7,17 @@ an institutional-grade development tool for financial research and automated tra
 
 To install the plugin, follow these steps:
 
-1. Download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases/download/v1.2.1/AlpacaZorroPlugin_v1.2.1.zip).
-2. Unzip the file.
-3. Copy the `Alpaca.dll` and the `websocket_proxy` folder into the `plugin` folder under Zorro's root path.
-4. Copy the `AlpacaBrokerCommands.h` file into the `include` folder under Zorro's root path.
+1. Download the [latest release](https://github.com/kzhdev/alpaca_zorro_plugin/releases).
+2. Unzip the downloaded file.
+3. Copy the `Alpaca.dll` file and the `websocket_proxy` folder into the `plugin` folder (or `plugin64` folder for 64bit build) under Zorro's root path.
+4. Copy the `AlpacaBrokderCommands.h` file into the `include` folder under Zorro's root path.
 
 ## Usage
 
 To use the plugin, follow these steps:
 
 1. Generate an API Key on the Alpaca website.
-2. Open Zorro, select Alpaca.
+2. Open Zorro, select Alpaca as the broker.
 3. Enter the **API Key** in the **User ID** input box.
 4. Enter the **Secret Key** in the **Password** input box.
 
@@ -188,10 +188,6 @@ The Configurations are:
     * SET_ORDERTYPE
     * SET_PRICETYPE:
     * SET_DIAGNOSTICS:
-
-## TO-DO List
-
-* Add target and stop order support
 
 ## [Build From Source](BUILD.md)
 

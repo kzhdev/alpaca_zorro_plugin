@@ -26,7 +26,7 @@ namespace alpaca {
     private:
         template<typename> friend class Response;
 
-        template<typename CallerT, typename parserT>
+        template<typename parserT>
         std::pair<int, std::string> fromJSON(const parserT& parser) {
             parser.get<double>("buying_power", buying_power);
             parser.get<double>("cash", cash);

@@ -12,6 +12,7 @@
 #endif  // _WIN32
 
 namespace alpaca {
+	extern __time32_t parseTimeStamp2(const std::string& timestamp);
 	std::string timeToString(__time32_t time);
 
 	enum class Adjustment : uint8_t
@@ -43,23 +44,10 @@ namespace alpaca {
 		template<typename> friend class Response;
 		friend class Bars;
 
-		template<typename CallerT, typename T>
-		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class AlpacaMarketData>::value>::type* = 0) {
+		template<typename T>
+		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<std::string>("t", time_string);
 			time = parseTimeStamp2(time_string);
-			parser.get<double>("o", open_price);
-			parser.get<double>("h", high_price);
-			parser.get<double>("l", low_price);
-			parser.get<double>("c", close_price);
-			parser.get<uint32_t>("v", volume);
-			return std::make_pair(0, "OK");
-		}
-
-		template<typename CallerT, typename T>
-		std::pair<int, std::string> fromJSON(const T& parser, typename std::enable_if<std::is_same<CallerT, class Polygon>::value>::type* = 0) {
-			uint64_t t;
-			parser.get<uint64_t>("t", t);
-			time = static_cast<uint32_t>(t / 1000);
 			parser.get<double>("o", open_price);
 			parser.get<double>("h", high_price);
 			parser.get<double>("l", low_price);
@@ -80,19 +68,33 @@ namespace alpaca {
 	private:
 		template<typename> friend class Response;
 
-		template<typename CallerT, typename T>
+		template<typename T>
 		std::pair<int, std::string> fromJSON(const T& parser) {
 			parser.get<std::string>("next_page_token", next_page_token);
 			if (parser.json.HasMember("bars")) {
 				if (parser.json["bars"].IsNull()) {
 					return std::make_pair(0, "OK");
 				}
-				for (auto& symbol_bar : parser.json["bars"].GetArray()) {
-					auto barJson = symbol_bar.GetObject();
-					Parser<decltype(symbol_bar.GetObject())> p(barJson);
-					Bar bar;
-					bar.fromJSON<CallerT>(p);
-					bars.emplace_back(std::move(bar));
+
+				if (parser.json["bars"].IsArray()) {
+					for (auto& symbol_bar : parser.json["bars"].GetArray()) {
+						auto barJson = symbol_bar.GetObject();
+						Parser<decltype(symbol_bar.GetObject())> p(barJson);
+						Bar bar;
+						bar.fromJSON(p);
+						bars.emplace_back(std::move(bar));
+					}
+				}
+				else if (parser.json["bars"].IsObject()) {
+					for (auto& kvp : parser.json["bars"].GetObject()) {
+						for (auto& symbol_bar : kvp.value.GetArray()) {
+							auto barJson = symbol_bar.GetObject();
+							Parser<decltype(symbol_bar.GetObject())> p(barJson);
+							Bar bar;
+							bar.fromJSON(p);
+							bars.emplace_back(std::move(bar));
+						}
+					}
 				}
 			}
 			return std::make_pair(0, "OK");

@@ -1,0 +1,7 @@
+#pragma once
+
+// The version numbers are passed in from CMakeList
+#define AlpacaZorroPlugin_VERSION_MAJOR @AlpacaZorroPlugin_VERSION_MAJOR@
+#define AlpacaZorroPlugin_VERSION_MINOR @AlpacaZorroPlugin_VERSION_MINOR@
+#define AlpacaZorroPlugin_VERSION_PATCH @AlpacaZorroPlugin_VERSION_PATCH@
+#define AlpacaZorroPlugin_VERSION_TWEAK @AlpacaZorroPlugin_VERSION_TWEAK@
