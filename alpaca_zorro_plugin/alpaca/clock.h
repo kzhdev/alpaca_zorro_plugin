@@ -8,6 +8,7 @@ namespace alpaca {
     __time32_t parseTimeStamp2(std::string&& timestamp);
     int64_t parseDate(const std::string& timestamp);
     int32_t getTimeZoneOffset(const std::string& timestamp);
+    int32_t yyyymmdd_from_string(const std::string& s);
 
     struct Clock {
         __time32_t next_close;

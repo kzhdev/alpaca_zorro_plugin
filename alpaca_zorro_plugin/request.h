@@ -8,6 +8,7 @@
 #include "alpaca/json.h"
 #include "logger.h"
 #include "throttler.h"
+#include "rapidjson/error/en.h"
 
 #ifdef _WIN32
 // Remove GetObject definition from windows.h, which prevents calls to
@@ -94,14 +95,15 @@ namespace alpaca {
 
     private:
         template<typename T>
-        friend Response<T> request(const std::string&, const char*, const char*, LogLevel logLevel, LogType type);
+        friend Response<T> request(const std::string&, const char*, const char*, spdlog::level::level_enum logLevel);
 
         template<typename T>
-        friend void request(Response<T>& response, const std::string&, const char*, const char*, LogLevel logLevel, LogType type);
+        friend void request(Response<T>& response, const std::string&, const char*, const char*, spdlog::level::level_enum logLevel);
 
         void parseContent(const std::string& content, const std::string& url) {
             rapidjson::Document d;
             if (d.Parse(content.c_str()).HasParseError()) {
+                SPDLOG_ERROR("Received parse error when deserializing asset JSON. err={} error_offset={} content={}", GetParseError_En(d.GetParseError()), d.GetErrorOffset(), content);
                 onError("Received parse error when deserializing asset JSON. err=" + std::to_string(d.GetParseError()) + "\n" + content);
                 return;
             }
@@ -121,7 +123,7 @@ namespace alpaca {
             }
             else {
                 if (d.HasMember("code") && d.HasMember("message")) {
-                    onError(d["message"].GetString());
+                    onError(d["message"].GetString(), d["code"].GetInt());
                     return;
                 }
                 else if (!d.HasMember("code") && d.HasMember("message") /*&& (strcmp(d["message"].GetString(), "too many requests.") == 0)*/) {
@@ -197,7 +199,7 @@ namespace alpaca {
     * 
     */
     template<typename T>
-    inline void request(Response<T>& response, const std::string& url, const char* headers = nullptr, const char* data = nullptr, LogLevel logLevel = LogLevel::L_TRACE, LogType type = LogType::LT_ALL) {
+    inline void request(Response<T>& response, const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace) {
         if (url.empty()) {
             return response.onError("Invalid url - empty");
         }
@@ -207,7 +209,7 @@ namespace alpaca {
             return response.onError("Brokerprogress returned zero. Aborting...");
         }
 
-        LOG_DEBUG("--> %s\n", url.c_str());
+        spdlog::log(logLevel, "--> {}", url);
 
         int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
         if (!id) {
@@ -245,15 +247,15 @@ namespace alpaca {
             }
         }
 
-        Logger::instance().log(logLevel, type, "<-- %s\n", ss.str().c_str());
+        spdlog::log(logLevel, "<-- {}", ss.str());
 
         return response.parseContent(ss.str(), url);
     }
 
     template<typename T>
-    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, LogLevel logLevel = LogLevel::L_TRACE, LogType type = LogType::LT_ALL) {
+    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace) {
         Response<T> response;
-        request<T>(response, url, headers, data, logLevel, type);
+        request<T>(response, url, headers, data, logLevel);
         return response;
     }
 

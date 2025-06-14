@@ -1,3 +1,12 @@
+v1.4.0
+- Added Crypto and Options support
+- Removed Polygon market data support
+- Added x64 build
+- Removed git submodules
+- Added cmake build
+- Updated to 64bit WebSocketProxy
+- Changed to Spdlog
+
 v1.3.4
 - Subscribe Trades or Quotes via WebSocket based on the price type set in the script.
 - Add REST API throttle for Free MD plan.

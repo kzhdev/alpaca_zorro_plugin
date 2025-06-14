@@ -38,6 +38,7 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
@@ -52,6 +53,7 @@
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -90,7 +92,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include;..\3rdparty\spdlog\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -107,8 +109,8 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;SPDLOG_USE_STD_FORMAT;SPDLOG_USE_STD_FORMAT_HO</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include;..\3rdparty\spdlog\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -127,7 +129,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include;..\3rdparty\spdlog\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -160,8 +162,8 @@ EXIT 0</Command>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ALPACA_EXPORTS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;SPDLOG_USE_STD_FORMAT;SPDLOG_USE_STD_FORMAT_HO</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\zorro;.\;..\3rdparty\rapidjson\include;..\3rdparty\websocket_proxy\include;..\3rdparty\HowardHinnant\date\include;..\3rdparty\spdlog\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
       <LanguageStandard>stdcpp20</LanguageStandard>

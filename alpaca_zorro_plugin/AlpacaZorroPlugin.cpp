@@ -41,7 +41,7 @@ using namespace websocket_proxy;
 
 namespace {
     TimeInForce s_tif = TimeInForce::FOK;
-    std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
+    // std::unordered_map<uint32_t, Order> s_mapOrderByClientOrderId;
     std::unordered_map<std::string, Order> s_mapOrderByUUID;
     Config &s_config = Config::get();
     uint32_t alpaca_md_ws_id = 0;
@@ -70,6 +70,17 @@ namespace alpaca
     std::unique_ptr<Throttler> s_throttler;
     std::string account_number;
 
+    void shutdown()
+    {
+        if (wsClient) {
+            wsClient->logoutAll();
+            wsClient.reset();
+        }
+        alpaca_md_ws_id = 0;
+        client.reset();
+        spdlog::shutdown();
+    }
+
     inline AssetBase* getAsset(const std::string &symbol)
     {
         auto& assets = client->allAssets();
@@ -87,10 +98,6 @@ namespace alpaca
         strcpy_s(Name, 32, "Alpaca");
         (FARPROC&)BrokerError = fpError;
         (FARPROC&)BrokerProgress = fpProgress;
-        Logger::instance().init("Alpaca");
-        if (s_config.useWebsocket) {
-            wsClient = std::make_unique<AlpacaMdWs>();
-        }
         return PLUGIN_VERSION;
     }
 
@@ -106,10 +113,34 @@ namespace alpaca
     {
         if (!User) // log out
         {
-            if (wsClient) {
-                wsClient->logoutAll();
+            shutdown();
+            return 0;
+        }
+
+        try
+        {
+            spdlog::init_thread_pool(8192, 1);
+            auto async_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(std::format("./Log/Alpaca_{}_{}.log", report(25), Type), 524288000, 5);
+            auto async_logger = std::make_shared<spdlog::async_logger>("async_logger", async_sink, spdlog::thread_pool(), spdlog::async_overflow_policy::overrun_oldest);
+            spdlog::set_default_logger(async_logger);
+// #ifdef DEBUG
+//             spdlog::set_level(spdlog::level::trace);
+//             spdlog::flush_on(spdlog::level::trace);
+// #else
+            auto log_level = toLogLevel(s_config.logLevel);
+            spdlog::set_level(log_level);
+            if (log_level > SPDLOG_LEVEL_INFO)
+            {
+                spdlog::flush_on(log_level);
             }
-            alpaca_md_ws_id = 0;
+// #endif
+            spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%F][%t][%l] %v");
+            spdlog::flush_every(std::chrono::seconds(3));
+        }
+        catch(const std::exception& e)
+        {
+            BrokerError(e.what());
+            shutdown();
             return 0;
         }
 
@@ -120,8 +151,6 @@ namespace alpaca
         s_activeAssets.clear();        
 
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
-        Logger::instance().setLevel(static_cast<LogLevel>(s_config.logLevel));
-        Logger::instance().setLogType(s_config.logType);
 
         if (!client || client->getApiKey() != User) {
             s_throttler = std::make_unique<Throttler>(User);
@@ -133,38 +162,35 @@ namespace alpaca
 
             if (s_config.alpacaPaidPlan) {
                 BrokerError("Use Alpaca Pro Market Data");
-                LOG_INFO("Use Alpaca Pro Market Data\n");
+                SPDLOG_INFO("Use Alpaca Pro Market Data");
             }
             else {
                 BrokerError("Use Alpaca Basic Market Data");
-                LOG_INFO("Use Alpaca Basic Market Data\n");
+                SPDLOG_INFO("Use Alpaca Basic Market Data");
             }
         }
 
         if (isPaperTrading)
         {
             BrokerError("Paper mode");
-            LOG_INFO("Paper mode\n");
+            SPDLOG_INFO("Paper mode");
         }
         else
         {
             BrokerError("Live mode");
-            LOG_INFO("Live mode\n");
+            SPDLOG_INFO("Live mode");
         }
 
         if (s_config.useWebsocket) {
             try
             {
-                if (!wsClient)
-                {
-                    wsClient = std::make_unique<AlpacaMdWs>();
-                }
+                wsClient = std::make_unique<AlpacaMdWs>();
                 wsClient->init(User, Pwd);
             }
             catch (std::runtime_error& err)
             {
                 BrokerError(err.what());
-                LOG_ERROR(err.what());
+                SPDLOG_ERROR(err.what());
             }
             catch (...)
             {
@@ -261,7 +287,7 @@ namespace alpaca
                 {
                     if (wsClient->subscribeAsset(asset))
                     {
-                        LOG_DEBUG("%s subscribed\n", Asset);
+                        SPDLOG_DEBUG("{} subscribed", Asset);
 
                         // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
                         if (global.price_type_ == 2)
@@ -283,7 +309,7 @@ namespace alpaca
                     }
                     else 
                     {
-                        LOG_DEBUG("Failed to subscribed %s\n", Asset);
+                        SPDLOG_DEBUG("Failed to subscribed {}", Asset);
                         BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
                         wsClient.reset();
                     }
@@ -490,16 +516,16 @@ namespace alpaca
         };
 
         if (!s_config.alpacaPaidPlan) {
-            LOG_DEBUG("BrokerHistory %s start: %d end: %d nTickMinutes: %d nTicks: %d\n", Asset, start, end, nTickMinutes, nTicks);
+            SPDLOG_DEBUG("BrokerHistory {} start: {} end: {} nTickMinutes: {} nTicks: {}", Asset, start, end, nTickMinutes, nTicks);
             auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             if ((now - end) <= 900) {
                 end = static_cast<__time32_t>(now) - 930;
-                LOG_INFO("Alpaca Basic Plan. Adjust end to %d\n", end);
+                SPDLOG_INFO("Alpaca Basic Plan. Adjust end to {}", end);
             }
         }
 
         while(true) {
-            LOG_DEBUG("BrokerHistory %s start: %s(%d) end: %s(%d) nTickMinutes: %d nTicks: %d\n", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
+            SPDLOG_DEBUG("BrokerHistory {} start: {}({}) end: {}({}) nTickMinutes: {} nTicks: {}", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
 
             auto response = pMarketData[asset_class]->getBars(Asset, start, end, nTickMinutes, nTicks, global.price_type_);
             if (!response) {
@@ -519,10 +545,10 @@ namespace alpaca
                 return barsDownloaded;
             }
 
-            LOG_DIAG("%d bar downloaded. %s-%s\n", bars.size(), (bars.size() > 0 ? bars[0].time_string.c_str() : ""), (bars.size() > 0 ? (*bars.rbegin()).time_string.c_str() : ""));
+            SPDLOG_TRACE("{} bar downloaded. {}-{}", bars.size(), (bars.size() > 0 ? bars[0].time_string.c_str() : ""), (bars.size() > 0 ? (*bars.rbegin()).time_string.c_str() : ""));
 
             populateTicks(bars);
-            LOG_DIAG("%d bar returned\n", barsDownloaded);
+            SPDLOG_TRACE("{} bar returned", barsDownloaded);
             break;
         }
         return barsDownloaded;
@@ -564,7 +590,7 @@ namespace alpaca
 
         }
 
-        LOG_DEBUG("BrokerBuy2 %s orderText=%s nAmount=%d qty=%f dStopDist=%f limit=%f\n", Asset, global.order_text_.c_str(), nAmount, qty, dStopDist, dLimit);
+        SPDLOG_DEBUG("BrokerBuy2 {} orderText={} nAmount={} qty={} dStopDist={} limit={}", Asset, global.order_text_, nAmount, qty, dStopDist, dLimit);
 
         auto asset = client->allAssets().at(Asset);
         auto response = client->submitOrder(asset, qty, side, type, s_tif, dLimit, NAN, global.order_text_, asset->asset_class == AssetClass::US_EQUITY ? s_config.fractionalLotAmount : global.amount_);
@@ -577,8 +603,8 @@ namespace alpaca
 
         auto* order = &response.content();
         auto exchOrdId = order->id;
-        auto internalOrdId = order->internal_id;
-        s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
+        // auto internalOrdId = order->internal_id;
+        // s_mapOrderByClientOrderId.emplace(internalOrdId, *order);
         s_mapOrderByUUID.emplace(exchOrdId, *order);
         s_lastOrderUUID = exchOrdId;
 
@@ -591,8 +617,8 @@ namespace alpaca
             }
             // reset amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
             global.amount_ = 1.;
-            return internalOrdId;
-            // return -1;
+            // return internalOrdId;
+            return -1;
         }
         
         if (pFill)
@@ -601,8 +627,8 @@ namespace alpaca
         }
 
         if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
-            return internalOrdId;
-            // return -1;
+            // return internalOrdId;
+            return -1;
         }
 
         // Limit order has not accepted by Exchange yet
@@ -614,10 +640,10 @@ namespace alpaca
                 break;
             }
             order = &response2.content();
-            s_mapOrderByClientOrderId[internalOrdId] = *order;
+            // s_mapOrderByClientOrderId[internalOrdId] = *order;
             s_mapOrderByUUID[exchOrdId] = *order;
 
-            LOG_DEBUG_EXT(LT_ORDER, "Order status: %s\n", order->status.c_str());
+            SPDLOG_DEBUG("Order status: {}", order->status.c_str());
 
             if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
                 break;
@@ -641,7 +667,7 @@ namespace alpaca
 
             auto timePast = std::difftime(std::time(nullptr), start);
             if (timePast >= 30) {
-                LOG_INFO("Order submit timed out. Canceling order %s\n", exchOrdId.c_str());
+                SPDLOG_INFO("Order submit timed out. Canceling order {}", exchOrdId.c_str());
                 auto response3 = client->cancelOrder(exchOrdId);
                 if (!response3) {
                     BrokerError(("Failed to cancel order " + exchOrdId + " " + response3.what()).c_str());
@@ -651,65 +677,65 @@ namespace alpaca
         } while (!order->filled_qty);
         // reset amount, next asset might have lotAmount = 1, in that case SET_AMOUNT will not be called in advance
         global.amount_ = 1.;
-        return internalOrdId;
-        // return -1;
+        // return internalOrdId;
+        return -1;
     }
 
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
-        LOG_INFO("BrokerTrade: %d\n", nTradeID);
-        // if (nTradeID != -1) {
-        //     BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
-        //     return NAY;
-        // }
+        SPDLOG_INFO("BrokerTrade: {}", nTradeID);
+        if (nTradeID != -1) {
+            BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
+            return NAY;
+        }
         
         Response<Order> response;
         Order* order = nullptr;
-        auto iter = s_mapOrderByClientOrderId.find(nTradeID);
-        if (iter == s_mapOrderByClientOrderId.end()) {
-           // unknown order?
-           std::stringstream clientOrderId;
-           clientOrderId << "ZORRO_";
-           if (!global.order_text_.empty()) {
-               clientOrderId << global.order_text_ << "_";
-           }
-           clientOrderId << nTradeID;
-           response = client->getOrderByClientOrderId(clientOrderId.str());
-           if (!response) {
-               BrokerError(response.what().c_str());
-               return NAY;
-           }
-           order = &response.content();
-           s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
-        }
-        else {
-           order = &iter->second;
-           if (order->status != "filled" && order->status != "canceled" && order->status != "expired") {
-               response = client->getOrder(iter->second.id);
-               if (!response) {
-                   BrokerError(response.what().c_str());
-                   return NAY;
-               }
-               order = &response.content();
-               s_mapOrderByClientOrderId[nTradeID] = *order;
-           }
-        }
+        // auto iter = s_mapOrderByClientOrderId.find(nTradeID);
+        // if (iter == s_mapOrderByClientOrderId.end()) {
+        //    // unknown order?
+        //    std::stringstream clientOrderId;
+        //    clientOrderId << "ZORRO_";
+        //    if (!global.order_text_.empty()) {
+        //        clientOrderId << global.order_text_ << "_";
+        //    }
+        //    clientOrderId << nTradeID;
+        //    response = client->getOrderByClientOrderId(clientOrderId.str());
+        //    if (!response) {
+        //        BrokerError(response.what().c_str());
+        //        return NAY;
+        //    }
+        //    order = &response.content();
+        //    s_mapOrderByClientOrderId.insert(std::make_pair(nTradeID, response.content()));
+        // }
+        // else {
+        //    order = &iter->second;
+        //    if (order->status != "filled" && order->status != "canceled" && order->status != "expired") {
+        //        response = client->getOrder(iter->second.id);
+        //        if (!response) {
+        //            BrokerError(response.what().c_str());
+        //            return NAY;
+        //        }
+        //        order = &response.content();
+        //        s_mapOrderByClientOrderId[nTradeID] = *order;
+        //    }
+        // }
         
-        // if (s_nextOrderUUID.empty())
-        // {
-        //     BrokerError("BrokerTrade: Order UUID not specifid");
-        //     return NAY;
-        // }
-        // auto iter = s_mapOrderByUUID.find(s_nextOrderUUID);
-        // if (iter == s_mapOrderByUUID.end()) {
-        //     // unknown order?
-        //     response = client->getOrder(s_nextOrderUUID, false);
-        //     if (!response) {
-        //         BrokerError(response.what().c_str());
-        //         return NAY;
-        //     }
-        //     order = &response.content();
-        //     iter = s_mapOrderByUUID.emplace(s_nextOrderUUID, response.content()).first;
-        // }
+        if (s_nextOrderUUID.empty())
+        {
+            BrokerError("BrokerTrade: Order UUID not specifid");
+            return NAY;
+        }
+        auto iter = s_mapOrderByUUID.find(s_nextOrderUUID);
+        if (iter == s_mapOrderByUUID.end()) {
+            // unknown order?
+            response = client->getOrder(s_nextOrderUUID, false);
+            if (!response) {
+                BrokerError(response.what().c_str());
+                return NAY;
+            }
+            order = &response.content();
+            iter = s_mapOrderByUUID.emplace(s_nextOrderUUID, response.content()).first;
+        }
 
         order = &iter->second;
         if (order->status == "canceled" && order->status == "expired")
@@ -854,7 +880,7 @@ namespace alpaca
                 return 0;
             }
 
-            BrokerError(("Get position failed. " + response.what()).c_str());
+            BrokerError(std::format("Get {} position failed. {}", asset, response.what()).c_str());
             return 0;
         }
 
@@ -871,7 +897,7 @@ namespace alpaca
         FILE* f;
         std::string filename = s_config.alpacaPaidPlan ? "./Log/AssetsAlpaca.csv" : "./Log/AssetsAlpacaPaper.csv";
         if (fopen_s(&f, filename.c_str(), "w+")) {
-            LOG_ERROR("Failed to open %s file\n", filename.c_str());
+            SPDLOG_ERROR("Failed to open {} file", filename.c_str());
             return;
         }
 
@@ -993,7 +1019,7 @@ namespace alpaca
                     auto iter = all_assets.find(symbol);
                     if (iter == all_assets.end())
                     {
-                        LOG_ERROR("Asset %s invalid\n", symbol);
+                        SPDLOG_ERROR("Asset {} invalid", symbol);
                         BrokerError(("Asset " + symbol + " invalid").c_str());
                     }
                     assets.emplace_back(iter->second);
@@ -1087,7 +1113,7 @@ namespace alpaca
             // Alpaca rate limit is 200 requests per minutes for Free plan.
             // GET_MAXREQUESTS: maximum number of requests per second allowed by the broker API
             auto rt = s_config.alpacaPaidPlan ? 0 : 3;
-            LOG_DEBUG("GET_MAXREQUESTS %d\n", rt);
+            SPDLOG_DEBUG("GET_MAXREQUESTS {}", rt);
             return rt;
         }
 
@@ -1099,12 +1125,12 @@ namespace alpaca
 
         case SET_ORDERTEXT:
             global.order_text_ = (char*)parameter;
-            LOG_DEBUG("SET_ORDERTEXT: %s\n", global.order_text_.c_str());
+            SPDLOG_DEBUG("SET_ORDERTEXT: {}", global.order_text_.c_str());
             return (double)parameter;
 
         case SET_SYMBOL:
             global.symbol_ = (char*)parameter;
-            LOG_DEBUG("SET_SYMBOL: %s\n", global.symbol_.c_str());
+            SPDLOG_DEBUG("SET_SYMBOL: {}", global.symbol_.c_str());
             return 1;
 
         case SET_MULTIPLIER:
@@ -1140,7 +1166,7 @@ namespace alpaca
                 return (int)parameter;
             }
 
-            LOG_DEBUG("SET_ORDERTYPE: %d s_tif=%s\n", (int)parameter, to_string(s_tif));
+            SPDLOG_DEBUG("SET_ORDERTYPE: {} s_tif={}", (int)parameter, to_string(s_tif));
             return tifToZorroOrderType(s_tif);
         }
 
@@ -1152,14 +1178,14 @@ namespace alpaca
             auto price_type = (int)parameter;
             bool resubscribe = global.price_type_ != price_type;
             global.price_type_ = (int)parameter;
-            LOG_DEBUG("SET_PRICETYPE: %d resubscribe: %d\n", global.price_type_, resubscribe);
+            SPDLOG_DEBUG("SET_PRICETYPE: {} resubscribe: {}", global.price_type_, resubscribe);
             if (resubscribe && wsClient) {
                 // price type changed. 
                 // change websocket subscription
                 for (auto* asset : s_activeAssets) {
                     if (wsClient->subscribeAsset(asset))
                     {
-                        LOG_DEBUG("%s subscribed\n", asset);
+                        SPDLOG_DEBUG("{} subscribed", asset->name);
 
                         // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
                         if (global.price_type_ == 2)
@@ -1185,26 +1211,30 @@ namespace alpaca
         }
 
         case GET_UUID:
-            LOG_TRACE("GET_UUID: %s\n", s_lastOrderUUID.c_str());
-            snprintf((char*)parameter, s_lastOrderUUID.size(), s_lastOrderUUID.c_str());
-            break;
+            snprintf((char*)parameter, s_lastOrderUUID.size() + 1, s_lastOrderUUID.c_str());
+            SPDLOG_TRACE("GET_UUID: {}", (char*)parameter);
+            return (double)parameter;
 
         case SET_UUID:
             s_nextOrderUUID = (char*)parameter;
-            LOG_TRACE("SET_UUID: %s, %s\n", s_nextOrderUUID.c_str(), std::string((char*)parameter, s_nextOrderUUID.size() + 1).c_str());
-            break;
+            SPDLOG_TRACE("SET_UUID: {}", s_nextOrderUUID);
+            return (double)parameter;
 
         case SET_AMOUNT:
             global.amount_ = *(double*)parameter;
-            LOG_TRACE("SET_AMOUNT: %.8f\n", global.amount_);
-            break;
+            SPDLOG_TRACE("SET_AMOUNT: {:.8f}", global.amount_);
+            return (double)parameter;
 
         case SET_DIAGNOSTICS:
-            if ((int)parameter == 1 || (int)parameter == 0) {
-                Logger::instance().setLevel((int)parameter ? LogLevel::L_TRACE : LogLevel::L_OFF);
-                return (double)parameter;
+            if ((int)parameter == 1)
+            {
+                spdlog::set_level(spdlog::level::trace);
             }
-            break;
+            else if ((int)parameter == 0)
+            {
+                spdlog::set_level(toLogLevel(s_config.logLevel));
+            }
+            return (double)parameter;
 
         case GET_VOLTYPE:
         {
@@ -1216,13 +1246,19 @@ namespace alpaca
         case SET_VOLTYPE:
             SPDLOG_TRACE("SET_VOLTYPE: {}", (int)parameter);
             global.vol_type_ = (int)parameter;
-            return parameter;
+            return (double)parameter;
 
         case SET_HWND:
         {
-            SPDLOG_TRACE("SET_HWND: 0x{:x}", parameter);
             global.handle_ = (HWND)parameter;
-            return parameter;
+            return (double)parameter;
+        }
+
+        case SET_FUNCTIONS:
+        {
+            FARPROC* Functions = (FARPROC*)parameter;
+            (FARPROC &)report = Functions[565];
+            break;
         }
 
         case GET_CALLBACK:
@@ -1238,6 +1274,38 @@ namespace alpaca
                 break;
             }
             break;
+
+        case GET_OPTIONS: {
+            auto rsp = client->getOptionContracts(global.symbol_);
+            if (!rsp) {
+                BrokerError(rsp.what().c_str());
+                return 0;
+            }
+            int nOptions = rsp.content().contracts.size();
+            CONTRACT *contract = (CONTRACT*)parameter;
+            auto& options = rsp.content();
+            for (auto & option : options.contracts) {
+                if (option.symbol.empty()) {
+                    --nOptions;
+                    continue;
+                }
+                auto expiry = yyyymmdd_from_string(option.str_expration_date);
+                if (expiry == -1) {
+                    BrokerError(("Invalid option expiration date: " + option.str_expration_date).c_str());
+                    --nOptions;
+                    continue; // skip expired options
+                }
+                contract->fStrike = option.strike_price;
+                contract->fVal = option.multiplier;
+                contract->Expiry = expiry;
+                contract->Type = option.type == OptionContract::Type::OPT_CALL ? CALL : PUT;
+                if (option.style == OptionContract::Style::OPT_EUROPEAN) {
+                    contract->Type |= EUROPEAN;
+                }
+                contract++;
+            }
+            return nOptions;
+        }
 
         case CREATE_ASSETLIST: {
             downloadAssets((char*)parameter);
@@ -1300,15 +1368,14 @@ namespace alpaca
             return false;
         }
 
-        case SET_LOG_TYPE: {
-            BrokerError(("Set LogType to " + std::to_string((int)parameter)).c_str());
-            Logger::instance().setLogType((LogType)parameter);
-            break;
-        }
-
         case SET_LOG_LEVEL: {
+            auto level = toLogLevel((int)parameter);
             BrokerError(("Set LogLevel to " + std::to_string((int)parameter)).c_str());
-            Logger::instance().setLevel((LogLevel)parameter);
+            spdlog::set_level(level);
+            if (level > SPDLOG_LEVEL_INFO)
+            {
+                spdlog::flush_on(level);
+            }
             break;
         }
 
@@ -1318,12 +1385,8 @@ namespace alpaca
             break;
         }
 
-        case CREATE_OPTION_ASSETLIST: {
-            break;
-        }
-
         default:
-            LOG_DEBUG("Unhandled command: %d %lu\n", Command, parameter);
+            SPDLOG_DEBUG("Unhandled command: {} {}", Command, parameter);
             break;
         }
         return 0;

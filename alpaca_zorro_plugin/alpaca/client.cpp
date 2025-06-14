@@ -65,7 +65,7 @@ namespace alpaca {
         }
         else
         {
-            LOG_ERROR("Failed to get assets %s\n", asset_rsp.what());
+            SPDLOG_ERROR("Failed to get assets {}", asset_rsp.what());
         }
         //auto option_contracts_rsp = getOptionContracts();
         //if (option_contracts_rsp)
@@ -89,15 +89,15 @@ namespace alpaca {
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account>(baseUrl_ + "account", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ACCOUNT);
+        return request<Account>(baseUrl_ + "account", headers_.c_str());
     }
 
     Response<Balance> Client::getBalance() const {
-        return request<Balance>(baseUrl_ + "account", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_BALANCE);
+        return request<Balance>(baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<Clock> Client::getClock() const {
-        auto rsp = request<Clock>(baseUrl_ + "clock", headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_MISC);
+        auto rsp = request<Clock>(baseUrl_ + "clock", headers_.c_str());
         if (rsp)
         {
             is_open_ = rsp.content().is_open;
@@ -107,12 +107,12 @@ namespace alpaca {
 
     Response<std::vector<Asset>> Client::getAssets(bool active_only) const {
         return active_only 
-            ? request<std::vector<Asset>>(baseUrl_ + "assets?status=active", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC)
-            : request<std::vector<Asset>>(baseUrl_ + "assets", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
+            ? request<std::vector<Asset>>(baseUrl_ + "assets?status=active", headers_.c_str(), nullptr, spdlog::level::trace)
+            : request<std::vector<Asset>>(baseUrl_ + "assets", headers_.c_str(), nullptr, spdlog::level::trace);
     }
 
     Response<Asset> Client::getAsset(const std::string& symbol) const {
-        return request<Asset>(baseUrl_ + "assets/" + symbol, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
+        return request<Asset>(baseUrl_ + "assets/" + symbol, headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<OptionContracts> Client::getOptionContracts(const std::string &symbols, bool active_only) const {
@@ -121,19 +121,22 @@ namespace alpaca {
         }
         Response<OptionContracts> rsp;
         do {
+            BrokerProgress(0);
             if (active_only) {
                 request<OptionContracts>(rsp, baseUrl_ + "options/contracts?status=active&limit=10000&underlying_symbols=" + symbols
-                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
+                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, spdlog::level::trace);
             }
-            request<OptionContracts>(rsp, baseUrl_ + "options/contracts&limit=10000&underlying_symbols=" + symbols
-                + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
-            BrokerProgress(0);
+            else
+            {
+                request<OptionContracts>(rsp, baseUrl_ + "options/contracts?limit=10000&underlying_symbols=" + symbols
+                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, spdlog::level::trace);
+            }
         } while (!rsp.content().next_page_token.empty());
         return rsp;
     }
 
     Response<OptionContract> Client::getOptionContract(const std::string& symbol) const {
-        return request<OptionContract>(baseUrl_ + "options/contracts/" + symbol, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_MISC);
+        return request<OptionContract>(baseUrl_ + "options/contracts/" + symbol, headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<std::vector<Order>> Client::getOrders(
@@ -173,7 +176,7 @@ namespace alpaca {
             }
             url << queries[i];
         }
-        return request<std::vector<Order>>(url.str(), headers_.c_str(), nullptr, LogLevel::L_TRACE, LogType::LT_ORDER);
+        return request<std::vector<Order>>(url.str(), headers_.c_str());
     }
 
     Response<Order> Client::getOrder(const std::string& id, const bool nested) const {
@@ -183,11 +186,11 @@ namespace alpaca {
         }
 
         Response<Order> response;
-        return request<Order>(url, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ORDER);
+        return request<Order>(url, headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<Order> Client::getOrderByClientOrderId(const std::string& clientOrderId) const {
-        return request<Order>(baseUrl_ + "orders:by_client_order_id?client_order_id=" + clientOrderId, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_ORDER);
+        return request<Order>(baseUrl_ + "orders:by_client_order_id?client_order_id=" + clientOrderId, headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<Order> Client::submitOrder(
@@ -316,11 +319,11 @@ namespace alpaca {
             writer.EndObject();
             auto data = s.GetString();
 
-            LOG_DEBUG_EXT(LogType::LT_ORDER, "--> POST %sorders\n", baseUrl_.c_str());
+            SPDLOG_DEBUG("--> POST {}orders", baseUrl_.c_str());
             if (data) {
-                LOG_TRACE_EXT(LogType::LT_ORDER, "Data:\n%s\n", data);
+                SPDLOG_TRACE("Data:\n{}", data);
             }
-            response = request<Order>(baseUrl_ + "orders", headers_.c_str(), data, LogLevel::L_DEBUG, LT_ORDER);
+            response = request<Order>(baseUrl_ + "orders", headers_.c_str(), data, spdlog::level::debug);
             if (!response && response.what() == "client_order_id must be unique") {
                 // clinet order id has been used.
                 // increment conflict count and try again.
@@ -382,12 +385,12 @@ namespace alpaca {
         std::string body("#PATCH ");
         body.append(s.GetString());
 
-        return request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), body.c_str(), LogLevel::L_DEBUG, LogType::LT_ORDER);
+        return request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), body.c_str(), spdlog::level::debug);
     }
 
     Response<Order> Client::cancelOrder(const std::string& id) const {
-        LOG_DEBUG("--> DELETE %sorders/%s\n", baseUrl_.c_str(), id.c_str());
-        auto response = request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), "#DELETE", LogLevel::L_DEBUG, LogType::LT_ORDER);
+        SPDLOG_DEBUG("--> DELETE {}orders/{}", baseUrl_, id);
+        auto response = request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), "#DELETE", spdlog::level::debug);
         if (!response) {
             // Alpaca cancelOrder not return a object
             Order* order;
@@ -400,17 +403,17 @@ namespace alpaca {
                     }
                 }
             } while (order->status == "pending_cancel");
-            LOG_WARNING("failed to cancel order %s. order status=%s", id.c_str(), order->status.c_str());
+            SPDLOG_WARN("failed to cancel order {}. order status={}", id, order->status);
             return Response<Order>(1, "Failed to cancel order");
         }
         return response;
     }
 
     Response<Position> Client::getPosition(const std::string& symbol) const {
-        return request<Position>(baseUrl_ + "positions/" + symbol, headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_POSITION);
+        return request<Position>(baseUrl_ + "positions/" + symbol, headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<std::vector<Position>> Client::getPositions() const {
-        return request<std::vector<Position>>(baseUrl_ + "positions", headers_.c_str(), nullptr, LogLevel::L_DEBUG, LogType::LT_POSITION);
+        return request<std::vector<Position>>(baseUrl_ + "positions", headers_.c_str(), nullptr, spdlog::level::debug);
     }
 } // namespace alpaca

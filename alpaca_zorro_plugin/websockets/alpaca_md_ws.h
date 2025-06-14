@@ -96,7 +96,7 @@ namespace alpaca {
             }
             auto& connection = connections_[asset_class];
             connection.status_ = Status::CONNECTING;
-            LOG_INFO("Open Alpaca MD Websocket %s...\n", connection.url_.c_str());
+            SPDLOG_INFO("Open Alpaca MD Websocket {}...", connection.url_);
             auto result = openWebSocket(connection.url_, api_key_);
             if (result.first) {
                 if (!result.second) {
@@ -135,7 +135,7 @@ namespace alpaca {
         }
 
         void logout(ConnectionInfo &connection) {
-            LOG_INFO("Logout %s\n", connection.url_.c_str());
+            SPDLOG_INFO("Logout {}", connection.url_);
             unsubscribeAll();
             closeWebSocket(connection.id_.load(std::memory_order_relaxed));
             connection.status_ = Status::LOGOUT;
@@ -211,7 +211,7 @@ namespace alpaca {
             connection.pending_subscription_ = asset->symbol;
             connection.status_ = Status::SUBSCRIBING;
             auto id = connection.id_.load(std::memory_order_relaxed);
-            LOG_INFO("Subscribe %s, id=%d, %s\n", asset->symbol.c_str(), id, data);
+            SPDLOG_INFO("Subscribe {}, id={}, {}", asset->symbol, id, data);
 
             bool existing = false;
             if (!subscribe(id, asset->symbol, data, (uint32_t)s.GetSize(), (SubscriptionType)subscription.subscriptionType, existing)) {
@@ -300,7 +300,7 @@ namespace alpaca {
             {
                 return;
             }
-            LOG_INFO("Unsubscribe %s\n", asset->symbol.c_str());
+            SPDLOG_INFO("Unsubscribe {}", asset->symbol);
             connection.status_ = Status::UNSUBSCRIBING;
 
             rapidjson::StringBuffer s;
@@ -352,7 +352,7 @@ namespace alpaca {
         }
 
         void onWebsocketOpened(uint64_t id) override {
-            LOG_INFO("Websocket opened. id=%d\n", id);
+            SPDLOG_INFO("Websocket opened. id={}", id);
             for (auto& connection : connections_)
             {
                 if (connection.status_ == Status::CONNECTING)
@@ -381,10 +381,10 @@ namespace alpaca {
 
         void onWebsocketError(uint64_t id, const char* err, uint32_t len) override {
             if (err && len) {
-                LOG_ERROR("WS error: %.*s\n", len, err);
+                SPDLOG_ERROR("WS error: {}", std::string(err, len));
             }
             else {
-                LOG_ERROR("WS error\n");
+                SPDLOG_ERROR("WS error");
             }
             ++error_count_;
             if (error_count_ > 10) {
@@ -417,7 +417,6 @@ namespace alpaca {
 
             if (data && len) {
                 ss_ << std::string(data, len);
-                printf("%s\n", ss_.str().c_str());
             }
 
             if (remaining == 0) { // message complete
@@ -445,7 +444,7 @@ namespace alpaca {
                                 int32_t code;
                                 parser.get<int32_t>("code", code);
                                 
-                                LOG_ERROR("On Ws error %s(%d).\n", msg.c_str(), code);
+                                SPDLOG_ERROR("On Ws error {}({}).", msg, code);
                                 BrokerError((msg + " (" + std::to_string(code) + ")").c_str());
 
                                 ++error_count_;
@@ -462,12 +461,12 @@ namespace alpaca {
                                 std::string msg;
                                 parser.get<std::string>("msg", msg);
                                 if (msg == "connected") {
-                                    LOG_INFO("Alpaca MarketData Websocket Opened.\n");
+                                    SPDLOG_INFO("Alpaca MarketData Websocket Opened.");
                                     BrokerError("Alpaca MarketData Websocket Opened");
                                     authenticate(connection);
                                 }
                                 else if (msg == "authenticated") {
-                                    LOG_INFO("Authenticated.\n");
+                                    SPDLOG_INFO("Authenticated.");
                                     BrokerError("Websocket Authenticated");
                                     connection->status_ = Status::AUTHENTICATED;
                                 }
@@ -487,7 +486,7 @@ namespace alpaca {
                                          ss_.str() == "[{\"T\":\"subscription\",\"trades\":[],\"quotes\":[],\"bars\":[]}]")*/ {
                                     //status_ = Status::UNSUBSCRIBED;
                                         //LOG_INFO("Unsubscribed.\n");
-                                    LOG_TRACE_EXT(LogType::LT_WEB_SOCKET_DATA, "%s\n", ss_.str().c_str());
+                                    SPDLOG_TRACE(ss_.str());
                                 }
                             }
                             else if (t == "t") {
@@ -497,14 +496,13 @@ namespace alpaca {
                                 onQuote(objJson);
                             }
                             else {
-                                LOG_DEBUG_EXT(LogType::LT_WEB_SOCKET_DATA, "%s\n", ss_.str().c_str());
-                                LOG_WARNING_EXT(LogType::LT_WEB_SOCKET_DATA, "Unhandled %s\n", t.GetString());
+                                SPDLOG_WARN("Unhandled {}. {}", t.GetString(), ss_.str());
                             }
                         }
                     }
                 }
 
-                LOG_TRACE_EXT(LogType::LT_WEB_SOCKET_DATA, "%s\n", ss_.str().c_str());
+                SPDLOG_TRACE(ss_.str());
 
                 // reset message
                 ss_.str("");
@@ -527,7 +525,7 @@ namespace alpaca {
 
             writer.EndObject();
             auto data = s.GetString();
-            LOG_INFO_EXT(LogType::LT_WEB_SOCKET_DATA, "Authenticating...\n");
+            SPDLOG_DEBUG("Authenticating...");
             send(connection->id_.load(std::memory_order_relaxed), data, (uint32_t)s.GetSize());
         }
 

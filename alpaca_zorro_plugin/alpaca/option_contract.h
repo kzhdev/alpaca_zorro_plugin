@@ -24,15 +24,20 @@ namespace alpaca {
 			OPT_EUROPEAN,
 		};
 
-		int64_t expiration_date;
-
-		Type type;
-		Style style;
 		std::string str_expration_date;
 		std::string root_symbol;
 		std::string underlying_symbol;
 		std::string underlying_asset_id;
-		std::string next_page_token;
+		std::string open_interest_date;
+		std::string close_price_date;
+		double strike_price = 0.0;
+		double size = 0.0;
+		double multiplier = 0.0;
+		double close_price = 0.0;
+		int64_t expiration_date;
+		int32_t open_interest = 0;
+		Type type;
+		Style style;
 
 	private:
 		template<typename> friend class Response;
@@ -52,7 +57,13 @@ namespace alpaca {
 			parser.get("root_symbole", root_symbol);
 			parser.get("underlying_symbol", underlying_symbol);
 			parser.get("underlying_asset_id", underlying_asset_id);
-			parser.get("next_page_token", next_page_token);
+			parser.get("strike_price", strike_price);
+			parser.get("size", size);
+			parser.get("multiplier", multiplier);
+			parser.get("open_interest", open_interest);
+			parser.get("open_interest_date", open_interest_date);
+			parser.get("close_price", close_price);
+			parser.get("close_price_date", close_price_date);
 
 			return std::make_pair(0, "OK");
 		}

@@ -22,6 +22,7 @@ namespace alpaca
     long(__cdecl* http_status)(int id);
     long(__cdecl* http_result)(int id, char* content, long size);
     void(__cdecl* http_free)(int id);
+    const char* (__cdecl* report)(int Mode);
 
     // zorro functions
     DLLFUNC_C int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress);
