@@ -44,6 +44,21 @@ END
 
 #endif    // APSTUDIO_INVOKED
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_SETTINGS_DIALOG DIALOGEX 0, 0, 176, 95
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Alpaca Settings"
+FONT 8, "MS Shell Dlg", 0, 0, 0x0
+BEGIN
+    LTEXT           "Logging Level:",-1,7,14,60,8
+    COMBOBOX        IDC_LOG_LEVEL,73,12,96,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK",IDOK,38,65,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,95,65,50,14
+END
 
 /////////////////////////////////////////////////////////////////////////////
 //

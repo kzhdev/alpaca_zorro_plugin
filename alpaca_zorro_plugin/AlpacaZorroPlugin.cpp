@@ -30,6 +30,8 @@
 #include "websockets/alpaca_md_ws.h"
 #include "AlpacaBrokerCommands.h"
 #include "global.h"
+#include "resource.h"
+#include "SettingsDialog.h"
 #include <zorro/include/trading.h>
 
 #define PLUGIN_VERSION	2
@@ -38,6 +40,9 @@ using namespace alpaca;
 using namespace websocket_proxy;
 
 #define ALPACA_STREAM_URL "wss://api.alpaca.markets/stream"
+
+HMODULE g_hModule = nullptr;
+DWORD g_mainThreadId = 0;
 
 namespace {
     TimeInForce s_tif = TimeInForce::FOK;
@@ -59,6 +64,47 @@ namespace {
     std::string s_nextOrderUUID;
 
     auto &global = zorro::Global::get();
+
+    DWORD WINAPI SettingsThreadProc(LPVOID)
+    {
+        RegisterHotKey(nullptr, 1, 0, VK_F2);
+        MSG msg;
+        while (GetMessage(&msg, nullptr, 0, 0))
+        {
+            if (msg.message == WM_HOTKEY && msg.wParam == 1)
+            {
+                DialogBox(g_hModule, MAKEINTRESOURCE(IDD_SETTINGS_DIALOG), nullptr, SettingsDlgProc);
+            }
+        }
+        UnregisterHotKey(nullptr, 1);
+        return 0;
+    }
+
+    void processMessages()
+    {
+        MSG msg;
+        while (PeekMessage(&msg, nullptr, WM_LOG_LEVEL_CHANGE, WM_LOG_LEVEL_CHANGE, PM_REMOVE))
+        {
+            if (msg.message == WM_LOG_LEVEL_CHANGE)
+            {
+                s_config.logLevel = static_cast<uint8_t>(msg.wParam);
+                auto log_level = toLogLevel(s_config.logLevel);
+                spdlog::set_level(log_level);
+                if (log_level > SPDLOG_LEVEL_INFO)
+                {
+                    spdlog::flush_on(log_level);
+                }
+            }
+        }
+    }
+
+    void __cdecl brokerCallback(int id, void*)
+    {
+        if (id == 3)
+        {
+            processMessages();
+        }
+    }
 }
 
 namespace alpaca
@@ -95,6 +141,11 @@ namespace alpaca
     ////////////////////////////////////////////////////////////////
     DLLFUNC_C int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress)
     {
+        g_mainThreadId = GetCurrentThreadId();
+        MSG msg;
+        PeekMessage(&msg, nullptr, 0, 0, PM_NOREMOVE);
+        CreateThread(nullptr, 0, SettingsThreadProc, nullptr, 0, nullptr);
+
         strcpy_s(Name, 32, "Alpaca");
         (FARPROC&)BrokerError = fpError;
         (FARPROC&)BrokerProgress = fpProgress;
@@ -571,7 +622,7 @@ namespace alpaca
         return 1;
     }
 
-    DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill) 
+    DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill)
     {
         auto start = std::time(nullptr);
 
@@ -1262,6 +1313,7 @@ namespace alpaca
         }
 
         case GET_CALLBACK:
+            return (double)(intptr_t)brokerCallback;
         case SET_CCY:
             break;
 
