@@ -8,6 +8,21 @@ namespace {
     Config &s_config = Config::get();
 }
 
+DWORD WINAPI SettingsThreadProc(LPVOID)
+{
+    RegisterHotKey(nullptr, 1, 0, VK_F2);
+    MSG msg;
+    while (GetMessage(&msg, nullptr, 0, 0))
+    {
+        if (msg.message == WM_HOTKEY && msg.wParam == 1)
+        {
+            DialogBox(g_hModule, MAKEINTRESOURCE(IDD_SETTINGS_DIALOG), nullptr, SettingsDlgProc);
+        }
+    }
+    UnregisterHotKey(nullptr, 1);
+    return 0;
+}
+
 INT_PTR CALLBACK SettingsDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)

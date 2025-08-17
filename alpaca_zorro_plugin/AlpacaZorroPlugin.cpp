@@ -65,21 +65,6 @@ namespace {
 
     auto &global = zorro::Global::get();
 
-    DWORD WINAPI SettingsThreadProc(LPVOID)
-    {
-        RegisterHotKey(nullptr, 1, 0, VK_F2);
-        MSG msg;
-        while (GetMessage(&msg, nullptr, 0, 0))
-        {
-            if (msg.message == WM_HOTKEY && msg.wParam == 1)
-            {
-                DialogBox(g_hModule, MAKEINTRESOURCE(IDD_SETTINGS_DIALOG), nullptr, SettingsDlgProc);
-            }
-        }
-        UnregisterHotKey(nullptr, 1);
-        return 0;
-    }
-
     void processMessages()
     {
         MSG msg;
@@ -144,7 +129,6 @@ namespace alpaca
         g_mainThreadId = GetCurrentThreadId();
         MSG msg;
         PeekMessage(&msg, nullptr, 0, 0, PM_NOREMOVE);
-        CreateThread(nullptr, 0, SettingsThreadProc, nullptr, 0, nullptr);
 
         strcpy_s(Name, 32, "Alpaca");
         (FARPROC&)BrokerError = fpError;
