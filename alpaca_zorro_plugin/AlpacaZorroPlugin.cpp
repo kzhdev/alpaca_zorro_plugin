@@ -183,7 +183,7 @@ namespace alpaca
         bool isPaperTrading = strcmp(Type, "Demo") == 0;
 
         if (!client || client->getApiKey() != User) {
-            s_throttler = std::make_unique<Throttler>(User);
+            s_throttler = std::make_unique<Throttler>(User, !isPaperTrading);
             client = std::make_unique<Client>(User, Pwd, isPaperTrading);
 
             pMarketData[AssetClass::US_EQUITY] = std::make_unique<StockMarketData>(client->headers());
@@ -263,7 +263,22 @@ namespace alpaca
     DLLFUNC_C int BrokerTime(DATE* pTimeGMT)
     {
         handleSettingUpdate();
+        __time32_t now = get_timestamp();
+        auto next_clock_request_time = s_throttler->nextClockRequestTime();
+        if (next_clock_request_time && now < next_clock_request_time)
+        {
+            *pTimeGMT = convertTime(now);
+            if (!s_subscribedAssets[AssetClass::CRYPTO].empty())
+            {
+                // crypto trading open 24 hours
+                return 2;
+            }
+            return client->isOpen() ? 2 : 1;
+        }
+
         auto response = client->getClock();
+        s_throttler->setNextClockRequestTime(now + 1000); // set next clock request time to 1 second later
+
         if (!response) {
 #ifdef _DEBUG
             BrokerError(response.what().c_str());
@@ -369,6 +384,12 @@ namespace alpaca
             if (trade)
             {
                 *pPrice = trade->price;
+
+                auto quote = wsClient->getLastQuote(asset);
+                if (quote && !isZero(quote->ask_price) && pSpread)
+                {
+                    *pSpread = quote->ask_price - quote->bid_price;
+                }
             }
             else 
             {
@@ -595,7 +616,16 @@ namespace alpaca
     DLLFUNC_C int BrokerAccount(char* Account, double* pdBalance, double* pdTradeVal, double* pdMarginVal)
     {
         handleSettingUpdate();
-        auto response = client->getBalance();
+        static thread_local Response<Balance> response;
+
+        __time32_t now = get_timestamp();
+        auto next_balance_request_time = s_throttler->nextBalanceRequestTime();
+        if (!next_balance_request_time || now >= next_balance_request_time)
+        {
+            client->getBalance(response, now);
+            s_throttler->setNextBalanceRequestTime(now + 1000); // set next balance request time to 1 second later
+        }
+
         if (!response) {
             return 0;
         }
@@ -723,7 +753,6 @@ namespace alpaca
 
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
         handleSettingUpdate();
-        SPDLOG_INFO("BrokerTrade: {}", nTradeID);
         if (nTradeID != -1) {
             BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
             return NAY;
@@ -854,8 +883,8 @@ namespace alpaca
         return static_cast<int>(order->filled_qty / s_config.fractionalLotAmount);
     }
 
-    //DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
-    //    LOG_DEBUG("BrokerSell2 nTradeID=%d nAmount=%d limit=%f\n", nTradeID,nAmount, Limit);
+    // DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
+    //     SPDLOG_DEBUG("BrokerSell2 nTradeID={} nAmount={} limit={}", nTradeID, nAmount, Limit);
 
     //    auto iter = s_mapOrderByClientOrderId.find(nTradeID);
     //    if (iter == s_mapOrderByClientOrderId.end()) {
@@ -1172,7 +1201,7 @@ namespace alpaca
 
         case SET_SYMBOL:
             global.symbol_ = (char*)parameter;
-            SPDLOG_DEBUG("SET_SYMBOL: {}", global.symbol_.c_str());
+            SPDLOG_TRACE("SET_SYMBOL: {}", global.symbol_.c_str());
             return 1;
 
         case SET_MULTIPLIER:

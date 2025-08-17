@@ -26,6 +26,7 @@ namespace alpaca {
         ~Client() = default;
 
         bool isLiveMode() const noexcept { return isLiveMode_;  }
+        bool isOpen() const noexcept { return is_open_; }
 
         const std::string& headers() const noexcept { return headers_;  }
 
@@ -40,8 +41,10 @@ namespace alpaca {
 
         Response<Account> getAccount() const;
         Response<Balance> getBalance() const;
+        void getBalance(Response<Balance>& rsp, uint64_t timestamp) const;
 
         Response<Clock> getClock() const;
+        void getClock(Response<Clock> &rsp, uint64_t timestamp) const;
 
         Response<std::vector<Asset>> getAssets(bool active_only = true) const;
         Response<Asset> getAsset(const std::string& symbol) const;

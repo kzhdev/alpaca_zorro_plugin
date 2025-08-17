@@ -89,11 +89,15 @@ namespace alpaca {
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account>(baseUrl_ + "account", headers_.c_str());
+        return request<Account>(baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<Balance> Client::getBalance() const {
-        return request<Balance>(baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<Balance>(baseUrl_ + "account", headers_.c_str());
+    }
+
+    void Client::getBalance(Response<Balance> &rsp, uint64_t tiemstamp) const {
+        request<Balance>(rsp, baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::trace, tiemstamp);
     }
 
     Response<Clock> Client::getClock() const {
@@ -103,6 +107,14 @@ namespace alpaca {
             is_open_ = rsp.content().is_open;
         }
         return rsp;
+    }
+
+    void Client::getClock(Response<Clock> &rsp, uint64_t tiemstamp) const {
+        request<Clock>(rsp, baseUrl_ + "clock", headers_.c_str(), nullptr, spdlog::level::trace, tiemstamp);
+        if (rsp)
+        {
+            is_open_ = rsp.content().is_open;
+        }
     }
 
     Response<std::vector<Asset>> Client::getAssets(bool active_only) const {
