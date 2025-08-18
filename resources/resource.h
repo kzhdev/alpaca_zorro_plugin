@@ -1,5 +1,3 @@
-//{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ generated include file.
 // Used by alpaca_zorro_plugin.rc
 
 // Next default values for new objects

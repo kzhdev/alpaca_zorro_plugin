@@ -16,4 +16,16 @@ namespace alpaca {
             default: return spdlog::level::off;
         }
     }
+
+    inline std::string to_string(uint8_t level) {
+        switch (level) {
+            case 0: return "off";
+            case 1: return "error";
+            case 2: return "warn";
+            case 3: return "info";
+            case 4: return "debug";
+            case 5: return "trace";
+            default: return "unknown";
+        }
+    }
 }

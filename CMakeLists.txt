@@ -21,7 +21,7 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
 endif()
 
 configure_file(alpaca_zorro_plugin/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/version.h)
-configure_file(resources/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
+configure_file(resources/resources.rc.in ${CMAKE_CURRENT_BINARY_DIR}/resources.rc)
 
 # Enable precompiled headers
 # set(CMAKE_CXX_PCH_ENABLED TRUE)
@@ -31,7 +31,7 @@ add_definitions(-DSPDLOG_USE_STD_FORMAT -DSPDLOG_USE_STD_FORMAT_HO)
 file(GLOB_RECURSE SOURCE_FILES alpaca_zorro_plugin/*.cpp alpaca/*.cpp market_data/*.cpp websocket/*.cpp)
 
 set(RESOURCES
-    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+    ${CMAKE_CURRENT_BINARY_DIR}/resources.rc
 )
 
 add_library(alpaca_zorro_plugin SHARED ${SOURCE_FILES} ${RESOURCES})
@@ -42,6 +42,7 @@ target_include_directories(alpaca_zorro_plugin PUBLIC
     3rdparty/rapidjson/include
     3rdparty/websocket_proxy/include
     3rdparty/spdlog/include
+    resources
 )
 
 add_definitions(-D_WIN32_WINNT=0x0A00)
