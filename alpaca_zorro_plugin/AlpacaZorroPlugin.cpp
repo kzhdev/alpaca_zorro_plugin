@@ -30,6 +30,8 @@
 #include "websockets/alpaca_md_ws.h"
 #include "AlpacaBrokerCommands.h"
 #include "global.h"
+#include <resource.h>
+#include "SettingsDialog.h"
 #include <zorro/include/trading.h>
 
 #define PLUGIN_VERSION	2
@@ -38,6 +40,8 @@ using namespace alpaca;
 using namespace websocket_proxy;
 
 #define ALPACA_STREAM_URL "wss://api.alpaca.markets/stream"
+
+HMODULE g_hModule = nullptr;
 
 namespace {
     TimeInForce s_tif = TimeInForce::FOK;
@@ -59,6 +63,31 @@ namespace {
     std::string s_nextOrderUUID;
 
     auto &global = zorro::Global::get();
+
+    void handleSettingUpdate()
+    {
+        auto setting_update = global.setting_update_.exchange(nullptr, std::memory_order_acquire);
+        if (setting_update)
+        {
+            auto log_level = toLogLevel(setting_update->log_level_);
+            auto current_level = spdlog::get_level();
+            if (log_level != current_level)
+            {
+                s_config.logLevel = setting_update->log_level_;
+                SPDLOG_INFO("Log level changed to {}", to_string(s_config.logLevel));
+                spdlog::set_level(log_level);
+                if (log_level > SPDLOG_LEVEL_INFO)
+                {
+                    spdlog::flush_on(log_level);
+                }
+            }
+        }
+    }
+
+    DLLFUNC_C void pluginCallback(void*)
+    {
+        handleSettingUpdate();
+    }
 }
 
 namespace alpaca
@@ -113,6 +142,7 @@ namespace alpaca
     {
         if (!User) // log out
         {
+            global.logged_in_.store(false, std::memory_order_release);
             shutdown();
             return 0;
         }
@@ -204,6 +234,11 @@ namespace alpaca
             return 0;
         }
 
+        global.logged_in_.store(true, std::memory_order_release);
+        std::thread([]() {
+            SettingsThreadProc();
+        }).detach();
+
         if (s_config.fractionalLotAmount > 1) {
             s_config.fractionalLotAmount = 1;
             BrokerError(("Fractional qty disabled. Invalid config: AlpacaFranctionalLotAmount must be less than 1. AlpacaFranctionalLotAmount=" + std::to_string(s_config.fractionalLotAmount)).c_str());
@@ -227,6 +262,7 @@ namespace alpaca
 
     DLLFUNC_C int BrokerTime(DATE* pTimeGMT)
     {
+        handleSettingUpdate();
         auto response = client->getClock();
         if (!response) {
 #ifdef _DEBUG
@@ -247,6 +283,7 @@ namespace alpaca
 
     DLLFUNC_C int BrokerAsset(char* Asset, double* pPrice, double* pSpread, double* pVolume, double* pPip, double* pPipCost, double* pLotAmount, double* pMarginCost, double* pRollLong, double* pRollShort)
     {
+        handleSettingUpdate();
         AssetBase* asset = nullptr;
 
         {
@@ -481,6 +518,7 @@ namespace alpaca
 
     DLLFUNC_C int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd, int nTickMinutes, int nTicks, T6* ticks)
     {
+        handleSettingUpdate();
         if (!client || !Asset || !ticks || !nTicks) return 0;
 
         auto& assets = client->allAssets();
@@ -556,6 +594,7 @@ namespace alpaca
 
     DLLFUNC_C int BrokerAccount(char* Account, double* pdBalance, double* pdTradeVal, double* pdMarginVal)
     {
+        handleSettingUpdate();
         auto response = client->getBalance();
         if (!response) {
             return 0;
@@ -571,8 +610,9 @@ namespace alpaca
         return 1;
     }
 
-    DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill) 
+    DLLFUNC_C int BrokerBuy2(char* Asset, int nAmount, double dStopDist, double dLimit, double* pPrice, int* pFill)
     {
+        handleSettingUpdate();
         auto start = std::time(nullptr);
 
         OrderSide side = nAmount > 0 ? OrderSide::Buy : OrderSide::Sell;
@@ -682,6 +722,7 @@ namespace alpaca
     }
 
     DLLFUNC_C int BrokerTrade(int nTradeID, double* pOpen, double* pClose, double* pCost, double *pProfit) {
+        handleSettingUpdate();
         SPDLOG_INFO("BrokerTrade: {}", nTradeID);
         if (nTradeID != -1) {
             BrokerError(("nTradeID " + std::to_string(nTradeID) + " not valid. Need to be an UUID").c_str());
@@ -1092,6 +1133,7 @@ namespace alpaca
     
     DLLFUNC_C double BrokerCommand(int Command, intptr_t parameter)
     {
+        handleSettingUpdate();
         static int SetMultiplier;
         std::string Data, response;
         int i = 0;
@@ -1262,6 +1304,8 @@ namespace alpaca
         }
 
         case GET_CALLBACK:
+            return (double)(intptr_t)pluginCallback;
+
         case SET_CCY:
             break;
 

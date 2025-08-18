@@ -28,6 +28,11 @@
 
 namespace zorro {
 
+struct SettingUpdate
+{
+    uint8_t log_level_ = 0;
+};
+
 struct Global
 {
     static Global& get()
@@ -58,6 +63,9 @@ struct Global
 
     HWND handle_ = nullptr;
 
+    std::atomic_bool logged_in_ = false;
+    std::atomic<std::shared_ptr<SettingUpdate>> setting_update_ = nullptr;
+
     void reset()
     {
         symbol_ = "";
@@ -69,6 +77,9 @@ struct Global
         multiplier_ = 1.0;
         asset_no_data_.clear();
         price_type_ = 0;
+        logged_in_.store(false, std::memory_order_release);
+        vol_type_ = 0;
+        setting_update_.store(nullptr, std::memory_order_release);
     }
 
 private:
