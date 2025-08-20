@@ -249,7 +249,9 @@ namespace alpaca
 
         account_number = response.content().account_number;
         BrokerError(("Account " + account_number).c_str());
-        sprintf_s(Account, 1024, account_number.c_str());
+        if (Account) {
+            sprintf_s(Account, 1024, account_number.c_str());
+        }
         return 1;
     }
 
