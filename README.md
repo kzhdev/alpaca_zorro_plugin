@@ -29,8 +29,6 @@ Since version 1.0.0, the AlpacaZorroPlugin supports several optional Alpaca-spec
   ```text
   AlpacaPaidDataPlan = 1                // 0 = False (Use Basic Data Plan), 1 = True (Use Pro Data Plan). Default to 1.
   AlpacaLogLevel = 0                    // 0 = OFF, 1 = ERROR, 2 = WARNING, 3 = INFO, 4 = DEBUG, 5 = TRACE. Default to 0.
-  AlpacaLogType = 127                   // 1 = DEFAULT, 2 = ACCOUNT, 4 = BALANCE, 8 = POSITION, 16 = ORDER, 32 = HISTORY, 64 = MD, 128 = WEB_SOCKET_DATA,
-                                        // 127 = DEFAULT | ACCOUNT | BALANCE | POSITION | ORDER | HISTORY | MD, 255 = ALL
   AlpacaUseWebsocket = 0                // 0 = Not use Websocket, 1 = Use Websocket. Default to 1.
   AlpacaFractionalLotAmount = 0.001     // The LotAmount for fractionable asset. Default to 1.
   ```
