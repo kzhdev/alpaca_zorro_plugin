@@ -35,13 +35,19 @@ namespace alpaca {
         Throttler(const std::string& account, bool is_live_mode) {
             std::string shmName("AlpacaThrottler");
             shmName.append(account);
+            
+            // Convert to wide string properly
+            int wideSize = MultiByteToWideChar(CP_UTF8, 0, shmName.c_str(), -1, NULL, 0);
+            std::wstring wideShmName(wideSize, 0);
+            MultiByteToWideChar(CP_UTF8, 0, shmName.c_str(), -1, &wideShmName[0], wideSize);
+            
             hMapFile_ = CreateFileMapping(
                 INVALID_HANDLE_VALUE,   // use paging file
                 NULL,                   // default security
                 PAGE_READWRITE,         // read/write access
                 0,                      // maximum object size (high-order DWORD)
                 BF_SZ,                  // maximum object size (low-order DWORD)
-                (LPCWSTR)shmName.c_str()// name of mapping object
+                wideShmName.c_str()     // name of mapping object
             );
 
             bool own = false;

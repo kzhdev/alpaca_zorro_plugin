@@ -38,6 +38,7 @@ namespace alpaca {
 		static std::unordered_map<std::string, AssetClass> assetClasses = {
 			{"us_equity" , AssetClass::US_EQUITY},
 			{"crypto", AssetClass::CRYPTO},
+			{"option", AssetClass::OPTIONS},
 		};
 		assert(assetClasses.find(asset_class) != assetClasses.end());
 		return assetClasses[asset_class];
@@ -49,6 +50,7 @@ namespace alpaca {
 
 	struct AssetBase
 	{
+		uint32_t index;
 		std::string id;
 		std::string symbol;
 		std::string name;
