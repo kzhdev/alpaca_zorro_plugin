@@ -49,6 +49,7 @@ namespace alpaca {
 
 	struct AssetBase
 	{
+		uint32_t index;
 		std::string id;
 		std::string symbol;
 		std::string name;

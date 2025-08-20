@@ -66,19 +66,22 @@ namespace {
 
     void handleSettingUpdate()
     {
-        auto setting_update = global.setting_update_.exchange(nullptr, std::memory_order_acquire);
-        if (setting_update)
+        if (global.logged_in_.load(std::memory_order_relaxed))
         {
-            auto log_level = toLogLevel(setting_update->log_level_);
-            auto current_level = spdlog::get_level();
-            if (log_level != current_level)
+            auto setting_update = global.setting_update_.exchange(nullptr, std::memory_order_acq_rel);
+            if (setting_update)
             {
-                s_config.logLevel = setting_update->log_level_;
-                SPDLOG_INFO("Log level changed to {}", to_string(s_config.logLevel));
-                spdlog::set_level(log_level);
-                if (log_level > SPDLOG_LEVEL_INFO)
+                auto log_level = toLogLevel(setting_update->log_level_);
+                auto current_level = spdlog::get_level();
+                if (log_level != current_level)
                 {
-                    spdlog::flush_on(log_level);
+                    s_config.logLevel = setting_update->log_level_;
+                    SPDLOG_INFO("Log level changed to {}", to_string(s_config.logLevel));
+                    spdlog::set_level(log_level);
+                    if (log_level > SPDLOG_LEVEL_INFO)
+                    {
+                        spdlog::flush_on(log_level);
+                    }
                 }
             }
         }
@@ -326,7 +329,7 @@ namespace alpaca
                 s_subscribedAssets[asset_class].append(",").append(Asset);
             }
 
-            if (wsClient && !wsClient->isSubscribed(asset))
+            if (wsClient && !wsClient->hasSubscription(asset))
             {
                 if (!wsClient->authenticated(asset_class))
                 {
@@ -808,7 +811,7 @@ namespace alpaca
         }
 
         order = &iter->second;
-        if (order->status == "canceled" && order->status == "expired")
+        if (order->status == "canceled" || order->status == "expired")
         {
             return NAY - 1;
         }
