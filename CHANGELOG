@@ -1,4 +1,6 @@
-v1.5.0.0
+v1.5.0.0 - [8/20/2025]
+- Implemented a setting dialog to support changing logging level at run time
+- Enhanded throttler to reduce pulling Alpaca Account and Clock.
 - Fixed race condition in websocket subscription access that could cause crashes during concurrent operations
 - Changed websocket subscription storage from unordered_map to vector with shared_ptr for thread-safe access
 - Fixed typos in client.cpp
