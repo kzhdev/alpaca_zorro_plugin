@@ -196,7 +196,7 @@ Response<std::vector<Bar>> MarketData::downloadBars(
 
         auto& retrvievedBars = retrieved.content().bars;
         if (!retrvievedBars.empty()) {
-            SPDLOG_TRACE("{} bars downloaded. {}-{}", retrvievedBars.size(), retrvievedBars.front().time_string, retrvievedBars.back().time_string);
+            SPDLOG_DEBUG("{} bars downloaded. {}-{}", retrvievedBars.size(), retrvievedBars.front().time_string, retrvievedBars.back().time_string);
 
             if (!retrieved.content().next_page_token.empty() && retrvievedBars.size() != 10000) {
                 SPDLOG_TRACE("data pagenated");
@@ -214,7 +214,7 @@ Response<std::vector<Bar>> MarketData::downloadBars(
             }
         }
         else {
-            SPDLOG_TRACE("0 bars downloaded.");
+            SPDLOG_DEBUG("0 bars downloaded.");
             break;
         }
     } while (limit || !page_token.empty());

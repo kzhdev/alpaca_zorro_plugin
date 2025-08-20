@@ -80,20 +80,26 @@ namespace alpaca {
         all_assets_.reserve(assets_.size() + option_contracts_.size());
         for (auto& asset : assets_)
         {
+            asset.index = static_cast<uint32_t>(all_assets_.size());
             all_assets_.emplace(asset.symbol, &asset);
         }
         for (auto& option : option_contracts_)
         {
+            option.index = static_cast<uint32_t>(all_assets_.size());
             all_assets_.emplace(option.symbol, &option);
         }
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account>(baseUrl_ + "account", headers_.c_str());
+        return request<Account>(baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::debug);
     }
 
     Response<Balance> Client::getBalance() const {
-        return request<Balance>(baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<Balance>(baseUrl_ + "account", headers_.c_str());
+    }
+
+    void Client::getBalance(Response<Balance> &rsp, uint64_t timestamp) const {
+        request<Balance>(rsp, baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::trace, timestamp);
     }
 
     Response<Clock> Client::getClock() const {
@@ -103,6 +109,14 @@ namespace alpaca {
             is_open_ = rsp.content().is_open;
         }
         return rsp;
+    }
+
+    void Client::getClock(Response<Clock> &rsp, uint64_t timestamp) const {
+        request<Clock>(rsp, baseUrl_ + "clock", headers_.c_str(), nullptr, spdlog::level::trace, timestamp);
+        if (rsp)
+        {
+            is_open_ = rsp.content().is_open;
+        }
     }
 
     Response<std::vector<Asset>> Client::getAssets(bool active_only) const {
@@ -325,7 +339,7 @@ namespace alpaca {
             }
             response = request<Order>(baseUrl_ + "orders", headers_.c_str(), data, spdlog::level::debug);
             if (!response && response.what() == "client_order_id must be unique") {
-                // clinet order id has been used.
+                // client order id has been used.
                 // increment conflict count and try again.
                 s_orderIdGen->onIdConflict();
             }   

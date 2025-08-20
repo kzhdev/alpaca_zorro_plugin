@@ -95,40 +95,47 @@ namespace alpaca {
 
     private:
         template<typename T>
-        friend Response<T> request(const std::string&, const char*, const char*, spdlog::level::level_enum logLevel);
+        friend Response<T> request(const std::string&, const char*, const char*, spdlog::level::level_enum logLevel, uint64_t timestamp);
 
         template<typename T>
-        friend void request(Response<T>& response, const std::string&, const char*, const char*, spdlog::level::level_enum logLevel);
+        friend void request(Response<T>& response, const std::string&, const char*, const char*, spdlog::level::level_enum logLevel, uint64_t timestamp);
 
-        void parseContent(const std::string& content, const std::string& url) {
+        bool parseContent(const std::string& content, const std::string& url) {
             rapidjson::Document d;
             if (d.Parse(content.c_str()).HasParseError()) {
                 SPDLOG_ERROR("Received parse error when deserializing asset JSON. err={} error_offset={} content={}", GetParseError_En(d.GetParseError()), d.GetErrorOffset(), content);
                 onError("Received parse error when deserializing asset JSON. err=" + std::to_string(d.GetParseError()) + "\n" + content);
-                return;
+                return false;
             }
 
             if (!d.IsObject()) {
                 if (d.IsArray()) {
                     if (!is_vector<T>::value) {
                         onError("JSON is an arry type, but the response content is an object.");
-                        return;
+                        return false;
                     }
                 }
                 else {
                     message_ = "Deserialized valid JSON but it wasn't an object";
                     code_ = 1;
-                    return;
+                    return false;
                 }
             }
             else {
                 if (d.HasMember("code") && d.HasMember("message")) {
-                    onError(d["message"].GetString(), d["code"].GetInt());
-                    return;
+                    auto code = d["code"].GetInt();
+                    if (code == 42910000)
+                    {
+                        s_throttler->enableThrottle(true);
+                    }
+                    onError(d["message"].GetString(), code);
+                    SPDLOG_ERROR("<-- {}", content);
+                    return true;
                 }
                 else if (!d.HasMember("code") && d.HasMember("message") /*&& (strcmp(d["message"].GetString(), "too many requests.") == 0)*/) {
                     onError(d["message"].GetString());
-                    return;
+                    SPDLOG_ERROR("<-- {}", content);
+                    return true;
                 }
             }
 
@@ -140,6 +147,7 @@ namespace alpaca {
             catch (std::exception& e) {
                 onError(e.what());
             }
+            return false;
         }
         
         template<typename U>
@@ -199,12 +207,12 @@ namespace alpaca {
     * 
     */
     template<typename T>
-    inline void request(Response<T>& response, const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace) {
+    inline void request(Response<T>& response, const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace, uint64_t timestamp = get_timestamp()) {
         if (url.empty()) {
             return response.onError("Invalid url - empty");
         }
 
-        if (!Config::get().alpacaPaidPlan && !s_throttler->waitForSending()) {
+        if (!Config::get().alpacaPaidPlan && !s_throttler->waitForSending(timestamp)) {
             // reached throttle limit
             return response.onError("Brokerprogress returned zero. Aborting...");
         }
@@ -246,16 +254,17 @@ namespace alpaca {
                 return response.onError("Transfer Failed", n);
             }
         }
-
-        spdlog::log(logLevel, "<-- {}", ss.str());
-
-        return response.parseContent(ss.str(), url);
+        
+        bool error_msg_logged = response.parseContent(ss.str(), url);
+        if (!error_msg_logged) {
+            spdlog::log(logLevel, "<-- {}", ss.str());
+        }
     }
 
     template<typename T>
-    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace) {
+    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace, uint64_t timestamp = get_timestamp()) {
         Response<T> response;
-        request<T>(response, url, headers, data, logLevel);
+        request<T>(response, url, headers, data, logLevel, timestamp);
         return response;
     }
 

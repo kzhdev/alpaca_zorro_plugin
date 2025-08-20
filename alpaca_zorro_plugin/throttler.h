@@ -14,6 +14,8 @@ namespace alpaca {
     class Throttler {
         struct throttler_info {
             uint64_t start_timestamp_ = 0;
+            __time32_t next_balance_request_time_ = 0;
+            __time32_t next_clock_request_time_ = 0;
             uint32_t count_ = 0;
         };
 
@@ -24,17 +26,28 @@ namespace alpaca {
 
         static constexpr uint32_t BF_SZ = 64;
 
+        uint32_t threshold_ = 200;
+        uint32_t throttle_breach_count_ = 0;
+        bool enable_throttle_ = false;
+        bool is_live_mode_ = false;
+
     public:
-        Throttler(const std::string& account) {
+        Throttler(const std::string& account, bool is_live_mode) {
             std::string shmName("AlpacaThrottler");
             shmName.append(account);
+            
+            // Convert to wide string properly
+            int wideSize = MultiByteToWideChar(CP_UTF8, 0, shmName.c_str(), -1, NULL, 0);
+            std::wstring wideShmName(wideSize, 0);
+            MultiByteToWideChar(CP_UTF8, 0, shmName.c_str(), -1, &wideShmName[0], wideSize);
+            
             hMapFile_ = CreateFileMapping(
                 INVALID_HANDLE_VALUE,   // use paging file
                 NULL,                   // default security
                 PAGE_READWRITE,         // read/write access
                 0,                      // maximum object size (high-order DWORD)
                 BF_SZ,                  // maximum object size (low-order DWORD)
-                (LPCWSTR)shmName.c_str()// name of mapping object
+                wideShmName.c_str()     // name of mapping object
             );
 
             bool own = false;
@@ -52,13 +65,17 @@ namespace alpaca {
             }
 
             if (own) {
-                SPDLOG_DEBUG(" {} create shm {}", _getpid(), shmName);
+                SPDLOG_DEBUG(" {} create shm {} sz: {} {}", _getpid(), shmName, sizeof(std::atomic<throttler_info>), sizeof(DWORD));
                 data_ = new (lpvMem_) std::atomic<throttler_info>;
             }
             else {
-                SPDLOG_DEBUG(" {} open shm {}", _getpid(), shmName);
+                SPDLOG_DEBUG(" {} open shm sz: {} {}", _getpid(), shmName, sizeof(std::atomic<throttler_info>));
                 data_ = reinterpret_cast<std::atomic<throttler_info>*>(lpvMem_);
             }
+
+            enable_throttle_ = !Config::get().alpacaPaidPlan;
+            threshold_ = !Config::get().alpacaPaidPlan ? 200 : 10000;
+            is_live_mode_ = is_live_mode;
         }
 
         ~Throttler() {
@@ -73,12 +90,34 @@ namespace alpaca {
             }
         }
 
-        bool waitForSending() const noexcept {
-            if (Config::get().alpacaPaidPlan) {
+        void enableThrottle(bool enable) noexcept {
+            if (enable ^ enable_throttle_) {
+                enable_throttle_ = enable;
+                if (enable) {
+                    SPDLOG_INFO("Throttler enabled");
+                }
+                else {
+                    SPDLOG_INFO("Throttler disabled");
+                }
+            }
+            else if (enable) {
+                if ((threshold_ > 100) && (++throttle_breach_count_ > 10)) {
+                    if (Config::get().alpacaPaidPlan) {
+                        threshold_ -= 100;
+                    } else {
+                        threshold_ -= 10;
+                    }
+                    throttle_breach_count_ = 0;
+                    SPDLOG_WARN("Throttler threshold reduced to {} due to repeated throttle breaches", threshold_);
+                }
+            }
+        }
+
+        bool waitForSending(uint64_t timestamp = get_timestamp()) const noexcept {
+            if (!enable_throttle_) {
                 return true;
             }
 
-            auto timestamp = get_timestamp();
             while (true) {
                 auto data = data_->load(std::memory_order_relaxed);
                 if ((timestamp - data.start_timestamp_) >= 60000) {
@@ -90,7 +129,7 @@ namespace alpaca {
                     }
                 }
 
-                while (data.count_ < 200) {
+                while (data.count_ < threshold_) {
                     throttler_info new_data = data;
                     ++new_data.count_;
                     if (data_->compare_exchange_strong(data, new_data, std::memory_order_release, std::memory_order_relaxed)) {
@@ -100,7 +139,7 @@ namespace alpaca {
                 }
 
                 SPDLOG_TRACE("waitForSending...");
-                while (((timestamp = get_timestamp()) - data.start_timestamp_) < 60000 && data.count_ >= 200)
+                while (((timestamp = get_timestamp()) - data.start_timestamp_) < 60000 && data.count_ >= threshold_)
                 {
                     if (!BrokerProgress(1)) {
                         return false;
@@ -114,8 +153,40 @@ namespace alpaca {
             return data_->load(std::memory_order_relaxed).count_;
         }
 
-        uint64_t startTimestamp() const noexcept {
+        __time32_t startTimestamp() const noexcept {
             return data_->load(std::memory_order_relaxed).start_timestamp_;
+        }
+
+        __time32_t nextBalanceRequestTime() const noexcept {
+            return data_->load(std::memory_order_relaxed).next_balance_request_time_;
+        }
+
+        void setNextBalanceRequestTime(__time32_t time) noexcept {
+            auto info = data_->load(std::memory_order_relaxed);
+            throttler_info new_info;
+            do {
+                if (info.next_balance_request_time_ >= time) {
+                    return;
+                }
+                new_info = info;
+                new_info.next_balance_request_time_ = time;
+            } while (!data_->compare_exchange_weak(info, new_info, std::memory_order_release, std::memory_order_relaxed));
+        }
+
+        __time32_t nextClockRequestTime() const noexcept {
+            return data_->load(std::memory_order_relaxed).next_clock_request_time_;
+        }
+
+        void setNextClockRequestTime(__time32_t time) noexcept {
+            auto info = data_->load(std::memory_order_relaxed);
+            throttler_info new_info;
+            do {
+                if (info.next_clock_request_time_ >= time) {
+                    return;
+                }
+                new_info = info;
+                new_info.next_clock_request_time_ = time;
+            } while (!data_->compare_exchange_weak(info, new_info, std::memory_order_release, std::memory_order_relaxed));
         }
 
     private:

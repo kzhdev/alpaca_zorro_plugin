@@ -20,6 +20,7 @@ To use the plugin, follow these steps:
 2. Open Zorro, select Alpaca as the broker.
 3. Enter the **API Key** in the **User ID** input box.
 4. Enter the **Secret Key** in the **Password** input box.
+5. Press **F2** to open the plugin settings dialog and adjust the logging level at runtime.
 
 ## AlpacaPlugin Specific Config
 

@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <alpaca/json.h>
 
 #ifdef _WIN32
 // Remove GetObject definition from windows.h, which prevents calls to
