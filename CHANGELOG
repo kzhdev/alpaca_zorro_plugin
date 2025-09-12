@@ -1,4 +1,4 @@
-v1.5.1.0 - [9/2/2025]
+v1.5.1.0 - [9/12/2025]
 - Replace spdlog with slick_logger
 - Add slick_logger header for logging functionality
 - Add slick_queue header for queuing operations
