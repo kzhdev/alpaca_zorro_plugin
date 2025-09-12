@@ -65,7 +65,7 @@ namespace alpaca {
         }
         else
         {
-            SPDLOG_ERROR("Failed to get assets {}", asset_rsp.what());
+            LOG_ERROR("Failed to get assets {}", asset_rsp.what());
         }
         //auto option_contracts_rsp = getOptionContracts();
         //if (option_contracts_rsp)
@@ -91,7 +91,7 @@ namespace alpaca {
     }
 
     Response<Account> Client::getAccount() const {
-        return request<Account>(baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<Account>(baseUrl_ + "account", headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
     }
 
     Response<Balance> Client::getBalance() const {
@@ -99,7 +99,7 @@ namespace alpaca {
     }
 
     void Client::getBalance(Response<Balance> &rsp, uint64_t timestamp) const {
-        request<Balance>(rsp, baseUrl_ + "account", headers_.c_str(), nullptr, spdlog::level::trace, timestamp);
+        request<Balance>(rsp, baseUrl_ + "account", headers_.c_str(), nullptr, slick_logger::LogLevel::L_TRACE, timestamp);
     }
 
     Response<Clock> Client::getClock() const {
@@ -112,7 +112,7 @@ namespace alpaca {
     }
 
     void Client::getClock(Response<Clock> &rsp, uint64_t timestamp) const {
-        request<Clock>(rsp, baseUrl_ + "clock", headers_.c_str(), nullptr, spdlog::level::trace, timestamp);
+        request<Clock>(rsp, baseUrl_ + "clock", headers_.c_str(), nullptr, slick_logger::LogLevel::L_TRACE, timestamp);
         if (rsp)
         {
             is_open_ = rsp.content().is_open;
@@ -121,12 +121,12 @@ namespace alpaca {
 
     Response<std::vector<Asset>> Client::getAssets(bool active_only) const {
         return active_only 
-            ? request<std::vector<Asset>>(baseUrl_ + "assets?status=active", headers_.c_str(), nullptr, spdlog::level::trace)
-            : request<std::vector<Asset>>(baseUrl_ + "assets", headers_.c_str(), nullptr, spdlog::level::trace);
+            ? request<std::vector<Asset>>(baseUrl_ + "assets?status=active", headers_.c_str())
+            : request<std::vector<Asset>>(baseUrl_ + "assets", headers_.c_str());
     }
 
     Response<Asset> Client::getAsset(const std::string& symbol) const {
-        return request<Asset>(baseUrl_ + "assets/" + symbol, headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<Asset>(baseUrl_ + "assets/" + symbol, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
     }
 
     Response<OptionContracts> Client::getOptionContracts(const std::string &symbols, bool active_only) const {
@@ -138,19 +138,19 @@ namespace alpaca {
             BrokerProgress(0);
             if (active_only) {
                 request<OptionContracts>(rsp, baseUrl_ + "options/contracts?status=active&limit=10000&underlying_symbols=" + symbols
-                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, spdlog::level::trace);
+                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str());
             }
             else
             {
                 request<OptionContracts>(rsp, baseUrl_ + "options/contracts?limit=10000&underlying_symbols=" + symbols
-                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str(), nullptr, spdlog::level::trace);
+                    + (rsp.content().next_page_token.empty() ? "" : "&page_token=" + rsp.content().next_page_token), headers_.c_str());
             }
         } while (!rsp.content().next_page_token.empty());
         return rsp;
     }
 
     Response<OptionContract> Client::getOptionContract(const std::string& symbol) const {
-        return request<OptionContract>(baseUrl_ + "options/contracts/" + symbol, headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<OptionContract>(baseUrl_ + "options/contracts/" + symbol, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
     }
 
     Response<std::vector<Order>> Client::getOrders(
@@ -200,11 +200,11 @@ namespace alpaca {
         }
 
         Response<Order> response;
-        return request<Order>(url, headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<Order>(url, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
     }
 
     Response<Order> Client::getOrderByClientOrderId(const std::string& clientOrderId) const {
-        return request<Order>(baseUrl_ + "orders:by_client_order_id?client_order_id=" + clientOrderId, headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<Order>(baseUrl_ + "orders:by_client_order_id?client_order_id=" + clientOrderId, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
     }
 
     Response<Order> Client::submitOrder(
@@ -333,11 +333,11 @@ namespace alpaca {
             writer.EndObject();
             auto data = s.GetString();
 
-            SPDLOG_DEBUG("--> POST {}orders", baseUrl_.c_str());
+            LOG_DEBUG("--> POST {}orders", baseUrl_.c_str());
             if (data) {
-                SPDLOG_TRACE("Data:\n{}", data);
+                LOG_TRACE("Data:\n{}", data);
             }
-            response = request<Order>(baseUrl_ + "orders", headers_.c_str(), data, spdlog::level::debug);
+            response = request<Order>(baseUrl_ + "orders", headers_.c_str(), data, slick_logger::LogLevel::L_DEBUG);
             if (!response && response.what() == "client_order_id must be unique") {
                 // client order id has been used.
                 // increment conflict count and try again.
@@ -399,12 +399,12 @@ namespace alpaca {
         std::string body("#PATCH ");
         body.append(s.GetString());
 
-        return request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), body.c_str(), spdlog::level::debug);
+        return request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), body.c_str(), slick_logger::LogLevel::L_DEBUG);
     }
 
     Response<Order> Client::cancelOrder(const std::string& id) const {
-        SPDLOG_DEBUG("--> DELETE {}orders/{}", baseUrl_, id);
-        auto response = request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), "#DELETE", spdlog::level::debug);
+        LOG_DEBUG("--> DELETE {}orders/{}", baseUrl_, id);
+        auto response = request<Order>(baseUrl_ + "orders/" + id, headers_.c_str(), "#DELETE", slick_logger::LogLevel::L_DEBUG);
         if (!response) {
             // Alpaca cancelOrder not return a object
             Order* order;
@@ -417,17 +417,17 @@ namespace alpaca {
                     }
                 }
             } while (order->status == "pending_cancel");
-            SPDLOG_WARN("failed to cancel order {}. order status={}", id, order->status);
+            LOG_WARN("failed to cancel order {}. order status={}", id, order->status);
             return Response<Order>(1, "Failed to cancel order");
         }
         return response;
     }
 
     Response<Position> Client::getPosition(const std::string& symbol) const {
-        return request<Position>(baseUrl_ + "positions/" + symbol, headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<Position>(baseUrl_ + "positions/" + symbol, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
     }
 
     Response<std::vector<Position>> Client::getPositions() const {
-        return request<std::vector<Position>>(baseUrl_ + "positions", headers_.c_str(), nullptr, spdlog::level::debug);
+        return request<std::vector<Position>>(baseUrl_ + "positions", headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
     }
 } // namespace alpaca

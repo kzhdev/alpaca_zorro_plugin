@@ -23,27 +23,27 @@ namespace alpaca {
         virtual AssetClass type() const noexcept = 0;
 
         virtual Response<LastQuotes> getLastQuotes(const std::string& symbols) const {
-            return request<LastQuotes>(base_url_ + "quotes/latest?symbols=" + symbols, headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<LastQuotes>(base_url_ + "quotes/latest?symbols=" + symbols, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         virtual Response<LastTrades> getLastTrades(const std::string& symbols) const {
-            return request<LastTrades>(base_url_ + "trades/latest?symbols=" + symbols, headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<LastTrades>(base_url_ + "trades/latest?symbols=" + symbols, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         virtual Response<Snapshot> getSnapshots(const std::string& symbols) const {
-            return request<Snapshot>(base_url_ + "snapshots?symbols=" + symbols, headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<Snapshot>(base_url_ + "snapshots?symbols=" + symbols, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         virtual Response<LastQuote> getLastQuote(const std::string& symbol) const {
-            return request<LastQuote>(base_url_ + symbol + "/quotes/latest", headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<LastQuote>(base_url_ + symbol + "/quotes/latest", headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         virtual Response<LastTrade> getLastTrade(const std::string& symbol) const {
-            return request<LastTrade>(base_url_ + symbol + "/trades/latest", headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<LastTrade>(base_url_ + symbol + "/trades/latest", headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         virtual Response<Snapshot> getSnapshot(const std::string& symbol) const {
-            return request<Snapshot>(base_url_ + symbol + "/snapshot", headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<Snapshot>(base_url_ + symbol + "/snapshot", headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         Response<std::vector<Bar>> getBars(

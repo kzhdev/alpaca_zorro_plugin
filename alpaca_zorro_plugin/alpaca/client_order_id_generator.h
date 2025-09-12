@@ -80,7 +80,7 @@ namespace alpaca {
                                     continue;
                                 }
 
-                                SPDLOG_DEBUG("clientOrderId={}", order.client_order_id);
+                                LOG_DEBUG("clientOrderId={}", order.client_order_id);
 
                                 if (order.internal_id) {
                                     int32_t base = order.internal_id / 100000;
@@ -103,7 +103,7 @@ namespace alpaca {
                 next_order_id_ = reinterpret_cast<std::atomic<NextId>*>(lpvMem_);
             }
             auto next = next_order_id_->load(std::memory_order_relaxed);
-            SPDLOG_INFO("last_order_id_: conflit_cout={}, id={}", next.conflict_count, next.next_id);
+            LOG_INFO("last_order_id_: conflit_cout={}, id={}", next.conflict_count, next.next_id);
         }
 
         ~ClientOrderIdGenerator() {

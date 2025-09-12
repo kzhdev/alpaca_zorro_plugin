@@ -34,7 +34,7 @@ namespace alpaca {
             return apiKey_;
         }
 
-        const std::unordered_map<std::string, AssetBase*> allAssets() const noexcept
+        const std::unordered_map<std::string, AssetBase*>& allAssets() const noexcept
         {
             return all_assets_;
         }

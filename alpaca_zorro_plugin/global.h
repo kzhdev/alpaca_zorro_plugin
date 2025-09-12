@@ -31,6 +31,7 @@ namespace zorro {
 struct SettingUpdate
 {
     uint8_t log_level_ = 0;
+    bool pass_log_level_to_websocket_proxy_ = false;
 };
 
 struct Global

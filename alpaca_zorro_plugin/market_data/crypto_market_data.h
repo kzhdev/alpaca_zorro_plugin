@@ -17,11 +17,11 @@ namespace alpaca {
         AssetClass type() const noexcept override { return AssetClass::CRYPTO; }
 
         Response<LastQuotes> getLastQuotes(const std::string& symbols) const override {
-            return request<LastQuotes>(base_url_ + "latest/quotes?symbols=" + symbols, headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<LastQuotes>(base_url_ + "latest/quotes?symbols=" + symbols, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         Response<LastTrades> getLastTrades(const std::string& symbols) const override {
-            return request<LastTrades>(base_url_ + "latest/trades?symbols=" + symbols, headers_.c_str(), nullptr, spdlog::level::debug);
+            return request<LastTrades>(base_url_ + "latest/trades?symbols=" + symbols, headers_.c_str(), nullptr, slick_logger::LogLevel::L_DEBUG);
         }
 
         Response<LastQuote> getLastQuote(const std::string& symbol) const override {

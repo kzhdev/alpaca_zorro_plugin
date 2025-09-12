@@ -20,8 +20,5 @@
 #include <vector>
 #include <cstdlib>
 #include <memory>
-
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-#include <spdlog/spdlog.h>
-#include <spdlog/async.h>
-#include <spdlog/sinks/rotating_file_sink.h>
+#include <slick_queue/slick_queue.h>
+#include <slick_logger/logger.hpp>

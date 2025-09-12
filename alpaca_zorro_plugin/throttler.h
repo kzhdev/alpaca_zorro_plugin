@@ -14,8 +14,8 @@ namespace alpaca {
     class Throttler {
         struct throttler_info {
             uint64_t start_timestamp_ = 0;
-            __time32_t next_balance_request_time_ = 0;
-            __time32_t next_clock_request_time_ = 0;
+            uint64_t next_balance_request_time_ = 0;
+            uint64_t next_clock_request_time_ = 0;
             uint32_t count_ = 0;
         };
 
@@ -65,11 +65,11 @@ namespace alpaca {
             }
 
             if (own) {
-                SPDLOG_DEBUG(" {} create shm {} sz: {} {}", _getpid(), shmName, sizeof(std::atomic<throttler_info>), sizeof(DWORD));
+                LOG_DEBUG(" {} create shm {} sz: {} {}", _getpid(), shmName, sizeof(std::atomic<throttler_info>), sizeof(DWORD));
                 data_ = new (lpvMem_) std::atomic<throttler_info>;
             }
             else {
-                SPDLOG_DEBUG(" {} open shm sz: {} {}", _getpid(), shmName, sizeof(std::atomic<throttler_info>));
+                LOG_DEBUG(" {} open shm sz: {} {}", _getpid(), shmName, sizeof(std::atomic<throttler_info>));
                 data_ = reinterpret_cast<std::atomic<throttler_info>*>(lpvMem_);
             }
 
@@ -94,10 +94,10 @@ namespace alpaca {
             if (enable ^ enable_throttle_) {
                 enable_throttle_ = enable;
                 if (enable) {
-                    SPDLOG_INFO("Throttler enabled");
+                    LOG_INFO("Throttler enabled");
                 }
                 else {
-                    SPDLOG_INFO("Throttler disabled");
+                    LOG_INFO("Throttler disabled");
                 }
             }
             else if (enable) {
@@ -108,7 +108,7 @@ namespace alpaca {
                         threshold_ -= 10;
                     }
                     throttle_breach_count_ = 0;
-                    SPDLOG_WARN("Throttler threshold reduced to {} due to repeated throttle breaches", threshold_);
+                    LOG_WARN("Throttler threshold reduced to {} due to repeated throttle breaches", threshold_);
                 }
             }
         }
@@ -135,10 +135,10 @@ namespace alpaca {
                     if (data_->compare_exchange_strong(data, new_data, std::memory_order_release, std::memory_order_relaxed)) {
                         return true;
                     }
-                    SPDLOG_TRACE("compare_exchange_strong failed. {} -> {}", new_data.count_, data.count_);
+                    LOG_TRACE("compare_exchange_strong failed. {} -> {}", new_data.count_, data.count_);
                 }
 
-                SPDLOG_TRACE("waitForSending...");
+                LOG_TRACE("waitForSending...");
                 while (((timestamp = get_timestamp()) - data.start_timestamp_) < 60000 && data.count_ >= threshold_)
                 {
                     if (!BrokerProgress(1)) {
@@ -153,15 +153,15 @@ namespace alpaca {
             return data_->load(std::memory_order_relaxed).count_;
         }
 
-        __time32_t startTimestamp() const noexcept {
+        uint64_t startTimestamp() const noexcept {
             return data_->load(std::memory_order_relaxed).start_timestamp_;
         }
 
-        __time32_t nextBalanceRequestTime() const noexcept {
+        uint64_t nextBalanceRequestTime() const noexcept {
             return data_->load(std::memory_order_relaxed).next_balance_request_time_;
         }
 
-        void setNextBalanceRequestTime(__time32_t time) noexcept {
+        void setNextBalanceRequestTime(uint64_t time) noexcept {
             auto info = data_->load(std::memory_order_relaxed);
             throttler_info new_info;
             do {
@@ -173,11 +173,11 @@ namespace alpaca {
             } while (!data_->compare_exchange_weak(info, new_info, std::memory_order_release, std::memory_order_relaxed));
         }
 
-        __time32_t nextClockRequestTime() const noexcept {
+        uint64_t nextClockRequestTime() const noexcept {
             return data_->load(std::memory_order_relaxed).next_clock_request_time_;
         }
 
-        void setNextClockRequestTime(__time32_t time) noexcept {
+        void setNextClockRequestTime(uint64_t time) noexcept {
             auto info = data_->load(std::memory_order_relaxed);
             throttler_info new_info;
             do {

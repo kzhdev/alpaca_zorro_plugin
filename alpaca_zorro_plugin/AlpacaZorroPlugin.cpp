@@ -52,8 +52,8 @@ namespace {
     std::unordered_set<AssetBase*> s_activeAssets;
     std::array<std::string, AssetClass::__count__> s_subscribedAssets;
     uint64_t s_lastRequestTime = 0;
-    std::array<Response<LastQuotes>, AssetClass::__count__> s_lastQuotes{ Response<LastQuotes>{1, "No Data"}, Response<LastQuotes>{1, "No Data"}, Response<LastQuotes>{1, "No Data"} };
-    std::array<Response<LastTrades>, AssetClass::__count__> s_lastTrades{ Response<LastTrades>{1, "No Data"}, Response<LastTrades>{1, "No Data"}, Response<LastTrades>{1, "No Data"} };
+    std::array<Response<LastQuotes>, AssetClass::__count__> s_lastQuotes{ Response<LastQuotes>{1, "No Data"}, Response<LastQuotes>{1, "No Data"}, Response<LastQuotes>{1, "No Data"}, Response<LastQuotes>{1, "No Data"} };
+    std::array<Response<LastTrades>, AssetClass::__count__> s_lastTrades{ Response<LastTrades>{1, "No Data"}, Response<LastTrades>{1, "No Data"}, Response<LastTrades>{1, "No Data"}, Response<LastTrades>{1, "No Data"} };
     constexpr uint64_t REQUEST_BANNING_TIME = 333;  // 333 ms;
     constexpr double EPSILON = 0.000000001;
     bool isZero(double val) noexcept {
@@ -63,34 +63,7 @@ namespace {
     std::string s_nextOrderUUID;
 
     auto &global = zorro::Global::get();
-
-    void handleSettingUpdate()
-    {
-        if (global.logged_in_.load(std::memory_order_relaxed))
-        {
-            auto setting_update = global.setting_update_.exchange(nullptr, std::memory_order_acq_rel);
-            if (setting_update)
-            {
-                auto log_level = toLogLevel(setting_update->log_level_);
-                auto current_level = spdlog::get_level();
-                if (log_level != current_level)
-                {
-                    s_config.logLevel = setting_update->log_level_;
-                    SPDLOG_INFO("Log level changed to {}", to_string(s_config.logLevel));
-                    spdlog::set_level(log_level);
-                    if (log_level > SPDLOG_LEVEL_INFO)
-                    {
-                        spdlog::flush_on(log_level);
-                    }
-                }
-            }
-        }
-    }
-
-    DLLFUNC_C void pluginCallback(void*)
-    {
-        handleSettingUpdate();
-    }
+    auto &logger = slick_logger::Logger::instance();
 }
 
 namespace alpaca
@@ -102,6 +75,36 @@ namespace alpaca
     std::unique_ptr<Throttler> s_throttler;
     std::string account_number;
 
+    void handleSettingUpdate()
+    {
+        if (global.logged_in_.load(std::memory_order_relaxed))
+        {
+            auto setting_update = global.setting_update_.exchange(nullptr, std::memory_order_acq_rel);
+            if (setting_update)
+            {
+                auto log_level = toLogLevel(setting_update->log_level_);
+                auto current_level = logger.get_level();
+                if (log_level != current_level)
+                {
+                    s_config.logLevel = setting_update->log_level_;
+                    LOG_INFO("Log level changed to {}", to_string(s_config.logLevel));
+                    logger.set_level(log_level);
+                }
+
+                s_config.passLogLevelToWebsocketProxy = setting_update->pass_log_level_to_websocket_proxy_;
+                if (s_config.passLogLevelToWebsocketProxy && wsClient)
+                {
+                    wsClient->setLogLevel(static_cast<websocket_proxy::LogLevel::level_enum>(log_level));
+                }
+            }
+        }
+    }
+
+    DLLFUNC_C void pluginCallback(void*)
+    {
+        handleSettingUpdate();
+    }
+
     void shutdown()
     {
         if (wsClient) {
@@ -110,7 +113,7 @@ namespace alpaca
         }
         alpaca_md_ws_id = 0;
         client.reset();
-        spdlog::shutdown();
+        logger.shutdown();
     }
 
     inline AssetBase* getAsset(const std::string &symbol)
@@ -152,23 +155,13 @@ namespace alpaca
 
         try
         {
-            spdlog::init_thread_pool(8192, 1);
-            auto async_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(std::format("./Log/Alpaca_{}_{}.log", report(25), Type), 524288000, 5);
-            auto async_logger = std::make_shared<spdlog::async_logger>("async_logger", async_sink, spdlog::thread_pool(), spdlog::async_overflow_policy::overrun_oldest);
-            spdlog::set_default_logger(async_logger);
-// #ifdef DEBUG
-//             spdlog::set_level(spdlog::level::trace);
-//             spdlog::flush_on(spdlog::level::trace);
-// #else
-            auto log_level = toLogLevel(s_config.logLevel);
-            spdlog::set_level(log_level);
-            if (log_level > SPDLOG_LEVEL_INFO)
-            {
-                spdlog::flush_on(log_level);
-            }
-// #endif
-            spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%F][%t][%l] %v");
-            spdlog::flush_every(std::chrono::seconds(3));
+            logger.clear_sinks();
+            slick_logger::RotationConfig rotation;
+            rotation.max_file_size = 300 * 1024 * 1024;  // 300MB
+            rotation.max_files = 10;                     // keep last 10 files
+            logger.add_rotating_file_sink(std::format("./Log/Alpaca_{}_{}.log", report(25), Type), rotation);
+            logger.set_level(toLogLevel(s_config.logLevel));
+            logger.init(65535);
         }
         catch(const std::exception& e)
         {
@@ -195,23 +188,23 @@ namespace alpaca
 
             if (s_config.alpacaPaidPlan) {
                 BrokerError("Use Alpaca Pro Market Data");
-                SPDLOG_INFO("Use Alpaca Pro Market Data");
+                LOG_INFO("Use Alpaca Pro Market Data");
             }
             else {
                 BrokerError("Use Alpaca Basic Market Data");
-                SPDLOG_INFO("Use Alpaca Basic Market Data");
+                LOG_INFO("Use Alpaca Basic Market Data");
             }
         }
 
         if (isPaperTrading)
         {
             BrokerError("Paper mode");
-            SPDLOG_INFO("Paper mode");
+            LOG_INFO("Paper mode");
         }
         else
         {
             BrokerError("Live mode");
-            SPDLOG_INFO("Live mode");
+            LOG_INFO("Live mode");
         }
 
         if (s_config.useWebsocket) {
@@ -219,11 +212,15 @@ namespace alpaca
             {
                 wsClient = std::make_unique<AlpacaMdWs>();
                 wsClient->init(User, Pwd);
+                if (s_config.passLogLevelToWebsocketProxy)
+                {
+                    wsClient->setLogLevel(static_cast<websocket_proxy::LogLevel::level_enum>(logger.get_level()));
+                }
             }
             catch (std::runtime_error& err)
             {
                 BrokerError(err.what());
-                SPDLOG_ERROR(err.what());
+                LOG_ERROR(err.what());
             }
             catch (...)
             {
@@ -234,6 +231,7 @@ namespace alpaca
         if (!response) {
             BrokerError("Login failed.");
             BrokerError(response.what().c_str());
+            shutdown();
             return 0;
         }
 
@@ -268,11 +266,11 @@ namespace alpaca
     DLLFUNC_C int BrokerTime(DATE* pTimeGMT)
     {
         handleSettingUpdate();
-        __time32_t now = get_timestamp();
+        uint64_t now = get_timestamp();
         auto next_clock_request_time = s_throttler->nextClockRequestTime();
         if (next_clock_request_time && now < next_clock_request_time)
         {
-            *pTimeGMT = convertTime(now);
+            *pTimeGMT = convertTime(static_cast<__time32_t>(now / 1000000));
             if (!s_subscribedAssets[AssetClass::CRYPTO].empty())
             {
                 // crypto trading open 24 hours
@@ -344,7 +342,7 @@ namespace alpaca
                 {
                     if (wsClient->subscribeAsset(asset))
                     {
-                        SPDLOG_DEBUG("{} subscribed", Asset);
+                        LOG_DEBUG("{} subscribed", Asset);
 
                         // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
                         if (global.price_type_ == 2)
@@ -366,9 +364,8 @@ namespace alpaca
                     }
                     else 
                     {
-                        SPDLOG_DEBUG("Failed to subscribed {}", Asset);
+                        LOG_DEBUG("Failed to subscribed {}", Asset);
                         BrokerError(("Failed to subscribe " + std::string(Asset) + " from Websocket. Price will be polled from REST API.").c_str());
-                        wsClient.reset();
                     }
                 }
             }
@@ -580,16 +577,16 @@ namespace alpaca
         };
 
         if (!s_config.alpacaPaidPlan) {
-            SPDLOG_DEBUG("BrokerHistory {} start: {} end: {} nTickMinutes: {} nTicks: {}", Asset, start, end, nTickMinutes, nTicks);
+            LOG_DEBUG("BrokerHistory {} start: {} end: {} nTickMinutes: {} nTicks: {}", Asset, start, end, nTickMinutes, nTicks);
             auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             if ((now - end) <= 900) {
                 end = static_cast<__time32_t>(now) - 930;
-                SPDLOG_INFO("Alpaca Basic Plan. Adjust end to {}", end);
+                LOG_INFO("Alpaca Basic Plan. Adjust end to {}", end);
             }
         }
 
         while(true) {
-            SPDLOG_DEBUG("BrokerHistory {} start: {}({}) end: {}({}) nTickMinutes: {} nTicks: {}", Asset, timeToString(start).c_str(), start, timeToString(end).c_str(), end, nTickMinutes, nTicks);
+            LOG_DEBUG("BrokerHistory {} start: {}({}) end: {}({}) nTickMinutes: {} nTicks: {}", Asset, timeToString(start), start, timeToString(end), end, nTickMinutes, nTicks);
 
             auto response = pMarketData[asset_class]->getBars(Asset, start, end, nTickMinutes, nTicks, global.price_type_);
             if (!response) {
@@ -609,10 +606,10 @@ namespace alpaca
                 return barsDownloaded;
             }
 
-            SPDLOG_TRACE("{} bar downloaded. {}-{}", bars.size(), (bars.size() > 0 ? bars[0].time_string.c_str() : ""), (bars.size() > 0 ? (*bars.rbegin()).time_string.c_str() : ""));
+            LOG_TRACE("{} bar downloaded. {}-{}", bars.size(), (bars.size() > 0 ? bars[0].time_string.c_str() : ""), (bars.size() > 0 ? (*bars.rbegin()).time_string.c_str() : ""));
 
             populateTicks(bars);
-            SPDLOG_TRACE("{} bar returned", barsDownloaded);
+            LOG_TRACE("{} bar returned", barsDownloaded);
             break;
         }
         return barsDownloaded;
@@ -623,7 +620,7 @@ namespace alpaca
         handleSettingUpdate();
         static thread_local Response<Balance> response;
 
-        __time32_t now = get_timestamp();
+        uint64_t now = get_timestamp();
         auto next_balance_request_time = s_throttler->nextBalanceRequestTime();
         if (!next_balance_request_time || now >= next_balance_request_time)
         {
@@ -665,7 +662,7 @@ namespace alpaca
 
         }
 
-        SPDLOG_DEBUG("BrokerBuy2 {} orderText={} nAmount={} qty={} dStopDist={} limit={}", Asset, global.order_text_, nAmount, qty, dStopDist, dLimit);
+        LOG_DEBUG("BrokerBuy2 {} orderText={} nAmount={} qty={} dStopDist={} limit={}", Asset, global.order_text_, nAmount, qty, dStopDist, dLimit);
 
         auto asset = client->allAssets().at(Asset);
         auto response = client->submitOrder(asset, qty, side, type, s_tif, dLimit, NAN, global.order_text_, asset->asset_class == AssetClass::US_EQUITY ? s_config.fractionalLotAmount : global.amount_);
@@ -718,7 +715,7 @@ namespace alpaca
             // s_mapOrderByClientOrderId[internalOrdId] = *order;
             s_mapOrderByUUID[exchOrdId] = *order;
 
-            SPDLOG_DEBUG("Order status: {}", order->status.c_str());
+            LOG_DEBUG("Order status: {}", order->status.c_str());
 
             if ((type == OrderType::Limit || s_tif == TimeInForce::CLS || s_tif == TimeInForce::OPG) && order->status == "new") {
                 break;
@@ -742,7 +739,7 @@ namespace alpaca
 
             auto timePast = std::difftime(std::time(nullptr), start);
             if (timePast >= 30) {
-                SPDLOG_INFO("Order submit timed out. Canceling order {}", exchOrdId.c_str());
+                LOG_INFO("Order submit timed out. Canceling order {}", exchOrdId.c_str());
                 auto response3 = client->cancelOrder(exchOrdId);
                 if (!response3) {
                     BrokerError(("Failed to cancel order " + exchOrdId + " " + response3.what()).c_str());
@@ -889,7 +886,7 @@ namespace alpaca
     }
 
     // DLLFUNC_C int BrokerSell2(int nTradeID, int nAmount, double Limit, double* pClose, double* pCost, double* pProfit, int* pFill) {
-    //     SPDLOG_DEBUG("BrokerSell2 nTradeID={} nAmount={} limit={}", nTradeID, nAmount, Limit);
+    //     LOG_DEBUG("BrokerSell2 nTradeID={} nAmount={} limit={}", nTradeID, nAmount, Limit);
 
     //    auto iter = s_mapOrderByClientOrderId.find(nTradeID);
     //    if (iter == s_mapOrderByClientOrderId.end()) {
@@ -948,18 +945,21 @@ namespace alpaca
     //}
 
     int32_t getPosition(const std::string& asset) {
-        auto response = client->getPosition(asset);
-        if (!response) {
-            if (response.getCode() == 40410000) {
-                // no open position
+        if (client) {
+            auto response = client->getPosition(asset);
+            if (!response) {
+                if (response.getCode() == 40410000) {
+                    // no open position
+                    return 0;
+                }
+    
+                BrokerError(std::format("Get {} position failed. {}", asset, response.what()).c_str());
                 return 0;
             }
-
-            BrokerError(std::format("Get {} position failed. {}", asset, response.what()).c_str());
-            return 0;
+    
+            return response.content().qty;
         }
-
-        return response.content().qty;
+        return 0;
     }
 
     constexpr int tifToZorroOrderType(TimeInForce tif) noexcept {
@@ -972,7 +972,7 @@ namespace alpaca
         FILE* f;
         std::string filename = s_config.alpacaPaidPlan ? "./Log/AssetsAlpaca.csv" : "./Log/AssetsAlpacaPaper.csv";
         if (fopen_s(&f, filename.c_str(), "w+")) {
-            SPDLOG_ERROR("Failed to open {} file", filename.c_str());
+            LOG_ERROR("Failed to open {} file", filename.c_str());
             return;
         }
 
@@ -1094,7 +1094,7 @@ namespace alpaca
                     auto iter = all_assets.find(symbol);
                     if (iter == all_assets.end())
                     {
-                        SPDLOG_ERROR("Asset {} invalid", symbol);
+                        LOG_ERROR("Asset {} invalid", symbol);
                         BrokerError(("Asset " + symbol + " invalid").c_str());
                     }
                     assets.emplace_back(iter->second);
@@ -1189,7 +1189,7 @@ namespace alpaca
             // Alpaca rate limit is 200 requests per minutes for Free plan.
             // GET_MAXREQUESTS: maximum number of requests per second allowed by the broker API
             auto rt = s_config.alpacaPaidPlan ? 0 : 3;
-            SPDLOG_DEBUG("GET_MAXREQUESTS {}", rt);
+            LOG_DEBUG("GET_MAXREQUESTS {}", rt);
             return rt;
         }
 
@@ -1201,12 +1201,12 @@ namespace alpaca
 
         case SET_ORDERTEXT:
             global.order_text_ = (char*)parameter;
-            SPDLOG_DEBUG("SET_ORDERTEXT: {}", global.order_text_.c_str());
+            LOG_DEBUG("SET_ORDERTEXT: {}", global.order_text_.c_str());
             return (double)parameter;
 
         case SET_SYMBOL:
             global.symbol_ = (char*)parameter;
-            SPDLOG_TRACE("SET_SYMBOL: {}", global.symbol_.c_str());
+            LOG_TRACE("SET_SYMBOL: {}", global.symbol_.c_str());
             return 1;
 
         case SET_MULTIPLIER:
@@ -1242,7 +1242,7 @@ namespace alpaca
                 return (int)parameter;
             }
 
-            SPDLOG_DEBUG("SET_ORDERTYPE: {} s_tif={}", (int)parameter, to_string(s_tif));
+            LOG_DEBUG("SET_ORDERTYPE: {} s_tif={}", (int)parameter, to_string(s_tif));
             return tifToZorroOrderType(s_tif);
         }
 
@@ -1254,14 +1254,14 @@ namespace alpaca
             auto price_type = (int)parameter;
             bool resubscribe = global.price_type_ != price_type;
             global.price_type_ = (int)parameter;
-            SPDLOG_DEBUG("SET_PRICETYPE: {} resubscribe: {}", global.price_type_, resubscribe);
+            LOG_DEBUG("SET_PRICETYPE: {} resubscribe: {}", global.price_type_, resubscribe);
             if (resubscribe && wsClient) {
                 // price type changed. 
                 // change websocket subscription
                 for (auto* asset : s_activeAssets) {
                     if (wsClient->subscribeAsset(asset))
                     {
-                        SPDLOG_DEBUG("{} subscribed", asset->name);
+                        LOG_DEBUG("{} subscribed", asset->name);
 
                         // Query Last Quote/Trade once, in case the symbol is iliquid we don't get any update from WebSocket
                         if (global.price_type_ == 2)
@@ -1288,39 +1288,39 @@ namespace alpaca
 
         case GET_UUID:
             snprintf((char*)parameter, s_lastOrderUUID.size() + 1, s_lastOrderUUID.c_str());
-            SPDLOG_TRACE("GET_UUID: {}", (char*)parameter);
+            LOG_TRACE("GET_UUID: {}", (char*)parameter);
             return (double)parameter;
 
         case SET_UUID:
             s_nextOrderUUID = (char*)parameter;
-            SPDLOG_TRACE("SET_UUID: {}", s_nextOrderUUID);
+            LOG_TRACE("SET_UUID: {}", s_nextOrderUUID);
             return (double)parameter;
 
         case SET_AMOUNT:
             global.amount_ = *(double*)parameter;
-            SPDLOG_TRACE("SET_AMOUNT: {:.8f}", global.amount_);
+            LOG_TRACE("SET_AMOUNT: {:.8f}", global.amount_);
             return (double)parameter;
 
         case SET_DIAGNOSTICS:
             if ((int)parameter == 1)
             {
-                spdlog::set_level(spdlog::level::trace);
+                logger.set_level(slick_logger::LogLevel::L_TRACE);
             }
             else if ((int)parameter == 0)
             {
-                spdlog::set_level(toLogLevel(s_config.logLevel));
+                logger.set_level(toLogLevel(s_config.logLevel));
             }
             return (double)parameter;
 
         case GET_VOLTYPE:
         {
             auto rt = global.price_type_ == 2 ? 4 : 3;
-            SPDLOG_TRACE("GET_VOLTYPE: {}", rt);
+            LOG_TRACE("GET_VOLTYPE: {}", rt);
             return rt;
         }
 
         case SET_VOLTYPE:
-            SPDLOG_TRACE("SET_VOLTYPE: {}", (int)parameter);
+            LOG_TRACE("SET_VOLTYPE: {}", (int)parameter);
             global.vol_type_ = (int)parameter;
             return (double)parameter;
 
@@ -1449,11 +1449,7 @@ namespace alpaca
         case SET_LOG_LEVEL: {
             auto level = toLogLevel((int)parameter);
             BrokerError(("Set LogLevel to " + std::to_string((int)parameter)).c_str());
-            spdlog::set_level(level);
-            if (level > SPDLOG_LEVEL_INFO)
-            {
-                spdlog::flush_on(level);
-            }
+            logger.set_level(level);
             break;
         }
 
@@ -1464,7 +1460,7 @@ namespace alpaca
         }
 
         default:
-            SPDLOG_DEBUG("Unhandled command: {} {}", Command, parameter);
+            LOG_DEBUG("Unhandled command: {} {}", Command, parameter);
             break;
         }
         return 0;

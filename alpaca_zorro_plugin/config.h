@@ -28,6 +28,7 @@ namespace alpaca {
         uint8_t logLevel = 0;
         bool alpacaPaidPlan = true;
         bool useWebsocket = true;
+        bool passLogLevelToWebsocketProxy = false;
         Adjustment adjustment = Adjustment::all;
 
         static Config& get()
@@ -61,6 +62,7 @@ namespace alpaca {
                 getConfig(line, ConfigFound::LogLevel, "AlpacaLogLevel", logLevel);
                 getConfig(line, ConfigFound::UseWebsocket, "AlpacaUseWebsocket", useWebsocket);
                 getConfig(line, ConfigFound::FractionalLotAmount, "AlpacaFractionalLotAmount", fractionalLotAmount);
+                getConfig(line, ConfigFound::PassLogLevelToWebsocketProxy, "AlpacaPassLogLevelToWebsocketProxy", passLogLevelToWebsocketProxy);
             }
 
             return configFound_.all();
@@ -114,6 +116,7 @@ namespace alpaca {
             LogLevel,
             UseWebsocket,
             FractionalLotAmount,
+            PassLogLevelToWebsocketProxy,
             __count__,  // for internal use only
         };
         std::bitset<ConfigFound::__count__> configFound_ = 0;

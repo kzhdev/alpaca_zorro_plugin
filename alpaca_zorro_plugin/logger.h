@@ -1,31 +1,30 @@
 #pragma once
 
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-#include <spdlog/spdlog.h>
+#include <slick_logger/logger.hpp>
 
 namespace alpaca {
 
-    inline spdlog::level::level_enum toLogLevel(uint8_t level) {
+    inline slick_logger::LogLevel toLogLevel(uint8_t level) {
         switch (level) {
-            case 0: return spdlog::level::off;
-            case 1: return spdlog::level::err;
-            case 2: return spdlog::level::warn;
-            case 3: return spdlog::level::info;
-            case 4: return spdlog::level::debug;
-            case 5: return spdlog::level::trace;
-            default: return spdlog::level::off;
+            case 0: return slick_logger::LogLevel::L_OFF;
+            case 1: return slick_logger::LogLevel::L_ERROR;
+            case 2: return slick_logger::LogLevel::L_WARN;
+            case 3: return slick_logger::LogLevel::L_INFO;
+            case 4: return slick_logger::LogLevel::L_DEBUG;
+            case 5: return slick_logger::LogLevel::L_TRACE;
+            default: return slick_logger::LogLevel::L_OFF;
         }
     }
 
     inline std::string to_string(uint8_t level) {
         switch (level) {
-            case 0: return "off";
-            case 1: return "error";
-            case 2: return "warn";
-            case 3: return "info";
-            case 4: return "debug";
-            case 5: return "trace";
-            default: return "unknown";
+            case 0: return "OFF";
+            case 1: return "ERROR";
+            case 2: return "WARN";
+            case 3: return "INFO";
+            case 4: return "DEBUG";
+            case 5: return "TRACE";
+            default: return "UNKNOWN";
         }
     }
 }

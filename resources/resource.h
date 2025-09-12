@@ -4,6 +4,7 @@
 //
 #define IDD_SETTINGS_DIALOG             101
 #define IDC_LOG_LEVEL                   1001
+#define IDC_PASS_LOG_LEVEL_TO_WEBSOCKET_PROXY 1002
 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS

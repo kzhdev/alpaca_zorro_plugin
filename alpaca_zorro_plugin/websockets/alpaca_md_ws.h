@@ -43,15 +43,20 @@ namespace alpaca {
             UNSUBSCRIBED,
         };
         
-        std::stringstream ss_;
+        std::string message_buffer_;
         std::string api_key_;
         std::string api_secret_;
         uint32_t error_count_ = 0;
+        const std::unordered_map<std::string, AssetBase*>* assets_cache_ = nullptr;
 
         struct Subscription {
             slick::SlickQueue<Trade> tradeQueue{256};
             slick::SlickQueue<Quote> quoteQueue{256};
             uint8_t subscriptionType = websocket_proxy::SubscriptionType::None;
+
+            ~Subscription() {
+                LOG_INFO("**** Subscription destroyed {:p}", static_cast<void*>(this));
+            }
         };
 
         std::vector<std::shared_ptr<Subscription>> subscriptions_;
@@ -81,14 +86,21 @@ namespace alpaca {
         }
         ~AlpacaMdWs() override = default;
 
+        void logError(std::function<std::string()> &&msg) override { LOG_ERROR(msg()); }
+        void logWarning(std::function<std::string()> &&msg) override { LOG_WARN(msg()); }
+        void logInfo(std::function<std::string()> &&msg) override { LOG_INFO(msg()); }
+        void logDebug(std::function<std::string()> &&msg) override { LOG_DEBUG(msg()); }
+
         void init(std::string key, std::string secret) {
             api_key_ = std::move(key);
             api_secret_ = std::move(secret);
             
             // Initialize subscription containers now that client is ready
             if (client && subscriptions_.empty()) {
-                subscriptions_.resize(client->allAssets().size());
+                subscriptions_.resize(client->allAssets().size(), nullptr);
                 subscribed_assets_.reserve(client->allAssets().size());
+                assets_cache_ = &client->allAssets();
+                message_buffer_.reserve(8192);
             }
         }
 
@@ -98,7 +110,7 @@ namespace alpaca {
             }
             auto& connection = connections_[asset_class];
             connection.status_ = Status::CONNECTING;
-            SPDLOG_INFO("Open Alpaca MD Websocket {}...", connection.url_);
+            LOG_INFO("Open Alpaca MD Websocket {}...", connection.url_);
             auto result = openWebSocket(connection.url_, api_key_);
             if (result.first) {
                 if (!result.second) {
@@ -137,7 +149,7 @@ namespace alpaca {
         }
 
         void logout(ConnectionInfo &connection) {
-            SPDLOG_INFO("Logout {}", connection.url_);
+            LOG_INFO("Logout {}", connection.url_);
             unsubscribeAll();
             closeWebSocket(connection.id_.load(std::memory_order_relaxed));
             connection.status_ = Status::LOGOUT;
@@ -174,7 +186,13 @@ namespace alpaca {
             if (!hasSubscription(asset))
             {
                 subscriptions_[asset->index] = std::make_shared<Subscription>();
+                assert(subscriptions_[asset->index]->quoteQueue.use_shm() == false);
+                assert(subscriptions_[asset->index]->quoteQueue.size() == 256);
+                assert(subscriptions_[asset->index]->tradeQueue.use_shm() == false);
+                assert(subscriptions_[asset->index]->tradeQueue.size() == 256);
                 subscribed_assets_.push_back(asset);
+
+                LOG_INFO("**** Subscription created {:p}", static_cast<void*>(subscriptions_[asset->index].get()));
             }
             else {
                 auto sub_type = subscriptions_[asset->index]->subscriptionType;
@@ -184,7 +202,7 @@ namespace alpaca {
                 }
             }
 
-            auto& subscription = subscriptions_[asset->index];
+            auto &subscription = subscriptions_[asset->index];
 
             rapidjson::StringBuffer s;
             rapidjson::Writer<rapidjson::StringBuffer> writer(s);
@@ -218,7 +236,7 @@ namespace alpaca {
             connection.pending_subscription_ = asset->symbol;
             connection.status_ = Status::SUBSCRIBING;
             auto id = connection.id_.load(std::memory_order_relaxed);
-            SPDLOG_INFO("Subscribe {}, id={}, {}", asset->symbol, id, data);
+            LOG_INFO("Subscribe {}, id={}, {}", asset->symbol, id, data);
 
             bool existing = false;
             if (!subscribe(id, asset->symbol, data, (uint32_t)s.GetSize(), (SubscriptionType)subscription->subscriptionType, existing)) {
@@ -232,6 +250,7 @@ namespace alpaca {
             }
             waitForWsReadyOrError(connection, Status::SUBSCRIBED);
             connection.pending_subscription_ = "";
+            LOG_DEBUG("**** Subscribe status: {}", (int)connection.status_);
             return connection.status_ == Status::SUBSCRIBED;
         }
 
@@ -291,13 +310,15 @@ namespace alpaca {
 
         void waitForWsReadyOrError(ConnectionInfo &connection, Status expected_status, uint32_t timeout = 10000) {
             auto start = websocket_proxy::get_timestamp();
-            while ((websocket_proxy::get_timestamp() - start) < timeout) {
+            uint64_t now;
+            while (((now = websocket_proxy::get_timestamp()) - start) < timeout) {
                 if (connection.status_ == expected_status || connection.status_ == Status::DISCONNECTED) {
-                    break;
+                    return;
                 }
                 BrokerProgress(1);
                 std::this_thread::yield();
             }
+            LOG_DEBUG("**** Wait for ws ready timeout. {} started at {}", now, start);
         }
 
         void unsubscribeAsset(const AssetBase* asset, bool keep_subscription = false)
@@ -307,7 +328,7 @@ namespace alpaca {
             {
                 return;
             }
-            SPDLOG_INFO("Unsubscribe {}", asset->symbol);
+            LOG_INFO("Unsubscribe {}", asset->symbol);
             connection.status_ = Status::UNSUBSCRIBING;
 
             rapidjson::StringBuffer s;
@@ -350,25 +371,25 @@ namespace alpaca {
 
         // Following functions are called from websocket proxy client thread
 
-        void onWebsocketProxyServerDisconnected() override{
+        void onWebsocketProxyServerDisconnected() override {
             for (auto& connection : connections_)
             {
                 if (connection.status_ != Status::LOGOUT && connection.status_ != Status::CONNECTING) {
                     connection.id_.store(0, std::memory_order_release);
-                    ss_.str() = "";
+                    message_buffer_.clear();
                     connection.status_ = Status::DISCONNECTED;
                 }
             }
         }
 
         void onWebsocketOpened(uint64_t id) override {
-            SPDLOG_INFO("Websocket opened. id={}", id);
+            LOG_INFO("Websocket opened. id={}", id);
             for (auto& connection : connections_)
             {
                 if (connection.status_ == Status::CONNECTING)
                 {
                     connection.id_.store(id, std::memory_order_release);
-                    ss_.str("");
+                    message_buffer_.clear();
                     BrokerProgress(1);
                     break;
                 }
@@ -381,7 +402,7 @@ namespace alpaca {
                 if (connection.id_.load(std::memory_order_relaxed) == id && connection.status_ != Status::LOGOUT)
                 {
                     connection.id_.store(0, std::memory_order_release);
-                    ss_.str() = "";
+                    message_buffer_.clear();
                     connection.status_ = Status::DISCONNECTED;
                     BrokerError("Websocket disconnected");
                     break;
@@ -391,10 +412,10 @@ namespace alpaca {
 
         void onWebsocketError(uint64_t id, const char* err, uint32_t len) override {
             if (err && len) {
-                SPDLOG_ERROR("WS error: {}", std::string(err, len));
+                LOG_ERROR("WS error: {}", std::string(err, len));
             }
             else {
-                SPDLOG_ERROR("WS error");
+                LOG_ERROR("WS error");
             }
             ++error_count_;
             if (error_count_ > 10) {
@@ -412,29 +433,35 @@ namespace alpaca {
 
         void onWebsocketData(uint64_t id, const char* data, uint32_t len, uint32_t remaining) override {
             error_count_ = 0;
+            ConnectionInfo* connection = nullptr;
 
-            ConnectionInfo *connection = nullptr;
-            for (auto& conn : connections_)
-            {
-                if (conn.id_.load(std::memory_order_relaxed) == id) {
-                    connection = &conn;
-                }
+            // Fast connection lookup using cached map
+            auto conn_it = connection_by_id_.find(id);
+            if (conn_it != connection_by_id_.end()) {
+                connection = conn_it->second;
             }
-            if (!connection)
-            {
-                return;
+            else {
+                for (auto& conn : connections_) {
+                    if (conn.id_.load(std::memory_order_relaxed) == id) {
+                        connection = &conn;
+                    }
+                }
+
+                if (!connection) {
+                    return;
+                }
             }
 
             if (data && len) {
-                ss_ << std::string(data, len);
+                message_buffer_.append(data, len);
             }
 
             if (remaining == 0) { // message complete
                 rapidjson::Document d;
-                if (d.Parse(ss_.str().c_str()).HasParseError()) {
+                if (d.Parse(message_buffer_.c_str()).HasParseError()) {
                     // When mutile instances connected to the proxy, a new instance 
                     // might reading a partial message from the queue. Drop the invalid message
-                    ss_.str("");
+                    message_buffer_.clear();
                     return;
                 }
 
@@ -454,7 +481,7 @@ namespace alpaca {
                                 int32_t code;
                                 parser.get<int32_t>("code", code);
                                 
-                                SPDLOG_ERROR("On Ws error {}({}).", msg, code);
+                                LOG_ERROR("On Ws error {}({}).", msg, code);
                                 BrokerError((msg + " (" + std::to_string(code) + ")").c_str());
 
                                 ++error_count_;
@@ -471,19 +498,19 @@ namespace alpaca {
                                 std::string msg;
                                 parser.get<std::string>("msg", msg);
                                 if (msg == "connected") {
-                                    SPDLOG_INFO("Alpaca MarketData Websocket Opened.");
+                                    LOG_INFO("Alpaca MarketData Websocket Opened.");
                                     BrokerError("Alpaca MarketData Websocket Opened");
                                     authenticate(connection);
                                 }
                                 else if (msg == "authenticated") {
-                                    SPDLOG_INFO("Authenticated.");
+                                    LOG_INFO("Authenticated.");
                                     BrokerError("Websocket Authenticated");
                                     connection->status_ = Status::AUTHENTICATED;
                                 }
                             }
                             else if (t == "subscription") {
                                 if (connection->status_ == Status::SUBSCRIBING) {
-                                    auto it = ss_.str().find(connection->pending_subscription_);
+                                    auto it = message_buffer_.find(connection->pending_subscription_);
                                     if (it != std::string::npos) {
                                         connection->status_ = Status::SUBSCRIBED;
                                     }
@@ -493,10 +520,10 @@ namespace alpaca {
                                     }
                                 }
                                 else /*if (status_ == Status::UNSUBSCRIBING &&
-                                         ss_.str() == "[{\"T\":\"subscription\",\"trades\":[],\"quotes\":[],\"bars\":[]}]")*/ {
+                                         message_buffer_ == "[{\"T\":\"subscription\",\"trades\":[],\"quotes\":[],\"bars\":[]}]")*/ {
                                     //status_ = Status::UNSUBSCRIBED;
                                         //LOG_INFO("Unsubscribed.\n");
-                                    SPDLOG_TRACE(ss_.str());
+                                    LOG_TRACE(message_buffer_);
                                 }
                             }
                             else if (t == "t") {
@@ -506,16 +533,16 @@ namespace alpaca {
                                 onQuote(objJson);
                             }
                             else {
-                                SPDLOG_WARN("Unhandled {}. {}", t.GetString(), ss_.str());
+                                LOG_WARN("Unhandled {}. {}", t.GetString(), message_buffer_);
                             }
                         }
                     }
                 }
 
-                SPDLOG_TRACE(ss_.str());
+                LOG_TRACE(message_buffer_);
 
                 // reset message
-                ss_.str("");
+                message_buffer_.clear();
             }
         }
 
@@ -535,7 +562,7 @@ namespace alpaca {
 
             writer.EndObject();
             auto data = s.GetString();
-            SPDLOG_DEBUG("Authenticating...");
+            LOG_DEBUG("Authenticating...");
             send(connection->id_.load(std::memory_order_relaxed), data, (uint32_t)s.GetSize());
         }
 
@@ -544,8 +571,10 @@ namespace alpaca {
             std::string symbol;
             Parser<T> parser(objJson);
             parser.get<std::string>("S", symbol);
-            auto &assets = client->allAssets();
-            auto* asset = assets.at(symbol);
+            auto it = assets_cache_->find(symbol);
+            if (it == assets_cache_->end()) return;
+            
+            auto* asset = it->second;
             auto subscription = subscriptions_[asset->index];  // Copy shared_ptr for safety, it could reset in unsubscribeAsset
             if (subscription) {
                 auto& queue = subscription->tradeQueue;
@@ -568,8 +597,10 @@ namespace alpaca {
             std::string symbol;
             Parser<T> parser(objJson);
             parser.get<std::string>("S", symbol);
-            auto& assets = client->allAssets();
-            auto* asset = assets.at(symbol);
+            auto it = assets_cache_->find(symbol);
+            if (it == assets_cache_->end()) return;
+            
+            auto* asset = it->second;
             auto subscription = subscriptions_[asset->index];   // Copy shared_ptr for safety, it could reset in unsubscribeAsset
             if (subscription) {
                 auto& queue = subscription->quoteQueue;

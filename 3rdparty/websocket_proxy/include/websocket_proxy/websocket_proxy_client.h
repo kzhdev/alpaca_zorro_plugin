@@ -67,12 +67,13 @@ public:
     bool closeWebSocket(uint64_t id = 0);
     bool subscribe(uint64_t id, const std::string& symbol, const char* subscription_request, uint32_t request_len, SubscriptionType type, bool& existing);
     bool unsubscribe(uint64_t id, const std::string& symbol, const char* unsubscription_request, uint32_t request_len);
+    bool setLogLevel(LogLevel::level_enum level);
     void send(uint64_t id, const char* msg, uint32_t len);
 
 private:
     bool connect();
     bool spawnWebsocketsProxyServer();
-    void waitForServerReady();
+    bool waitForServerReady();
     bool _register();
     void unregister();
     void sendMessage(Message* msg, uint64_t index, uint32_t size);
@@ -192,8 +193,12 @@ inline bool WebsocketProxyClient::connect() {
         return false;
     }
 
-    waitForServerReady();
-    return _register();
+    if (server_queue_index_ != 0 || waitForServerReady())
+    {
+        return _register();
+    }
+    callback_->logError([]() { return "Failed to connect to websocket proxy server"; });
+    return false;
 }
 
 inline void WebsocketProxyClient::sendMessage(Message* msg, uint64_t index, uint32_t size) {
@@ -247,7 +252,8 @@ inline bool WebsocketProxyClient::spawnWebsocketsProxyServer() {
             server_queue_ = std::make_unique<SHM_QUEUE_T>(SERVER_TO_CLIENT_QUEUE);
             break;
         }
-        catch (const std::runtime_error&) {
+        catch (const std::runtime_error &e) {
+            callback_->logError([&e]() { return e.what(); });
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
@@ -269,22 +275,24 @@ inline bool WebsocketProxyClient::spawnWebsocketsProxyServer() {
     return true;
 }
 
-inline void WebsocketProxyClient::waitForServerReady()
+inline bool WebsocketProxyClient::waitForServerReady()
 {
     auto start = get_timestamp();
     while ((get_timestamp() - start) < 10000) {
         auto result = server_queue_->read(server_queue_index_);
         if (result.first) {
-            break;
+            return true;
         }
     }
+    return false;
 }
 
 inline bool WebsocketProxyClient::_register() {
     auto [msg, index, size] = reserveMessage<RegisterMessage>();
-    msg->type = Message::Type::Regster;
+    msg->type = Message::Type::Register;
     auto reg = reinterpret_cast<RegisterMessage*>(msg->data);
-    strcpy_s(reg->name, 32, name_.c_str());
+    strcpy_s(reg->name, 31, name_.c_str());
+    reg->name[31] = 0;
     sendMessage(msg, index, size);
     if (!waitForResponse(msg, 20000)) {
         callback_->logError([]() { return "Unable to connect to websocket_proxy. timeout"; });
@@ -398,6 +406,15 @@ inline bool WebsocketProxyClient::unsubscribe(uint64_t id, const std::string& sy
     req->existing = false;
     memcpy(&req->symbol[0], symbol.c_str(), symbol.size());
     memcpy(req->request, unsubscription_request, request_len);
+    sendMessage(msg, index, size);
+    return true;
+}
+
+inline bool WebsocketProxyClient::setLogLevel(LogLevel::level_enum level) {
+    auto [msg, index, size] = reserveMessage<LogLevel>();
+    msg->type = Message::Type::LogLevel;
+    auto req = reinterpret_cast<LogLevel*>(msg->data);
+    req->level = level;
     sendMessage(msg, index, size);
     return true;
 }

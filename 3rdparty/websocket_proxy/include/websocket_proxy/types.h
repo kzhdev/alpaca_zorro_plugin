@@ -17,11 +17,11 @@
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.#pragma once
+// SOFTWARE.
 
 #pragma once
 
-#include "slick_queue.h"
+#include <slick_queue/slick_queue.h>
 #include <atomic>
 #include <chrono>
 
@@ -38,7 +38,7 @@ namespace websocket_proxy {
 #pragma pack(1)
 struct Message {
     enum Type : uint8_t {
-        Regster,
+        Register,
         Unregister,
         OpenWs,
         CloseWs,
@@ -48,6 +48,7 @@ struct Message {
         WsError,
         Subscribe,
         Unsubscribe,
+        LogLevel,
     };
 
     enum Status : uint8_t {
@@ -116,6 +117,21 @@ struct WsData {
     uint32_t len;
     uint32_t remaining;
     char data[0];
+};
+
+struct LogLevel {
+    enum level_enum : uint8_t {
+        trace = 0,
+        debug = 1,
+        info = 2,
+        warn = 3,
+        err = 4,
+        critical = 5,
+        off = 6,
+        n_levels
+    };
+
+    level_enum level;
 };
 #pragma pack()
 #pragma warning( pop )

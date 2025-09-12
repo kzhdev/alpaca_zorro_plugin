@@ -34,12 +34,6 @@ namespace alpaca {
     template<typename T, typename A>
     struct is_vector<std::vector<T, A>> : std::true_type {};
 
-    enum AssetType : uint8_t {
-        USSecurity,
-        Crypto,
-        Option
-    };
-
     /**
      * @brief The status of various Alpaca actions.
      */
@@ -95,15 +89,15 @@ namespace alpaca {
 
     private:
         template<typename T>
-        friend Response<T> request(const std::string&, const char*, const char*, spdlog::level::level_enum logLevel, uint64_t timestamp);
+        friend Response<T> request(const std::string&, const char*, const char*, slick_logger::LogLevel logLevel, uint64_t timestamp);
 
         template<typename T>
-        friend void request(Response<T>& response, const std::string&, const char*, const char*, spdlog::level::level_enum logLevel, uint64_t timestamp);
+        friend void request(Response<T>& response, const std::string&, const char*, const char*, slick_logger::LogLevel logLevel, uint64_t timestamp);
 
         bool parseContent(const std::string& content, const std::string& url) {
             rapidjson::Document d;
             if (d.Parse(content.c_str()).HasParseError()) {
-                SPDLOG_ERROR("Received parse error when deserializing asset JSON. err={} error_offset={} content={}", GetParseError_En(d.GetParseError()), d.GetErrorOffset(), content);
+                LOG_ERROR("Received parse error when deserializing asset JSON. err={} error_offset={} content={}", GetParseError_En(d.GetParseError()), d.GetErrorOffset(), content);
                 onError("Received parse error when deserializing asset JSON. err=" + std::to_string(d.GetParseError()) + "\n" + content);
                 return false;
             }
@@ -129,12 +123,12 @@ namespace alpaca {
                         s_throttler->enableThrottle(true);
                     }
                     onError(d["message"].GetString(), code);
-                    SPDLOG_ERROR("<-- {}", content);
+                    LOG_ERROR("<-- {}", content);
                     return true;
                 }
                 else if (!d.HasMember("code") && d.HasMember("message") /*&& (strcmp(d["message"].GetString(), "too many requests.") == 0)*/) {
                     onError(d["message"].GetString());
-                    SPDLOG_ERROR("<-- {}", content);
+                    LOG_ERROR("<-- {}", content);
                     return true;
                 }
             }
@@ -207,7 +201,7 @@ namespace alpaca {
     * 
     */
     template<typename T>
-    inline void request(Response<T>& response, const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace, uint64_t timestamp = get_timestamp()) {
+    inline void request(Response<T>& response, const std::string& url, const char* headers = nullptr, const char* data = nullptr, slick_logger::LogLevel logLevel = slick_logger::LogLevel::L_TRACE, uint64_t timestamp = get_timestamp()) {
         if (url.empty()) {
             return response.onError("Invalid url - empty");
         }
@@ -217,7 +211,7 @@ namespace alpaca {
             return response.onError("Brokerprogress returned zero. Aborting...");
         }
 
-        spdlog::log(logLevel, "--> {}", url);
+        slick_logger::Logger::instance().log(logLevel, "--> {}", url);
 
         int id = http_send((char*)url.c_str(), (char*)data, (char*)headers);
         if (!id) {
@@ -257,12 +251,12 @@ namespace alpaca {
         
         bool error_msg_logged = response.parseContent(ss.str(), url);
         if (!error_msg_logged) {
-            spdlog::log(logLevel, "<-- {}", ss.str());
+            slick_logger::Logger::instance().log(logLevel, "<-- {}", ss.str());
         }
     }
 
     template<typename T>
-    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, spdlog::level::level_enum logLevel = spdlog::level::trace, uint64_t timestamp = get_timestamp()) {
+    inline Response<T> request(const std::string& url, const char* headers = nullptr, const char* data = nullptr, slick_logger::LogLevel logLevel = slick_logger::LogLevel::L_TRACE, uint64_t timestamp = get_timestamp()) {
         Response<T> response;
         request<T>(response, url, headers, data, logLevel, timestamp);
         return response;

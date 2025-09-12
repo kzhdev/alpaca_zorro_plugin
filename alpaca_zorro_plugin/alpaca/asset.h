@@ -13,6 +13,7 @@ namespace alpaca {
 	enum AssetClass : uint8_t {
 		US_EQUITY,
 		CRYPTO,
+		CRYPTO_PERP,
 		OPTIONS,
 		__count__,	// for internal use only
 	};
@@ -29,7 +30,7 @@ namespace alpaca {
 	 * @brief A helper to convert an AssetClass to a string
 	 */
 	inline constexpr const char* assetClassToString(AssetClass asset_class) noexcept {
-		constexpr const char* sAssetClassToString[] = { "us_equity", "crypto", "option" };
+		constexpr const char* sAssetClassToString[] = { "us_equity", "crypto", "crypto_perp", "option" };
 		static_assert(sizeof(sAssetClassToString) / sizeof(const char*) == AssetClass::__count__, "sAssetClassToString inconsistent with AssetClass");
 		return sAssetClassToString[(uint8_t)asset_class];
 	}
@@ -38,6 +39,7 @@ namespace alpaca {
 		static std::unordered_map<std::string, AssetClass> assetClasses = {
 			{"us_equity" , AssetClass::US_EQUITY},
 			{"crypto", AssetClass::CRYPTO},
+			{"crypto_perp", AssetClass::CRYPTO},
 			{"option", AssetClass::OPTIONS},
 		};
 		assert(assetClasses.find(asset_class) != assetClasses.end());

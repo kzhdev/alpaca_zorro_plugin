@@ -70,7 +70,7 @@ Response<std::vector<Bar>> MarketData::downloadBars(
 
         if (timeframe.empty())
         {
-            SPDLOG_ERROR("Invalid timeframe ({})", nTickMinutes);
+            LOG_ERROR("Invalid timeframe ({})", nTickMinutes);
             return Response<std::vector<Bar>>(1, "Invalid timeframe " + std::to_string(nTickMinutes));
         }
     }
@@ -97,7 +97,7 @@ Response<std::vector<Bar>> MarketData::downloadBars(
             bar.time += nTickMinutes * 60;
             if (static_cast<__time32_t>(bar.time) > e) {
                 // end time cannot exceeds tEnd
-                SPDLOG_TRACE("Drop bar at {}", bar.time_string);
+                LOG_TRACE("Drop bar at {}", bar.time_string);
                 continue;
             }
 
@@ -111,19 +111,19 @@ Response<std::vector<Bar>> MarketData::downloadBars(
                         auto duration = nTickMinutes * 60;
                         if (((int)(e - bar.time) < duration) && ((e % duration) > (int)(bar.time % duration))) {
                             // drop incompleted bar data
-                            SPDLOG_TRACE("Drop bar at {}", bar.time_string);
+                            LOG_TRACE("Drop bar at {}", bar.time_string);
                             continue;
                         }
                         bFirstBar = false;
                     }
                     rtBar = bar;
                     bar_end_time = rtBar.time;
-                    SPDLOG_TRACE("Bar end at {}", rtBar.time_string.c_str());
+                    LOG_TRACE("Bar end at {}", rtBar.time_string.c_str());
                 }
                 else {
                     if ((int)(bar_end_time - bar.time) > ((nTickMinutes - 1) * 60)) {
-                        SPDLOG_WARN("Some data is missing, the data at {} belongs to different bar.", bar.time_string);
-                        SPDLOG_TRACE("Bar end at {}", bar.time_string);
+                        LOG_WARN("Some data is missing, the data at {} belongs to different bar.", bar.time_string);
+                        LOG_TRACE("Bar end at {}", bar.time_string);
                         bars.emplace_back(std::move(rtBar));
                         rtBar = bar;
                         bar_end_time = bar.time;
@@ -131,7 +131,7 @@ Response<std::vector<Bar>> MarketData::downloadBars(
                         --limit;
                     }
                     else {
-                        SPDLOG_TRACE("Bar at {}", bar.time_string);
+                        LOG_TRACE("Bar at {}", bar.time_string);
                         rtBar.high_price = std::max<double>(rtBar.high_price, bar.high_price);
                         rtBar.low_price = std::min<double>(rtBar.low_price, bar.low_price);
                         rtBar.open_price = bar.open_price;
@@ -181,7 +181,7 @@ Response<std::vector<Bar>> MarketData::downloadBars(
         if (!retrieved) {
             if (retrieved.getCode() == 40010001 && retrieved.what() == "end is too late for subscription") {
                 // Basic Plan has 15min delay
-                SPDLOG_ERROR("{}({})", retrieved.what(), retrieved.getCode());
+                LOG_ERROR("{}({})", retrieved.what(), retrieved.getCode());
                 response.onError(retrieved.what(), retrieved.getCode());
             }
             else {
@@ -196,10 +196,10 @@ Response<std::vector<Bar>> MarketData::downloadBars(
 
         auto& retrvievedBars = retrieved.content().bars;
         if (!retrvievedBars.empty()) {
-            SPDLOG_DEBUG("{} bars downloaded. {}-{}", retrvievedBars.size(), retrvievedBars.front().time_string, retrvievedBars.back().time_string);
+            LOG_DEBUG("{} bars downloaded. {}-{}", retrvievedBars.size(), retrvievedBars.front().time_string, retrvievedBars.back().time_string);
 
             if (!retrieved.content().next_page_token.empty() && retrvievedBars.size() != 10000) {
-                SPDLOG_TRACE("data pagenated");
+                LOG_TRACE("data pagenated");
                 // need to get more data entil reach the end;
                 page_token = retrieved.content().next_page_token;
             }
@@ -214,18 +214,18 @@ Response<std::vector<Bar>> MarketData::downloadBars(
             }
         }
         else {
-            SPDLOG_DEBUG("0 bars downloaded.");
+            LOG_DEBUG("0 bars downloaded.");
             break;
         }
     } while (limit || !page_token.empty());
-    SPDLOG_TRACE("limit: {}, bar size={}", limit, bars.size());
+    LOG_TRACE("limit: {}, bar size={}", limit, bars.size());
     return response;
 }
 
 void MarketData::getFromDownloadedBars(std::vector<Bar>& bars, __time32_t& end, uint32_t& limit) const {
     if (!downloaded_bars_.empty()) {
         // found in bars we already downloaded
-        SPDLOG_TRACE("check dowloaded bars. returned_index_={}, bar={}", returned_index_, timeToString(downloaded_bars_[returned_index_].time));
+        LOG_TRACE("check dowloaded bars. returned_index_={}, bar={}", returned_index_, timeToString(downloaded_bars_[returned_index_].time));
 
         for (returned_index_; returned_index_ >= 0 && returned_index_ < downloaded_bars_.size();) {
             auto& bar = downloaded_bars_[returned_index_];
@@ -241,7 +241,7 @@ void MarketData::getFromDownloadedBars(std::vector<Bar>& bars, __time32_t& end, 
         auto upperbound = returned_index_;
         returned_index_ = std::max<uint32_t>(returned_index_ - limit + 1, 0);
         if (returned_index_ > 0 || ((upperbound - returned_index_ + 1) == limit)) {
-            SPDLOG_TRACE("have enough data in downloaded. returned_index_={}, upperbound={}, first bar={}, last bar={}", returned_index_, upperbound, timeToString(downloaded_bars_[returned_index_].time), timeToString(downloaded_bars_[upperbound].time));
+            LOG_TRACE("have enough data in downloaded. returned_index_={}, upperbound={}, first bar={}, last bar={}", returned_index_, upperbound, timeToString(downloaded_bars_[returned_index_].time), timeToString(downloaded_bars_[upperbound].time));
             // dwonloaded bars contains enough bars
             for (auto i = returned_index_; i <= upperbound; ++i, --limit) {
                 bars.emplace_back(std::move(downloaded_bars_[i]));
@@ -262,7 +262,7 @@ void MarketData::getFromDownloadedBars(std::vector<Bar>& bars, __time32_t& end, 
         }
 
         if (!leftover_bars_.empty()) {
-            SPDLOG_TRACE("{} bars already downloaded, first bar {}, last bar {}", leftover_bars_.size(), timeToString(leftover_bars_[0].time), timeToString(leftover_bars_.back().time));
+            LOG_TRACE("{} bars already downloaded, first bar {}, last bar {}", leftover_bars_.size(), timeToString(leftover_bars_[0].time), timeToString(leftover_bars_.back().time));
             end = leftover_bars_[0].time;
         }
     }

@@ -26,8 +26,6 @@ configure_file(resources/resources.rc.in ${CMAKE_CURRENT_BINARY_DIR}/resources.r
 # Enable precompiled headers
 # set(CMAKE_CXX_PCH_ENABLED TRUE)
 
-add_definitions(-DSPDLOG_USE_STD_FORMAT -DSPDLOG_USE_STD_FORMAT_HO)
-
 file(GLOB_RECURSE SOURCE_FILES alpaca_zorro_plugin/*.cpp alpaca/*.cpp market_data/*.cpp websocket/*.cpp)
 
 set(RESOURCES
@@ -35,13 +33,14 @@ set(RESOURCES
 )
 
 add_library(alpaca_zorro_plugin SHARED ${SOURCE_FILES} ${RESOURCES})
-target_include_directories(alpaca_zorro_plugin PUBLIC 
+target_include_directories(alpaca_zorro_plugin PRIVATE 
     alpaca_zorro_plugin
     alpaca_zorro_plugin/zorro
     3rdparty/HowardHinnant/date/include
     3rdparty/rapidjson/include
     3rdparty/websocket_proxy/include
-    3rdparty/spdlog/include
+    3rdparty/slick_queue/include
+    3rdparty/slick_logger/include
     resources
 )
 
