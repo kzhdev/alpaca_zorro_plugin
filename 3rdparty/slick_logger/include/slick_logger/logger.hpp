@@ -54,8 +54,8 @@
 #define SLICK_LOGGER_VERSION_MAJOR 0
 #define SLICK_LOGGER_VERSION_MINOR 1
 #define SLICK_LOGGER_VERSION_PATCH 1
-#define SLICK_LOGGER_VERSION_TWEAK 0
-#define SLICK_LOGGER_VERSION "0.1.1.0"
+#define SLICK_LOGGER_VERSION_TWEAK 1
+#define SLICK_LOGGER_VERSION "0.1.1.1"
 
 namespace slick_logger {
 
@@ -467,6 +467,9 @@ private:
     void start();
     void writer_thread_func();
     void write_log_entry(const LogEntry* entry_ptr, uint32_t count);
+    
+    // Helper function to round up to next power of 2
+    static size_t round_up_to_power_of_2(size_t value) noexcept;
 
     std::unique_ptr<slick::SlickQueue<LogEntry>> queue_;
     std::vector<std::shared_ptr<ISink>> sinks_;
@@ -780,18 +783,7 @@ inline void Logger::init(const std::filesystem::path& log_file, size_t queue_siz
     add_sink(std::make_shared<FileSink>(log_file));
     
     // Ensure queue_size is power of 2
-    if (queue_size & (queue_size - 1)) {
-        // Round up to next power of 2
-        size_t temp = queue_size;
-        temp--;
-        temp |= temp >> 1;
-        temp |= temp >> 2;
-        temp |= temp >> 4;
-        temp |= temp >> 8;
-        temp |= temp >> 16;
-        temp |= temp >> 32;
-        queue_size = temp + 1;
-    }
+    queue_size = round_up_to_power_of_2(queue_size);
 
     queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(queue_size));
     log_file_ = log_file;
@@ -825,19 +817,7 @@ inline void Logger::init(const LogConfig& config) {
     set_level(config.min_level);
     
     // Ensure queue_size is power of 2
-    size_t queue_size = config.queue_size;
-    if (queue_size & (queue_size - 1)) {
-        // Round up to next power of 2
-        size_t temp = queue_size;
-        temp--;
-        temp |= temp >> 1;
-        temp |= temp >> 2;
-        temp |= temp >> 4;
-        temp |= temp >> 8;
-        temp |= temp >> 16;
-        temp |= temp >> 32;
-        queue_size = temp + 1;
-    }
+    size_t queue_size = round_up_to_power_of_2(config.queue_size);
 
     queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(queue_size));
     start();
@@ -870,18 +850,7 @@ inline void Logger::init(size_t queue_size) {
 
     // Initialize logger with pre-set sinks - sinks should be added before calling this
     // Ensure queue_size is power of 2
-    if (queue_size & (queue_size - 1)) {
-        // Round up to next power of 2
-        size_t temp = queue_size;
-        temp--;
-        temp |= temp >> 1;
-        temp |= temp >> 2;
-        temp |= temp >> 4;
-        temp |= temp >> 8;
-        temp |= temp >> 16;
-        temp |= temp >> 32;
-        queue_size = temp + 1;
-    }
+    queue_size = round_up_to_power_of_2(queue_size);
 
     queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(queue_size));
     start();
@@ -1058,6 +1027,24 @@ inline void Logger::write_log_entry(const LogEntry* entry_ptr, uint32_t count) {
             sink->flush();
         }
     }
+}
+
+inline size_t Logger::round_up_to_power_of_2(size_t value) noexcept {
+    if (value & (value - 1)) {
+        // Round up to next power of 2
+        size_t temp = value;
+        temp--;
+        temp |= temp >> 1;
+        temp |= temp >> 2;
+        temp |= temp >> 4;
+        temp |= temp >> 8;
+        temp |= temp >> 16;
+        if constexpr (sizeof(size_t) > 4) {
+            temp |= temp >> 32;
+        }
+        return temp + 1;
+    }
+    return value; // Already a power of 2
 }
 
 } // namespace slick_logger
