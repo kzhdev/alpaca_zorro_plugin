@@ -124,7 +124,6 @@ AlpacaPassLogLevelToWebsocketProxy = 0  # Passing Log Level to WebsocketProxy. 0
 |-----------|-------------|--------|---------|
 | **AlpacaPaidDataPlan** | Market data plan tier | 0 = Basic (Free)<br>1 = Pro (Paid) | 1 |
 | **AlpacaLogLevel** | Plugin logging verbosity | 0 = OFF<br>1 = ERROR<br>2 = WARNING<br>3 = INFO<br>4 = DEBUG<br>5 = TRACE | 0 |
-| **AlpacaLogType** | Types of data to log | Bitmask value | ALL except WEB_SOCKET_DATA |
 | **AlpacaUseWebsocket** | Real-time data method | 0 = REST polling<br>1 = WebSocket streaming | 1 |
 | **AlpacaFractionalLotAmount** | Fractional trading multiplier | Any value < 1.0 enables fractional shares<br>(e.g., 0.001 = 0.1% of 1 share) | 1.0 |
 | **AlpacaPassLogLevelToWebsocketProxy** | WebSocket proxy log level | Same as AlpacaLogLevel | 0 |
@@ -134,7 +133,6 @@ AlpacaPassLogLevelToWebsocketProxy = 0  # Passing Log Level to WebsocketProxy. 0
 Press **F2** in Zorro to open the plugin settings dialog where you can:
 - Adjust log levels without restarting
 - View current configuration
-- Test connection status
 
 ## Usage Examples
 

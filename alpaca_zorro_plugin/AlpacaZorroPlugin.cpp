@@ -161,7 +161,7 @@ namespace alpaca
             rotation.max_files = 10;                     // keep last 10 files
             logger.add_rotating_file_sink(std::format("./Log/Alpaca_{}_{}.log", report(25), Type), rotation);
             logger.set_level(toLogLevel(s_config.logLevel));
-            logger.init(65535);
+            logger.init(65535, 16777216);
         }
         catch(const std::exception& e)
         {

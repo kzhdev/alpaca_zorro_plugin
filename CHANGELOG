@@ -1,3 +1,7 @@
+v1.5.1.2 - [10/05/2025]
+- Increase slick_logger string buffer size to 10M. The default size is too small for all assets response.
+- Update README
+
 v1.5.1.1 - [10/04/2025]
 - Fix MSVC C4293 warning (shift count negative or too big) in x86 builds for slick_logger
 - Fix MSB8028 warning (shared intermediate directory) by separating intermediate directories per platform
