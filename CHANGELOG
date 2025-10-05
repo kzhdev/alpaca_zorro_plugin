@@ -1,3 +1,11 @@
+v1.5.1.1 - [10/04/2025]
+- Fix MSVC C4293 warning (shift count negative or too big) in x86 builds for slick_logger
+- Fix MSB8028 warning (shared intermediate directory) by separating intermediate directories per platform
+- Update slick_logger to v1.0.0.6
+- Update websocket_proxy to v1.1.1.1
+- Add CONTRIBUTING.md
+- Updated BUILD.md and README.md
+
 v1.5.1.0 - [9/12/2025]
 - Replace spdlog with slick_logger
 - Add slick_logger header for logging functionality
