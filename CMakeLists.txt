@@ -60,6 +60,15 @@ else()
 endif()
 set_target_properties(alpaca_zorro_plugin PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/Release")
 
+# Set unique intermediate directory per platform to avoid MSB8028 warning
+if (MSVC)
+    set_target_properties(alpaca_zorro_plugin PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_VS_PLATFORM_NAME}/$<CONFIG>"
+        COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_VS_PLATFORM_NAME}/$<CONFIG>"
+        PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_VS_PLATFORM_NAME}/$<CONFIG>"
+    )
+endif()
+
 set_target_properties(alpaca_zorro_plugin PROPERTIES LINK_INCREMENTAL ON)
 target_compile_definitions(alpaca_zorro_plugin PUBLIC _UNICODE) # set CharacterSet to unicode
 target_compile_definitions(alpaca_zorro_plugin PUBLIC WIN32 _WINDOWS _USRDLL ALPACA_EXPORTS) # set CharacterSet to unicode

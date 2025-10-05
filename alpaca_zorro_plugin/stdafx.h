@@ -20,5 +20,6 @@
 #include <vector>
 #include <cstdlib>
 #include <memory>
+#include <format>
 #include <slick_queue/slick_queue.h>
 #include <slick_logger/logger.hpp>

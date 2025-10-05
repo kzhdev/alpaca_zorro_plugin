@@ -29,6 +29,7 @@
 #pragma once
 
 #include <string>
+#include <cstring>
 #include <cstdint>
 #include <thread>
 #include <atomic>
@@ -44,6 +45,7 @@
 #include <format>
 #include <utility>
 #include <vector>
+#include <string_view>
 #include <slick_queue/slick_queue.h>
 
 // For time functions on some platforms
@@ -51,11 +53,15 @@
 #include <time.h>
 #endif
 
-#define SLICK_LOGGER_VERSION_MAJOR 0
-#define SLICK_LOGGER_VERSION_MINOR 1
-#define SLICK_LOGGER_VERSION_PATCH 1
-#define SLICK_LOGGER_VERSION_TWEAK 1
-#define SLICK_LOGGER_VERSION "0.1.1.1"
+#define SLICK_LOGGER_VERSION_MAJOR 1
+#define SLICK_LOGGER_VERSION_MINOR 0
+#define SLICK_LOGGER_VERSION_PATCH 0
+#define SLICK_LOGGER_VERSION_TWEAK 6
+#define SLICK_LOGGER_VERSION "1.0.0.6"
+
+#ifndef SLICK_LOGGER_MAX_ARGS
+#define SLICK_LOGGER_MAX_ARGS 20
+#endif
 
 namespace slick_logger {
 
@@ -170,17 +176,126 @@ private:
     std::string custom_format_;
 };
 
+enum class ArgType : uint8_t {
+    BOOL,
+    CHAR,
+    U_CHAR,
+    WCHAR,
+    INT8_T,
+    INT16_T,
+    INT32_T,
+    INT64_T,
+    UINT8_T,
+    UINT16_T,
+    UINT32_T,
+    UINT64_T,
+    FLOAT,
+    DOUBLE,
+    PTR,             // pointer types
+    STRING_LITERAL,  // const char* - safe to store pointer
+    STRING_DYNAMIC   // std::string - stored in separate queue
+};
+
+#pragma pack(push, 1)
+struct StringRef {
+    const char* ptr;    // Pointer to string data
+    uint32_t length;    // String length
+};
+
+struct LogArgument {
+    ArgType type;
+    union {
+        bool b;
+        char c;
+        unsigned char uc;
+        wchar_t wc;
+        int8_t i8;
+        int16_t i16;
+        int32_t i32;
+        int64_t i64;
+        uint8_t u8;
+        uint16_t u16;
+        uint32_t u32;
+        uint64_t u64;
+        float f;
+        double d;
+        void* ptr;             // For pointer types
+        const char* literal_ptr;  // For string literals
+        StringRef dynamic_str;    // For dynamic strings
+    } value;
+};
+
 struct LogEntry {
     LogLevel level;
-    std::function<std::pair<std::string,bool>()> formatter; // Lambda that returns formatted message
+    const char* format_ptr; // Format string
     uint64_t timestamp; // nanoseconds since epoch
+    int sink_index = -1; // Optional sink index, logged by that sink only
+    uint8_t arg_count = 0; // Number of arguments
+    LogArgument args[SLICK_LOGGER_MAX_ARGS];
 };
+#pragma pack(pop)
 
 class ISink {
 public:
+    ISink(std::string&& name = "") : name_(std::move(name)) {}
     virtual ~ISink() = default;
     virtual void write(const LogEntry& entry) = 0;
     virtual void flush() = 0;
+
+    void set_min_level(LogLevel level) noexcept { min_level_ = level; }
+    LogLevel min_level() const noexcept { return min_level_; }
+
+    /**
+     * @brief Set whether this sink is dedicated (logs only its own entries)
+     * @param dedicated True to make the sink dedicated, false otherwise
+     */
+    void set_dedicated(bool dedicated) noexcept { dedicated_ = dedicated; }
+
+    /**
+     * @brief Check if this sink is dedicated (logs only its own entries)
+     * @return True if the sink is dedicated, false otherwise
+     */
+    bool is_dedicated() const noexcept { return dedicated_; }
+
+    /**
+     * @brief Log a message with a specific log level and format to this sink only
+     * @param level LogLevel of the message
+     * @param format Format string (printf-style)
+     * @param args Arguments for the format string
+     */
+    template<typename FormatT, typename... Args>
+    void log(LogLevel level, FormatT&& format, Args&&... args);
+
+    template<typename FormatT, typename... Args>
+    void log_trace(FormatT&& format, Args&&... args);
+
+    template<typename FormatT, typename... Args>
+    void log_debug(FormatT&& format, Args&&... args);
+
+    template<typename FormatT, typename... Args>
+    void log_info(FormatT&& format, Args&&... args);
+
+    template<typename FormatT, typename... Args>
+    void log_warn(FormatT&& format, Args&&... args);
+
+    template<typename FormatT, typename... Args>
+    void log_error(FormatT&& format, Args&&... args);
+
+    template<typename FormatT, typename... Args>
+    void log_fatal(FormatT&& format, Args&&... args);
+
+    const std::string_view name() const noexcept { return name_; }
+
+    int index() const noexcept { return index_; }
+    void set_index(int idx) noexcept { index_ = idx; }
+protected:
+    std::pair<std::string, bool> format_log_message(const LogEntry& entry);
+
+protected:
+    std::string name_;
+    int index_ = -1; // Index assigned by Logger when added
+    LogLevel min_level_ = LogLevel::L_TRACE; // Minimum level for this sink
+    bool dedicated_ = false; // Whether this sink is dedicated (logs only its own entries)
 };
 
 struct RotationConfig {
@@ -192,11 +307,12 @@ struct RotationConfig {
 
 class ConsoleSink : public ISink {
 public:
-    explicit ConsoleSink(bool use_colors = true, bool use_stderr_for_errors = true, 
-                        TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS);
+    explicit ConsoleSink(bool use_colors = true, bool use_stderr_for_errors = true,
+                         TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS,
+                         std::string&& name = "");
     
     explicit ConsoleSink(const std::string& custom_timestamp_format, bool use_colors = true, 
-                        bool use_stderr_for_errors = true);
+                        bool use_stderr_for_errors = true, std::string&& name = "");
 
     void write(const LogEntry& entry) override;
     void flush() override;
@@ -213,10 +329,11 @@ private:
 
 class FileSink : public ISink {
 public:
-    explicit FileSink(const std::filesystem::path& file_path, 
-                     TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS);
+    explicit FileSink(const std::filesystem::path& file_path,
+                      TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS,
+                      std::string&& name = "");
     
-    explicit FileSink(const std::filesystem::path& file_path, const std::string& custom_timestamp_format);
+    explicit FileSink(const std::filesystem::path& file_path, const std::string& custom_timestamp_format, std::string&& name = "");
 
     std::string file_path() const noexcept;
     
@@ -234,10 +351,11 @@ protected:
 class RotatingFileSink : public FileSink {
 public:
     RotatingFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                    TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS);
+                    TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS,
+                    std::string&& name = "");
     
     RotatingFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                    const std::string& custom_timestamp_format);
+                    const std::string& custom_timestamp_format, std::string&& name = "");
     
     void write(const LogEntry& entry) override;
 
@@ -254,26 +372,28 @@ private:
 class DailyFileSink : public FileSink {
 public:
     DailyFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                 TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS);
+                 TimestampFormatter::Format timestamp_format = TimestampFormatter::Format::WITH_MICROSECONDS,
+                 std::string&& name = "");
 
     DailyFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                 const std::string& custom_timestamp_format);
+                 const std::string& custom_timestamp_format, std::string&& name = "");
 
     void write(const LogEntry& entry) override;
 
 protected:
     void check_rotation();
-    virtual std::string get_date_string();
+    virtual std::string get_date_string() const;
+    void rotate_daily_files();
+    void rotate_files_for_date(const std::string& date);
 
-    std::filesystem::path get_daily_filename();
-    std::filesystem::path get_dated_filename(const std::string& date);
-    std::filesystem::path get_dated_indexed_filename(const std::string& date, size_t index);
+    std::filesystem::path get_daily_filename() const;
+    std::filesystem::path get_dated_filename(const std::string& date) const;
+    std::filesystem::path get_dated_indexed_filename(const std::string& date, size_t index) const;
 
     RotationConfig config_;
     std::filesystem::path base_path_;
     std::string current_date_;
     size_t current_file_size_;
-    size_t current_day_index_;
 };
 
 /**
@@ -282,7 +402,8 @@ protected:
 struct LogConfig {
     std::vector<std::shared_ptr<ISink>> sinks;
     LogLevel min_level = LogLevel::L_TRACE;
-    size_t queue_size = 65536;
+    size_t log_queue_size = 65536;
+    size_t string_buffer_size = 4194304; // 4MB
 };
 
 /**
@@ -295,9 +416,10 @@ public:
     /**
      * @brief Initialize the logger with a log file path
      * @param log_file Path to the log file
-     * @param queue_size Size of the internal log queue (must be power of 2, default 65536)
+     * @param log_queue_size Size of the internal log queue (must be power of 2, default 65536)
+     * @param string_buffer_size Size of the internal string buffer (must be power of 2, default 4194304)
      */
-    void init(const std::filesystem::path& log_file, size_t queue_size = 65536);
+    void init(const std::filesystem::path& log_file, size_t log_queue_size = 65536, size_t string_buffer_size = 4194304);
 
     /**
      * @brief Initialize the logger with a configuration struct
@@ -308,8 +430,9 @@ public:
     /**
      * @brief Initialize logger with pre-added sinks - sinks should be added before calling this
      * @param queue_size Size of the internal log queue (must be power of 2, default 65536)
+     * @param string_buffer_size Size of the internal string buffer (must be power of 2, default 4194304)
      */
-    void init(size_t queue_size = 65536);
+    void init(size_t queue_size = 65536, size_t string_buffer_size = 4194304);
     
     /**
      * @brief Add a log sink
@@ -326,90 +449,102 @@ public:
      * @brief Add a console sink with optional color and error stream settings
      * @param use_colors Whether to use colors in console output (default true)
      * @param use_stderr_for_errors Whether to send warnings and errors to stderr (default true)
+     * @param name Optional name for the sink
      */
-    void add_console_sink(bool use_colors = true, bool use_stderr_for_errors = true);
+    void add_console_sink(bool use_colors = true, bool use_stderr_for_errors = true, std::string&& name = "");
 
     /**
      * @brief Add a console sink with custom timestamp format and optional color and error stream settings
      * @param timestamp_format Predefined timestamp format enum
      * @param use_colors Whether to use colors in console output (default true)
      * @param use_stderr_for_errors Whether to send warnings and errors to stderr (default true)
+     * @param name Optional name for the sink
      */
-    void add_console_sink(TimestampFormatter::Format timestamp_format, bool use_colors = true, bool use_stderr_for_errors = true);
+    void add_console_sink(TimestampFormatter::Format timestamp_format, bool use_colors = true, bool use_stderr_for_errors = true, std::string&& name = "");
 
     /**
      * @brief Add a console sink with custom timestamp format string and optional color and error stream settings
      * @param custom_timestamp_format Custom timestamp format string
      * @param use_colors Whether to use colors in console output (default true)
      * @param use_stderr_for_errors Whether to send warnings and errors to stderr (default true)
+     * @param name Optional name for the sink
      */
-    void add_console_sink(const std::string& custom_timestamp_format, bool use_colors = true, bool use_stderr_for_errors = true);
+    void add_console_sink(const std::string& custom_timestamp_format, bool use_colors = true, bool use_stderr_for_errors = true, std::string&& name = "");
     
     /**
      * @brief Add a file sink
      * @param path Path to the log file
+     * @param name Optional name for the sink
      */
-    void add_file_sink(const std::filesystem::path& path);
+    void add_file_sink(const std::filesystem::path& path, std::string&& name = "");
 
     /**
      * @brief Add a file sink with custom timestamp format
      * @param path Path to the log file
      * @param timestamp_format Predefined timestamp format enum
+     * @param name Optional name for the sink
      */
-    void add_file_sink(const std::filesystem::path& path, TimestampFormatter::Format timestamp_format);
+    void add_file_sink(const std::filesystem::path& path, TimestampFormatter::Format timestamp_format, std::string&& name = "");
 
     /**
      * @brief Add a file sink with custom timestamp format string
      * @param path Path to the log file
      * @param custom_timestamp_format Custom timestamp format string
+     * @param name Optional name for the sink
      */
-    void add_file_sink(const std::filesystem::path& path, const std::string& custom_timestamp_format);
+    void add_file_sink(const std::filesystem::path& path, const std::string& custom_timestamp_format, std::string&& name = "");
     
     /**
      * @brief Add a rotating file sink
      * @param path Base path to the log file
      * @param config Rotation configuration
+     * @param name Optional name for the sink
      */
-    void add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config);
+    void add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, std::string&& name = "");
 
     /**
      * @brief Add a rotating file sink with custom timestamp format
      * @param path Base path to the log file
      * @param config Rotation configuration
      * @param timestamp_format Predefined timestamp format enum
+     * @param name Optional name for the sink
      */
-    void add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format);
+    void add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format, std::string&& name = "");
 
     /**
      * @brief Add a rotating file sink with custom timestamp format string
      * @param path Base path to the log file
      * @param config Rotation configuration
      * @param custom_timestamp_format Custom timestamp format string
+     * @param name Optional name for the sink
      */
-    void add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format);
+    void add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format, std::string&& name = "");
     
     /**
      * @brief Add a daily file sink
      * @param path Base path to the log file
-     * @param config Rotation configuration
+     * @param name Optional name for the sink
+     * @param config Optional Rotation configuration (uses default if not provided)
      */
-    void add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config = {});
+    void add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config = {}, std::string&& name="");
 
     /**
      * @brief Add a daily file sink with custom timestamp format
      * @param path Base path to the log file
      * @param config Rotation configuration
      * @param timestamp_format Predefined timestamp format enum
+     * @param name Optional name for the sink
      */
-    void add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format);
+    void add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format, std::string&& name = "");
 
     /**
      * @brief Add a daily file sink with custom timestamp format string
      * @param path Base path to the log file
      * @param config Rotation configuration
      * @param custom_timestamp_format Custom timestamp format string
+     * @param name Optional name for the sink
      */
-    void add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format);
+    void add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format, std::string&& name = "");
 
     /**
      * @brief Get the sink of givent type
@@ -417,6 +552,12 @@ public:
      */
     template<typename SinkT>
     std::shared_ptr<ISink> get_sink() const noexcept;
+
+    /**
+     * @brief Get the sink by name
+     * @return The shared_ptr of the given sink name. It could be null if the sink of give name doesn't exist
+     */
+    std::shared_ptr<ISink> get_sink(std::string_view name) const noexcept;
 
     /**
      * @brief Get the current log level
@@ -440,8 +581,18 @@ public:
      * @param format Format string (printf-style)
      * @param args Arguments for the format string
      */
-    template<typename... Args>
-    void log(LogLevel level, const std::string& format, Args&&... args);
+    template<typename FormatT, typename... Args>
+    void log(LogLevel level, FormatT&& format, Args&&... args);
+
+    /**
+     * @brief Log a message to a specific sink by index
+     * @param index Index of the sink to log to
+     * @param level LogLevel of the message
+     * @param format Format string (printf-style)
+     * @param args Arguments for the format string
+     */
+    template<typename FormatT, typename... Args>
+    void log_to_sink(int sink_index, LogLevel level, FormatT&& format, Args&&... args);
 
     /**
      * @brief Shutdown the logger and flush all pending log entries
@@ -470,28 +621,195 @@ private:
     
     // Helper function to round up to next power of 2
     static size_t round_up_to_power_of_2(size_t value) noexcept;
+    
+    template<typename T>
+    void enqueue_argument(LogArgument& arg, T&& value);
 
-    std::unique_ptr<slick::SlickQueue<LogEntry>> queue_;
+    StringRef store_string_in_queue(std::string_view str);
+
+    std::unique_ptr<slick::SlickQueue<LogEntry>> log_queue_;
+    std::unique_ptr<slick::SlickQueue<char>> string_queue_;
     std::vector<std::shared_ptr<ISink>> sinks_;
     std::filesystem::path log_file_;
     std::thread writer_thread_;
     std::atomic<bool> running_{false};
     uint64_t read_index_{0};
     std::atomic<LogLevel> log_level_{LogLevel::L_TRACE};
+    std::unordered_map<std::string_view, int> sinkname_index_map_;
 };
 
-// Implementation (header-only library)
 
-inline ConsoleSink::ConsoleSink(bool use_colors, bool use_stderr_for_errors, 
-                                TimestampFormatter::Format timestamp_format)
-    : use_colors_(use_colors), use_stderr_for_errors_(use_stderr_for_errors), 
-      timestamp_formatter_(timestamp_format) {
+
+// ------------------------------ Implementation (header-only library) ------------------------------
+
+
+template<typename FormatT, typename... Args>
+inline void ISink::log(LogLevel level, FormatT&& format, Args&&... args) {
+    Logger::instance().log_to_sink(index_, level, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+template<typename FormatT, typename... Args>
+inline void ISink::log_trace(FormatT&& format, Args&&... args) {
+    log(LogLevel::L_TRACE, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+template<typename FormatT, typename... Args>
+inline void ISink::log_debug(FormatT&& format, Args&&... args) {
+    log(LogLevel::L_DEBUG, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+template<typename FormatT, typename... Args>
+inline void ISink::log_info(FormatT&& format, Args&&... args) {
+    log(LogLevel::L_INFO, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+template<typename FormatT, typename... Args>
+inline void ISink::log_warn(FormatT&& format, Args&&... args) {
+    log(LogLevel::L_WARN, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+template<typename FormatT, typename... Args>
+inline void ISink::log_error(FormatT&& format, Args&&... args) {
+    log(LogLevel::L_ERROR, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+template<typename FormatT, typename... Args>
+inline void ISink::log_fatal(FormatT&& format, Args&&... args) {
+    log(LogLevel::L_FATAL, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+inline std::pair<std::string, bool> ISink::format_log_message(const LogEntry& entry) {
+    if (entry.arg_count == 0) {
+        return std::make_pair(entry.format_ptr, true);
+    }
+
+    // Since std::make_format_args doesn't work with custom types in MSVC,
+    // we'll use a manual implementation that preserves std::format functionality
+    // by manually parsing format specifiers and applying them to each argument
+    try {
+        std::string format_str = entry.format_ptr;
+        std::string result;
+        result.reserve(format_str.length() + 256); // Reserve some space for formatting
+
+        size_t pos = 0;
+        uint8_t arg_index = 0;
+
+        while (pos < format_str.length()) {
+            size_t brace_start = format_str.find('{', pos);
+            if (brace_start == std::string::npos) {
+                // No more format specifiers, copy rest of string
+                result += format_str.substr(pos);
+                break;
+            }
+
+            // Copy everything before the brace
+            result += format_str.substr(pos, brace_start - pos);
+
+            // Find the closing brace
+            size_t brace_end = format_str.find('}', brace_start);
+            if (brace_end == std::string::npos) {
+                // Malformed format string
+                result += format_str.substr(brace_start);
+                break;
+            }
+
+            if (arg_index >= entry.arg_count) {
+                // Not enough arguments
+                result += "<MISSING_ARG>";
+                pos = brace_end + 1;
+                continue;
+            }
+
+            // Extract format spec (everything between { and })
+            std::string format_spec = format_str.substr(brace_start, brace_end - brace_start + 1);
+
+            // Format the argument using std::format with the specific format spec
+            const auto& arg = entry.args[arg_index];
+            std::string formatted_arg;
+
+            switch (arg.type) {
+                case ArgType::BOOL:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.b));
+                    break;
+                case ArgType::CHAR:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.c));
+                    break;
+                case ArgType::U_CHAR:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.uc));
+                    break;
+                // case ArgType::WCHAR:
+                //     formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.wc));
+                //     break;
+                case ArgType::INT8_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.i8));
+                    break;
+                case ArgType::UINT8_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.u8));
+                    break;
+                case ArgType::INT16_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.i16));
+                    break;
+                case ArgType::UINT16_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.u16));
+                    break;
+                case ArgType::INT32_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.i32));
+                    break;
+                case ArgType::UINT32_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.u32));
+                    break;
+                case ArgType::INT64_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.i64));
+                    break;
+                case ArgType::UINT64_T:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.u64));
+                    break;
+                case ArgType::FLOAT:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.f));
+                    break;
+                case ArgType::DOUBLE:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.d));
+                    break;
+                case ArgType::PTR:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.ptr));
+                    break;
+                case ArgType::STRING_LITERAL:
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(arg.value.literal_ptr));
+                    break;
+                case ArgType::STRING_DYNAMIC: {
+                    auto sv = std::string_view(arg.value.dynamic_str.ptr, arg.value.dynamic_str.length);
+                    formatted_arg = std::vformat(format_spec, std::make_format_args(sv));
+                    break;
+                }
+                default:
+                    formatted_arg = "<UNKNOWN>";
+                    break;
+            }
+
+            result += formatted_arg;
+            pos = brace_end + 1;
+            arg_index++;
+        }
+
+        return std::make_pair(result, true);
+    } catch (const std::format_error& e) {
+        // Return error message if formatting fails
+        return std::make_pair(std::string("[FORMAT_ERROR: ") + e.what() +"]", false);
+    } catch (...) {
+        return std::make_pair("[FORMAT_ERROR: Unknown format error]", false);
+    }
+}
+
+inline ConsoleSink::ConsoleSink(bool use_colors, bool use_stderr_for_errors,
+                                TimestampFormatter::Format timestamp_format, std::string&& name)
+    : ISink(std::move(name)), use_colors_(use_colors), use_stderr_for_errors_(use_stderr_for_errors)
+    , timestamp_formatter_(timestamp_format) {
 }
 
 inline ConsoleSink::ConsoleSink(const std::string& custom_timestamp_format, bool use_colors, 
-                                bool use_stderr_for_errors)
-    : use_colors_(use_colors), use_stderr_for_errors_(use_stderr_for_errors), 
-      timestamp_formatter_(custom_timestamp_format) {
+                                bool use_stderr_for_errors, std::string&& name)
+    : ISink(std::move(name)), use_colors_(use_colors), use_stderr_for_errors_(use_stderr_for_errors)
+    , timestamp_formatter_(custom_timestamp_format) {
 }
 
 inline void ConsoleSink::write(const LogEntry& entry) {
@@ -512,7 +830,7 @@ inline void ConsoleSink::flush() {
 inline std::string ConsoleSink::format_log_entry(const LogEntry& entry) {
     std::string level_str = to_string(entry.level);
     std::string timestamp = timestamp_formatter_.format_timestamp(entry.timestamp);
-    auto [message, good] = entry.formatter();
+    auto [message, good] = format_log_message(entry);
     if (!good) [[unlikely]] {
         level_str = "ERROR";
     }
@@ -541,17 +859,18 @@ inline std::string ConsoleSink::get_reset_code() {
     return "\033[0m";
 }
 
-inline FileSink::FileSink(const std::filesystem::path& file_path, 
-                          TimestampFormatter::Format timestamp_format)
-    : file_path_(file_path), timestamp_formatter_(timestamp_format) {
+inline FileSink::FileSink(const std::filesystem::path& file_path,
+                          TimestampFormatter::Format timestamp_format, std::string&& name)
+    : ISink(std::move(name)), file_path_(file_path), timestamp_formatter_(timestamp_format) {
     file_stream_.open(file_path_, std::ios::app);
     if (!file_stream_) {
         throw std::runtime_error("Failed to open log file: " + file_path_.string());
     }
 }
 
-inline FileSink::FileSink(const std::filesystem::path& file_path, const std::string& custom_timestamp_format)
-    : file_path_(file_path), timestamp_formatter_(custom_timestamp_format) {
+inline FileSink::FileSink(const std::filesystem::path& file_path,
+                          const std::string& custom_timestamp_format, std::string&& name)
+    : ISink(std::move(name)), file_path_(file_path), timestamp_formatter_(custom_timestamp_format) {
     file_stream_.open(file_path_, std::ios::app);
     if (!file_stream_) {
         throw std::runtime_error("Failed to open log file: " + file_path_.string());
@@ -573,7 +892,7 @@ inline void FileSink::flush() {
 inline std::string FileSink::format_log_entry(const LogEntry& entry) {
     std::string level_str = to_string(entry.level);
     std::string timestamp = timestamp_formatter_.format_timestamp(entry.timestamp);
-    auto [message, good] = entry.formatter();
+    auto [message, good] = format_log_message(entry);
     if (!good) [[unlikely]] {
         level_str = "ERROR";
     }
@@ -581,16 +900,16 @@ inline std::string FileSink::format_log_entry(const LogEntry& entry) {
 }
 
 inline RotatingFileSink::RotatingFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                                        TimestampFormatter::Format timestamp_format)
-    : FileSink(base_path, timestamp_format), config_(config), base_path_(base_path), current_file_size_(0) {
+                                          TimestampFormatter::Format timestamp_format, std::string&& name)
+    : FileSink(base_path, timestamp_format, std::move(name)), config_(config), base_path_(base_path), current_file_size_(0) {
     if (std::filesystem::exists(base_path_)) {
         current_file_size_ = std::filesystem::file_size(base_path_);
     }
 }
 
 inline RotatingFileSink::RotatingFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                                        const std::string& custom_timestamp_format)
-    : FileSink(base_path, custom_timestamp_format), config_(config), base_path_(base_path), current_file_size_(0) {
+                                        const std::string& custom_timestamp_format, std::string&& name)
+    : FileSink(base_path, custom_timestamp_format, std::move(name)), config_(config), base_path_(base_path), current_file_size_(0) {
     if (std::filesystem::exists(base_path_)) {
         current_file_size_ = std::filesystem::file_size(base_path_);
     }
@@ -642,25 +961,121 @@ inline std::filesystem::path RotatingFileSink::get_rotated_filename(size_t index
 }
 
 inline DailyFileSink::DailyFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                                  TimestampFormatter::Format timestamp_format)
-    : FileSink(base_path, timestamp_format), config_(config), base_path_(base_path),
-      current_file_size_(0), current_day_index_(0) {
+                                    TimestampFormatter::Format timestamp_format, std::string&& name)
+    : FileSink(base_path, timestamp_format, std::move(name)), config_(config), base_path_(base_path),
+      current_file_size_(0) {
     current_date_ = get_date_string();
-    // Initialize file size if file already exists
+
+    // Check if file already exists and is from a previous day
     if (std::filesystem::exists(base_path_)) {
-        current_file_size_ = std::filesystem::file_size(base_path_);
+        auto last_write_time = std::filesystem::last_write_time(base_path_);
+        auto last_write_time_t = std::chrono::system_clock::to_time_t(
+            std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                last_write_time - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+            )
+        );
+        std::tm* tm_ptr = std::localtime(&last_write_time_t);
+        if (tm_ptr) {
+            char date_str[11];
+            std::strftime(date_str, sizeof(date_str), "%Y-%m-%d", tm_ptr);
+            std::string file_date = std::string(date_str);
+
+            // If the existing file is from a previous day, rotate it
+            if (file_date != current_date_) {
+                file_stream_.close();
+
+                // Check if dated file already exists, if so rotate all files for that date
+                std::filesystem::path dated_file = get_dated_filename(file_date);
+                if (std::filesystem::exists(dated_file)) {
+                    rotate_files_for_date(file_date);
+                }
+
+                // Now rename current base file to dated filename
+                std::error_code ec;
+                std::filesystem::rename(base_path_, dated_file, ec);
+                if (ec) {
+                    // If rename fails, try copy and remove
+                    std::filesystem::copy_file(base_path_, dated_file, ec);
+                    if (!ec) {
+                        std::filesystem::remove(base_path_, ec);
+                    }
+                }
+
+                // Reopen file for today
+                file_stream_.open(base_path_, std::ios::out | std::ios::trunc);
+                if (!file_stream_) {
+                    throw std::runtime_error("Failed to reopen daily log file: " + base_path_.string());
+                }
+                current_file_size_ = 0;
+            } else {
+                // File is from today, continue appending
+                current_file_size_ = std::filesystem::file_size(base_path_);
+            }
+        } else {
+            // Could not get file date, just continue with current file
+            current_file_size_ = std::filesystem::file_size(base_path_);
+        }
     }
     // Keep logging to base_path (e.g., daily.log) - FileSink constructor already opened it
 }
 
 inline DailyFileSink::DailyFileSink(const std::filesystem::path& base_path, const RotationConfig& config,
-                                  const std::string& custom_timestamp_format)
-    : FileSink(base_path, custom_timestamp_format), config_(config), base_path_(base_path),
-      current_file_size_(0), current_day_index_(0) {
+                                  const std::string& custom_timestamp_format, std::string&& name)
+    : FileSink(base_path, custom_timestamp_format, std::move(name))
+    , config_(config)
+    , base_path_(base_path)
+    , current_file_size_(0) {
     current_date_ = get_date_string();
-    // Initialize file size if file already exists
+
+    // Check if file already exists and is from a previous day
     if (std::filesystem::exists(base_path_)) {
-        current_file_size_ = std::filesystem::file_size(base_path_);
+        auto last_write_time = std::filesystem::last_write_time(base_path_);
+        auto last_write_time_t = std::chrono::system_clock::to_time_t(
+            std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                last_write_time - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+            )
+        );
+        std::tm* tm_ptr = std::localtime(&last_write_time_t);
+        if (tm_ptr) {
+            char date_str[11];
+            std::strftime(date_str, sizeof(date_str), "%Y-%m-%d", tm_ptr);
+            std::string file_date = std::string(date_str);
+
+            // If the existing file is from a previous day, rotate it
+            if (file_date != current_date_) {
+                file_stream_.close();
+
+                // Check if dated file already exists, if so rotate all files for that date
+                std::filesystem::path dated_file = get_dated_filename(file_date);
+                if (std::filesystem::exists(dated_file)) {
+                    rotate_files_for_date(file_date);
+                }
+
+                // Now rename current base file to dated filename
+                std::error_code ec;
+                std::filesystem::rename(base_path_, dated_file, ec);
+                if (ec) {
+                    // If rename fails, try copy and remove
+                    std::filesystem::copy_file(base_path_, dated_file, ec);
+                    if (!ec) {
+                        std::filesystem::remove(base_path_, ec);
+                    }
+                }
+
+                // Reopen file for today
+                file_stream_.open(base_path_, std::ios::out | std::ios::trunc);
+                if (!file_stream_) {
+                    throw std::runtime_error("Failed to reopen daily log file: " + base_path_.string());
+                }
+                current_file_size_ = 0;
+            } else {
+                // File is from today, continue appending
+                current_file_size_ = std::filesystem::file_size(base_path_);
+            }
+        } else {
+            // Could not get file date, just continue with current file
+            current_file_size_ = std::filesystem::file_size(base_path_);
+        }
     }
     // Keep logging to base_path (e.g., daily.log) - FileSink constructor already opened it
 }
@@ -697,9 +1112,6 @@ inline void DailyFileSink::check_rotation() {
             }
         }
 
-        // Reset index for new day
-        current_day_index_ = 0;
-
         // Reopen base file for new day's logs
         file_stream_.open(base_path_, std::ios::out | std::ios::trunc); // Start fresh for new day
         if (!file_stream_) {
@@ -711,55 +1123,100 @@ inline void DailyFileSink::check_rotation() {
     }
 
     // Check for size-based rotation
-    if (current_file_size_ >= config_.max_file_size) {
-        // Close current file
-        file_stream_.close();
-
-        // Rename current base file to dated indexed filename (e.g., daily.log -> daily_2025-08-24_001.log)
-        std::filesystem::path old_dated_file = get_dated_indexed_filename(current_date_, current_day_index_);
-        std::error_code ec;
-        if (std::filesystem::exists(base_path_)) {
-            std::filesystem::rename(base_path_, old_dated_file, ec);
-            if (ec) {
-                // If rename fails, try copy and remove
-                std::filesystem::copy_file(base_path_, old_dated_file, ec);
-                if (!ec) {
-                    std::filesystem::remove(base_path_, ec);
-                }
-            }
-        }
-
-        // Increment index for next file
-        ++current_day_index_;
-
-        // Reopen base file for new logs
-        file_stream_.open(base_path_, std::ios::out | std::ios::trunc);
-        if (!file_stream_) {
-            throw std::runtime_error("Failed to reopen daily log file: " + base_path_.string());
-        }
-
-        current_file_size_ = 0;
-        return; // Don't check date rotation if we just did size rotation
+    if (config_.max_file_size && current_file_size_ >= config_.max_file_size) {
+        rotate_daily_files();
     }
 }
 
-inline std::filesystem::path DailyFileSink::get_daily_filename() {
+inline void DailyFileSink::rotate_files_for_date(const std::string& date) {
+    // Remove the oldest file if it exists and max_files is configured
+    // Files are: daily_DATE.log (index 0), daily_DATE_001.log (index 1), ..., daily_DATE_<max_files-1>.log (index max_files-1)
+
+    auto dated_file = get_dated_filename(date);
+
+    if (config_.max_files == 1) {
+        // If max_files is 1, we only keep the dated file (no indexed files)
+        // Just remove the old dated file - it will be replaced by the new one
+        if (std::filesystem::exists(dated_file)) {
+            std::filesystem::remove(dated_file);
+        }
+    } else if (config_.max_files > 1) {
+        // Remove the oldest indexed file
+        auto oldest_file = get_dated_indexed_filename(date, config_.max_files - 1);
+        if (std::filesystem::exists(oldest_file)) {
+            std::filesystem::remove(oldest_file);
+        }
+
+        // Rotate existing indexed files for the given date
+        // Start from the highest index and work down to 2
+        for (size_t i = config_.max_files - 1; i >= 2; --i) {
+            auto src = get_dated_indexed_filename(date, i - 1);
+            auto dst = get_dated_indexed_filename(date, i);
+
+            if (std::filesystem::exists(src)) {
+                std::filesystem::rename(src, dst);
+            }
+        }
+
+        // Rotate the dated file (without index) to _001.log
+        if (std::filesystem::exists(dated_file)) {
+            auto indexed_file_1 = get_dated_indexed_filename(date, 1);
+            std::filesystem::rename(dated_file, indexed_file_1);
+        }
+    }
+}
+
+inline void DailyFileSink::rotate_daily_files() {
+    file_stream_.close();
+
+    // Rotate all existing files for the current date (if any)
+    std::filesystem::path dated_file = get_dated_filename(current_date_);
+
+    // Always rotate if dated file exists, which will shift:
+    // daily_2025-10-02.log -> _001.log
+    // _001.log -> _002.log, etc.
+    if (std::filesystem::exists(dated_file)) {
+        rotate_files_for_date(current_date_);
+    }
+
+    // Rename current base file to dated filename (e.g., daily.log -> daily_2025-10-02.log)
+    std::error_code ec;
+    if (std::filesystem::exists(base_path_)) {
+        std::filesystem::rename(base_path_, dated_file, ec);
+        if (ec) {
+            // If rename fails, try copy and remove
+            std::filesystem::copy_file(base_path_, dated_file, ec);
+            if (!ec) {
+                std::filesystem::remove(base_path_, ec);
+            }
+        }
+    }
+
+    // Create new current file
+    file_stream_.open(base_path_, std::ios::out | std::ios::trunc);
+    if (!file_stream_) {
+        throw std::runtime_error("Failed to reopen daily log file: " + base_path_.string());
+    }
+    current_file_size_ = 0;
+}
+
+inline std::filesystem::path DailyFileSink::get_daily_filename() const {
     std::string date_str = get_date_string();
     return get_dated_filename(date_str);
 }
 
-inline std::filesystem::path DailyFileSink::get_dated_filename(const std::string& date) {
+inline std::filesystem::path DailyFileSink::get_dated_filename(const std::string& date) const {
     std::string filename = base_path_.stem().string() + "_" + date + base_path_.extension().string();
     return base_path_.parent_path() / filename;
 }
 
-inline std::filesystem::path DailyFileSink::get_dated_indexed_filename(const std::string& date, size_t index) {
+inline std::filesystem::path DailyFileSink::get_dated_indexed_filename(const std::string& date, size_t index) const {
     std::ostringstream oss;
     oss << base_path_.stem().string() << "_" << date << "_" << std::setfill('0') << std::setw(3) << index << base_path_.extension().string();
     return base_path_.parent_path() / oss.str();
 }
 
-inline std::string DailyFileSink::get_date_string() {
+inline std::string DailyFileSink::get_date_string() const {
     auto now = std::chrono::system_clock::now();
     time_t time_val = std::chrono::system_clock::to_time_t(now);
     std::tm* tm_ptr = std::localtime(&time_val);
@@ -778,14 +1235,16 @@ inline Logger& Logger::instance() {
     return instance;
 }
 
-inline void Logger::init(const std::filesystem::path& log_file, size_t queue_size) {
+inline void Logger::init(const std::filesystem::path& log_file, size_t log_queue_size, size_t string_buffer_size) {
     shutdown(); // make sure the logger is stopped
     add_sink(std::make_shared<FileSink>(log_file));
     
     // Ensure queue_size is power of 2
-    queue_size = round_up_to_power_of_2(queue_size);
+    log_queue_size = round_up_to_power_of_2(log_queue_size);
+    string_buffer_size = round_up_to_power_of_2(string_buffer_size);
 
-    queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(queue_size));
+    log_queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(log_queue_size));
+    string_queue_ = std::make_unique<slick::SlickQueue<char>>(static_cast<uint32_t>(string_buffer_size));
     log_file_ = log_file;
     start();
 }
@@ -794,7 +1253,7 @@ inline void Logger::start() {
     running_ = true;
     
     // Initialize read_index_ before starting the thread
-    read_index_ = queue_->initial_reading_index();
+    read_index_ = log_queue_->initial_reading_index();
     
     writer_thread_ = std::thread([this]() { writer_thread_func(); });
     
@@ -817,18 +1276,25 @@ inline void Logger::init(const LogConfig& config) {
     set_level(config.min_level);
     
     // Ensure queue_size is power of 2
-    size_t queue_size = round_up_to_power_of_2(config.queue_size);
+    size_t log_queue_size = round_up_to_power_of_2(config.log_queue_size);
+    size_t string_buffer_size = round_up_to_power_of_2(config.string_buffer_size);
 
-    queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(queue_size));
+    log_queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(log_queue_size));
+    string_queue_ = std::make_unique<slick::SlickQueue<char>>(static_cast<uint32_t>(string_buffer_size));
     start();
 }
 
 inline void Logger::add_sink(std::shared_ptr<ISink> sink) {
+    sink->set_index(static_cast<int>(sinks_.size()));
     sinks_.push_back(sink);
+    if (!sink->name().empty()) {
+        sinkname_index_map_[sink->name()] = sink->index();
+    }
 }
 
 inline void Logger::clear_sinks() {
     sinks_.clear();
+    sinkname_index_map_.clear();
 }
 
 template<typename SinkT>
@@ -841,7 +1307,18 @@ inline std::shared_ptr<ISink> Logger::get_sink() const noexcept {
     return nullptr;
 }
 
-inline void Logger::init(size_t queue_size) {
+inline std::shared_ptr<ISink> Logger::get_sink(std::string_view name) const noexcept {
+    auto iter = sinkname_index_map_.find(name);
+    if (iter != sinkname_index_map_.end()) {
+        int index = iter->second;
+        if (index >= 0 && static_cast<size_t>(index) < sinks_.size()) [[likely]] {
+            return sinks_[index];
+        }
+    }
+    return nullptr;  
+}
+
+inline void Logger::init(size_t queue_size, size_t string_buffer_size) {
     shutdown(false); // make sure the logger is stopped
 
     if (sinks_.empty()) {
@@ -851,57 +1328,59 @@ inline void Logger::init(size_t queue_size) {
     // Initialize logger with pre-set sinks - sinks should be added before calling this
     // Ensure queue_size is power of 2
     queue_size = round_up_to_power_of_2(queue_size);
+    string_buffer_size = round_up_to_power_of_2(string_buffer_size);
 
-    queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(queue_size));
+    log_queue_ = std::make_unique<slick::SlickQueue<LogEntry>>(static_cast<uint32_t>(queue_size));
+    string_queue_ = std::make_unique<slick::SlickQueue<char>>(static_cast<uint32_t>(string_buffer_size));
     start();
 }
 
-inline void Logger::add_console_sink(bool use_colors, bool use_stderr_for_errors) {
-    add_sink(std::make_shared<ConsoleSink>(use_colors, use_stderr_for_errors));
+inline void Logger::add_console_sink(bool use_colors, bool use_stderr_for_errors, std::string&& name) {
+    add_sink(std::make_shared<ConsoleSink>(use_colors, use_stderr_for_errors, TimestampFormatter::Format::WITH_MICROSECONDS, std::move(name)));
 }
 
-inline void Logger::add_console_sink(TimestampFormatter::Format timestamp_format, bool use_colors, bool use_stderr_for_errors) {
-    add_sink(std::make_shared<ConsoleSink>(use_colors, use_stderr_for_errors, timestamp_format));
+inline void Logger::add_console_sink(TimestampFormatter::Format timestamp_format, bool use_colors, bool use_stderr_for_errors, std::string&& name) {
+    add_sink(std::make_shared<ConsoleSink>(use_colors, use_stderr_for_errors, timestamp_format, std::move(name)));
 }
 
-inline void Logger::add_console_sink(const std::string& custom_timestamp_format, bool use_colors, bool use_stderr_for_errors) {
-    add_sink(std::make_shared<ConsoleSink>(custom_timestamp_format, use_colors, use_stderr_for_errors));
+inline void Logger::add_console_sink(const std::string& custom_timestamp_format, bool use_colors, bool use_stderr_for_errors, std::string&& name) {
+    add_sink(std::make_shared<ConsoleSink>(custom_timestamp_format, use_colors, use_stderr_for_errors, std::move(name)));
 }
 
-inline void Logger::add_file_sink(const std::filesystem::path& path) {
-    add_sink(std::make_shared<FileSink>(path));
+inline void Logger::add_file_sink(const std::filesystem::path& path, std::string&& name) {
+    add_sink(std::make_shared<FileSink>(path, TimestampFormatter::Format::WITH_MICROSECONDS, std::move(name)));
 }
 
-inline void Logger::add_file_sink(const std::filesystem::path& path, TimestampFormatter::Format timestamp_format) {
-    add_sink(std::make_shared<FileSink>(path, timestamp_format));
+inline void Logger::add_file_sink(const std::filesystem::path& path, TimestampFormatter::Format timestamp_format, std::string&& name) {
+    add_sink(std::make_shared<FileSink>(path, timestamp_format, std::move(name)));
 }
 
-inline void Logger::add_file_sink(const std::filesystem::path& path, const std::string& custom_timestamp_format) {
-    add_sink(std::make_shared<FileSink>(path, custom_timestamp_format));
+inline void Logger::add_file_sink(const std::filesystem::path& path, const std::string& custom_timestamp_format, std::string&& name) {
+    add_sink(std::make_shared<FileSink>(path, custom_timestamp_format, std::move(name)));
 }
 
-inline void Logger::add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config) {
-    add_sink(std::make_shared<RotatingFileSink>(path, config));
+inline void Logger::add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, std::string&& name) {
+    add_sink(std::make_shared<RotatingFileSink>(path, config, std::move(name)));
 }
 
-inline void Logger::add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format) {
-    add_sink(std::make_shared<RotatingFileSink>(path, config, timestamp_format));
+inline void Logger::add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format, std::string&& name) {
+    add_sink(std::make_shared<RotatingFileSink>(path, config, timestamp_format, std::move(name)));
 }
 
-inline void Logger::add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format) {
-    add_sink(std::make_shared<RotatingFileSink>(path, config, custom_timestamp_format));
+inline void Logger::add_rotating_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format, std::string&& name) {
+    add_sink(std::make_shared<RotatingFileSink>(path, config, custom_timestamp_format, std::move(name)));
 }
 
-inline void Logger::add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config) {
-    add_sink(std::make_shared<DailyFileSink>(path, config));
+inline void Logger::add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, std::string&& name) {
+    add_sink(std::make_shared<DailyFileSink>(path, config, std::move(name)));
 }
 
-inline void Logger::add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format) {
-    add_sink(std::make_shared<DailyFileSink>(path, config, timestamp_format));
+inline void Logger::add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, TimestampFormatter::Format timestamp_format, std::string&& name) {
+    add_sink(std::make_shared<DailyFileSink>(path, config, timestamp_format, std::move(name)));
 }
 
-inline void Logger::add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format) {
-    add_sink(std::make_shared<DailyFileSink>(path, config, custom_timestamp_format));
+inline void Logger::add_daily_file_sink(const std::filesystem::path& path, const RotationConfig& config, const std::string& custom_timestamp_format, std::string&& name) {
+    add_sink(std::make_shared<DailyFileSink>(path, config, custom_timestamp_format, std::move(name)));
 }
 
 // Helper function to convert arguments to owned types
@@ -923,9 +1402,21 @@ constexpr auto make_owned_arg(T&& arg) {
     }
 }
 
-template<typename... Args>
-inline void Logger::log(LogLevel level, const std::string& format, Args&&... args) {
-    if (!running_.load(std::memory_order_relaxed) || !queue_ || level < log_level_.load(std::memory_order_relaxed))
+template<typename FormatT, typename... Args>
+inline void Logger::log(LogLevel level, FormatT&& format, Args&&... args) {
+    log_to_sink(-1, level, std::forward<FormatT>(format), std::forward<Args>(args)...);
+}
+
+// #define IS_STRING_LITERAL(x) ([&]<class T = char>() { \
+//     return std::is_same_v<decltype(x), T const (&)[sizeof(x)]> && \
+//     requires { std::type_identity_t<T[sizeof(x) + 1]>{x}; }; }())
+
+#define IS_STRING_LITERAL(x) ([&]<class U = char>() { \
+    return std::is_same_v<decltype(x), U const (&)[sizeof(x)]>; }()) 
+
+template<typename FormatT, typename... Args>
+inline void Logger::log_to_sink(int sink_index, LogLevel level, FormatT&& format, Args&&... args) {
+    if (!running_.load(std::memory_order_relaxed) || !log_queue_ || level < log_level_.load(std::memory_order_relaxed))
     {
         return;
     }
@@ -933,33 +1424,173 @@ inline void Logger::log(LogLevel level, const std::string& format, Args&&... arg
     auto now = std::chrono::system_clock::now();
     auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
 
-    // Create lambda that captures format and arguments, formats when called
-    // Convert all arguments to owned types to prevent dangling pointers
-    auto formatter = [format, args_tuple = std::make_tuple(make_owned_arg(std::forward<Args>(args))...)]() mutable -> std::pair<std::string, bool> {
-        try {
-            if constexpr (sizeof...(Args) == 0) {
-                // No arguments provided, return format string as-is to avoid format parsing errors
-                return std::make_pair(format, true);
-            } else {
-                return std::make_pair(std::apply([&format](auto&&... unpacked_args) -> std::string {
-                    return std::vformat(format, std::make_format_args(std::forward<decltype(unpacked_args)>(unpacked_args)...));
-                }, args_tuple), true);
-            }
-        } catch (const std::exception& e) {
-            // Return original format string with error info if formatting fails
-            return std::make_pair(format + " [FORMAT_ERROR: " + e.what() + "]", false);
-        } catch (...) {
-            // Handle any other exceptions
-            return std::make_pair(format + " [FORMAT_ERROR: Unknown exception]", false);
-        }
-    };
+    LogEntry entry;
+    entry.level = level;
+    entry.timestamp = ns;
+    entry.sink_index = sink_index;
+    if constexpr (IS_STRING_LITERAL(format)) {
+        entry.format_ptr = format;  // String literal - safe to store pointer
+        entry.arg_count = sizeof...(args);
 
-    uint64_t index = queue_->reserve();
-    auto &entry_ref = *(*queue_)[index];
-    entry_ref.level = level;
-    entry_ref.formatter = std::move(formatter);
-    entry_ref.timestamp = static_cast<uint64_t>(ns);
-    queue_->publish(index);
+        // push arguments
+        size_t arg_idx = 0;
+        static_assert(sizeof...(args) <= SLICK_LOGGER_MAX_ARGS, "Too many log arguments");
+        (enqueue_argument(entry.args[arg_idx++], std::forward<Args>(args)), ...);
+    } 
+    else {
+        // Store dynamic string in string queue
+        static_assert(sizeof...(args) == 0, "Dynamic format strings are only supported when there are no arguments, to avoid dangling pointers.");
+        entry.format_ptr = "{}";
+        entry.arg_count = 1;
+        enqueue_argument(entry.args[0], format);
+    }
+
+
+
+    uint64_t index = log_queue_->reserve();
+    *(*log_queue_)[index] = std::move(entry);
+    log_queue_->publish(index);
+}
+
+template<typename T>
+inline void Logger::enqueue_argument(LogArgument& arg, T&& value) {
+    using DecayedT = std::decay_t<T>;
+
+    if constexpr (std::is_same_v<DecayedT, bool>) {
+        arg.type = ArgType::BOOL;
+        arg.value.b = value;
+    }
+    else if constexpr (std::is_same_v<DecayedT, char>) {
+        arg.type = ArgType::CHAR;
+        arg.value.c = value;
+    }
+    else if constexpr (std::is_same_v<DecayedT, unsigned char>) {
+        arg.type = ArgType::U_CHAR;
+        arg.value.uc = value;
+    }
+    else if constexpr (std::is_same_v<DecayedT, wchar_t>) {
+        arg.type = ArgType::WCHAR;
+        arg.value.wc = value;
+    }
+    else if constexpr (std::is_integral_v<DecayedT>) {
+        switch (sizeof(DecayedT)) {
+        case sizeof(int8_t):
+            if (std::is_signed_v<DecayedT>) {
+                arg.type = ArgType::INT8_T;
+                arg.value.i8 = static_cast<int8_t>(value);
+            } else {
+                arg.type = ArgType::UINT8_T;
+                arg.value.u8 = static_cast<uint8_t>(value);
+            }
+            return;
+        case sizeof(int16_t):
+            if (std::is_signed_v<DecayedT>) {
+                arg.type = ArgType::INT16_T;
+                arg.value.i16 = static_cast<int16_t>(value);
+            } else {
+                arg.type = ArgType::UINT16_T;
+                arg.value.u16 = static_cast<uint16_t>(value);
+            }
+            return;
+        case sizeof(int32_t):
+            if (std::is_signed_v<DecayedT>) {
+                arg.type = ArgType::INT32_T;
+                arg.value.i32 = static_cast<int32_t>(value);
+            } else {
+                arg.type = ArgType::UINT32_T;
+                arg.value.u32 = static_cast<uint32_t>(value);
+            }
+            return;
+        case sizeof(int64_t):
+            if (std::is_signed_v<DecayedT>) {
+                arg.type = ArgType::INT64_T;
+                arg.value.i64 = static_cast<int64_t>(value);
+            } else {
+                arg.type = ArgType::UINT64_T;
+                arg.value.u64 = static_cast<uint64_t>(value);
+            }
+            return;
+        default:
+            // larger integral types? - convert to string
+            arg.type = ArgType::STRING_DYNAMIC;
+            arg.value.dynamic_str = store_string_in_queue(std::to_string(value));
+            return;
+        }
+    }
+    else if constexpr (std::is_floating_point_v<DecayedT>) {
+        switch (sizeof(DecayedT)) {
+        case sizeof(float):
+            arg.type = ArgType::FLOAT;
+            arg.value.f = static_cast<float>(value);
+            return;
+        case sizeof(double):    
+            arg.type = ArgType::DOUBLE;
+            arg.value.d = static_cast<double>(value);
+            return;
+        }
+    }
+    else if constexpr (std::is_enum_v<DecayedT>) {
+        enqueue_argument(arg, static_cast<std::underlying_type_t<DecayedT>>(value));
+    }
+    else if constexpr (std::is_same_v<DecayedT, std::chrono::system_clock::time_point>) {
+        arg.type = ArgType::INT64_T;
+        arg.value.i64 = std::chrono::duration_cast<std::chrono::nanoseconds>(value.time_since_epoch()).count();
+    }
+    else if constexpr (IS_STRING_LITERAL(arg)) {
+        arg.type = ArgType::STRING_LITERAL;
+        arg.value.literal_ptr = value;
+    }
+    else if constexpr (std::is_same_v<DecayedT, const char*>) {
+        // Assume string literal - store pointer directly
+        arg.type = ArgType::STRING_DYNAMIC;
+        arg.value.dynamic_str = store_string_in_queue(value);
+    }
+    else if constexpr (std::is_same_v<DecayedT, char*>) {
+        // Assume string literal - store pointer directly
+        arg.type = ArgType::STRING_DYNAMIC;
+        arg.value.dynamic_str = store_string_in_queue(value);
+    }
+    else if constexpr (std::is_array_v<std::remove_reference_t<T>> && 
+                   (std::is_same_v<std::remove_extent_t<std::remove_reference_t<T>>, char> ||
+                    std::is_same_v<std::remove_extent_t<std::remove_reference_t<T>>, const char>)) {
+        // Handle char arrays
+        arg.type = ArgType::STRING_DYNAMIC;
+        arg.value.dynamic_str = store_string_in_queue(value);
+    }
+    else if constexpr (std::is_same_v<DecayedT, std::string>) {
+        // Dynamic string - copy to string queue
+        arg.type = ArgType::STRING_DYNAMIC;
+        arg.value.dynamic_str = store_string_in_queue(value);
+    }
+    else if constexpr (std::is_same_v<DecayedT, std::string_view>) {
+        // Could be either - need to determine at runtime or copy to be safe       
+        arg.type = ArgType::STRING_DYNAMIC;
+        arg.value.dynamic_str = store_string_in_queue(value);
+    }
+    else if constexpr (std::is_pointer_v<DecayedT>) {
+        arg.type = ArgType::PTR;
+        arg.value.ptr = static_cast<void*>(value);
+    }
+    else {
+        // custom type - convert to string
+        arg.type = ArgType::STRING_DYNAMIC;
+        arg.value.dynamic_str = store_string_in_queue(std::to_string(value));
+    }
+}
+
+inline StringRef Logger::store_string_in_queue(std::string_view str) {
+    uint32_t length = str.length();
+    auto len = length + 1; // +1 for null terminator
+
+    // Reserve space in string queue
+    uint64_t start_index = string_queue_->reserve(len);
+    // Copy string data
+    char* dest = (*string_queue_)[start_index];
+    std::memcpy(dest, str.data(), len);
+
+    // Publish the string data
+    string_queue_->publish(start_index, len);
+    return StringRef{dest, length};
 }
 
 inline void Logger::shutdown(bool clear_sinks) {
@@ -974,7 +1605,8 @@ inline void Logger::shutdown(bool clear_sinks) {
         // Clear sinks to release file handles and other resources
         sinks_.clear();
     }
-    queue_.reset();
+    log_queue_.reset();
+    string_queue_.reset();
 }
 
 inline Logger::~Logger() {
@@ -991,7 +1623,7 @@ inline void Logger::reset() {
 
 inline void Logger::writer_thread_func() {
     while (running_.load(std::memory_order_relaxed)) {
-        auto [entry_ptr, count] = queue_->read(read_index_);
+        auto [entry_ptr, count] = log_queue_->read(read_index_);
         if (entry_ptr) {
             write_log_entry(entry_ptr, count);
         } else {
@@ -1001,7 +1633,7 @@ inline void Logger::writer_thread_func() {
     
     // Drain remaining messages after running_ becomes false
     while (true) {
-        auto [entry_ptr, count] = queue_->read(read_index_);
+        auto [entry_ptr, count] = log_queue_->read(read_index_);
         if (!entry_ptr || count == 0) {
             break;
         }
@@ -1012,10 +1644,20 @@ inline void Logger::writer_thread_func() {
 inline void Logger::write_log_entry(const LogEntry* entry_ptr, uint32_t count) {
     for (uint32_t i = 0; i < count; ++i) {
         const LogEntry& entry = entry_ptr[i];
-        
-        // Write to all configured sinks
-        for (auto& sink : sinks_) {
-            if (sink) {
+        if (entry.sink_index >= 0 && static_cast<size_t>(entry.sink_index) < sinks_.size()) {
+            // Write to specific sink
+            auto &sink = sinks_[entry.sink_index];
+            if (entry.level < sink->min_level()) {
+                continue; // Skip if log level is below sink's minimum level
+            }
+            sink->write(entry);
+        }
+        else {
+            // Write to all non-dedicated sinks
+            for (auto& sink : sinks_) {
+                if (entry.level < sink->min_level() || sink->is_dedicated()) {
+                    continue; // Skip if log level is below sink's minimum level or sink is dedicated
+                }
                 sink->write(entry);
             }
         }
@@ -1039,9 +1681,11 @@ inline size_t Logger::round_up_to_power_of_2(size_t value) noexcept {
         temp |= temp >> 4;
         temp |= temp >> 8;
         temp |= temp >> 16;
+#if defined(_M_X64) || defined(__x86_64__)
         if constexpr (sizeof(size_t) > 4) {
             temp |= temp >> 32;
         }
+#endif
         return temp + 1;
     }
     return value; // Already a power of 2
