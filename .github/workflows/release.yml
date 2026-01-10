@@ -78,8 +78,8 @@ jobs:
           # Copy header file
           Copy-Item -Path "alpaca_zorro_plugin/AlpacaBrokerCommands.h" -Destination "build/bin/Release/include/"
 
-          # Copy websocket_proxy binaries
-          Copy-Item -Path "3rdparty/websocket_proxy/bin" -Destination "build/bin/Release/websocket_proxy" -Recurse
+          # Copy websocket_proxy binaries (copy contents of bin, not bin itself)
+          Copy-Item -Path "3rdparty/websocket_proxy/bin/*" -Destination "build/bin/Release/websocket_proxy" -Recurse
 
           # Create dist directory
           New-Item -Path "build/dist" -ItemType Directory -Force
@@ -88,7 +88,7 @@ jobs:
           # CMake uses: WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Release"
           # So we need to zip from inside that directory
           Push-Location "build/bin/Release"
-          Compress-Archive -Path "*" -DestinationPath "../../dist/${{ matrix.archive_name }}_${{ needs.extract-changelog.outputs.version }}.zip"
+          Compress-Archive -Path "*" -DestinationPath "../../dist/${{ matrix.archive_name }}_${{ needs.extract-changelog.outputs.version }}.zip" -Force
           Pop-Location
         shell: pwsh
 
