@@ -52,8 +52,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION @alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@,@alpaca_zorro_plugin_VERSION_TWEAK@
- PRODUCTVERSION @alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@,@alpaca_zorro_plugin_VERSION_TWEAK@
+ FILEVERSION @alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@
+ PRODUCTVERSION @alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@
  FILEFLAGSMASK 0x3fL
  FILEFLAGS VS_FF_PRERELEASE
  FILEOS 0x40004L
@@ -65,12 +65,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription", "Alpaca Zorro Plugin"
-            VALUE "FileVersion", "@alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@,@alpaca_zorro_plugin_VERSION_TWEAK@"
+            VALUE "FileVersion", "@alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@"
             VALUE "InternalName", "alpaca_zorro_plguin.dll"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "alpaca_zorro_plguin.dll"
             VALUE "ProductName", "AlpacaZorroPlugin"
-            VALUE "ProductVersion", "@alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@,@alpaca_zorro_plugin_VERSION_TWEAK@"
+            VALUE "ProductVersion", "@alpaca_zorro_plugin_VERSION_MAJOR@,@alpaca_zorro_plugin_VERSION_MINOR@,@alpaca_zorro_plugin_VERSION_PATCH@"
         END
     END
     BLOCK "VarFileInfo"

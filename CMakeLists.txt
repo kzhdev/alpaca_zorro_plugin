@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
-file (STRINGS "version" BUILD_VERSION)
-
 project(alpaca_zorro_plugin
-        VERSION ${BUILD_VERSION}
+        VERSION 1.5.2
         LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -83,7 +81,7 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/Release/include"
             COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/alpaca_zorro_plugin/AlpacaBrokerCommands.h" "${CMAKE_BINARY_DIR}/bin/Release/include/"
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/websocket_proxy/bin ${CMAKE_BINARY_DIR}/bin/Release/websocket_proxy
-            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/AlpacaZorroPlugin_${BUILD_VERSION}.zip" --format=zip "./"
+            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/AlpacaZorroPlugin_${PROJECT_VERSION}.zip" --format=zip "./"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Release"
             COMMENT "Creating zip archive"
         )
@@ -94,7 +92,7 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/Release/include"
             COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/alpaca_zorro_plugin/AlpacaBrokerCommands.h" "${CMAKE_BINARY_DIR}/bin/Release/include/"
             COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/websocket_proxy/bin ${CMAKE_BINARY_DIR}/bin/Release/websocket_proxy
-            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/AlpacaZorroPlugin64_${BUILD_VERSION}.zip" --format=zip "./"
+            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/dist/AlpacaZorroPlugin64_${PROJECT_VERSION}.zip" --format=zip "./"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Release"
             COMMENT "Creating zip archive 64bit"
         )

@@ -159,7 +159,12 @@ namespace alpaca
             slick_logger::RotationConfig rotation;
             rotation.max_file_size = 300 * 1024 * 1024;  // 300MB
             rotation.max_files = 10;                     // keep last 10 files
-            logger.add_rotating_file_sink(std::format("./Log/Alpaca_{}_{}.log", report(25), Type), rotation);
+            if (report) {
+                logger.add_rotating_file_sink(std::format("./Log/Alpaca_{}_{}.log", report(25), Type), rotation);
+            }
+            else {
+                logger.add_rotating_file_sink(std::format("./Log/Alpaca_{}.log", Type), rotation);
+            }
             logger.set_level(toLogLevel(s_config.logLevel));
             logger.init(65535, 16777216);
         }

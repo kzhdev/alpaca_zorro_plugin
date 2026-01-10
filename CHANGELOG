@@ -1,3 +1,9 @@
+v1.5.2 - [1/10/2025]
+- Refactored version management: removed external version file, now using CMakeLists.txt directly
+- Simplified versioning scheme from 4-part to 3-part semantic versioning (MAJOR.MINOR.PATCH)
+- Fixed null pointer exception in logger initialization for Zorro versions prior to 2.48
+- Added GitHub release workflow to build both 32-bit and 64-bit binaries with matrix strategy
+
 v1.5.1.2 - [10/05/2025]
 - Increase slick_logger string buffer size to 10M. The default size is too small for all assets response.
 - Update README
