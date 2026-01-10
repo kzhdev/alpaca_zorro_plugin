@@ -28,10 +28,12 @@ jobs:
           if [ -f CHANGELOG ]; then
             # Extract the section for this version from CHANGELOG
             VERSION="${{ github.ref_name }}"
+            # Remove any suffix after the version (e.g., -test, -rc1)
+            VERSION_CLEAN=$(echo "$VERSION" | sed 's/-.*$//')
             # Escape dots in version for regex
-            VERSION_ESCAPED=$(echo "$VERSION" | sed 's/\./\\./g')
-            # Use awk to extract content: start at version header, stop at next version header
-            CHANGES=$(awk "BEGIN{p=0} /^$VERSION_ESCAPED/{p=1;next} /^v[0-9]/{p=0} p" CHANGELOG | sed '/^$/d')
+            VERSION_ESCAPED=$(echo "$VERSION_CLEAN" | sed 's/\./\\./g')
+            # Use awk to extract content: start at version header (format: v1.5.2 - [date]), stop at next version header
+            CHANGES=$(awk "BEGIN{p=0} /^$VERSION_ESCAPED - /{p=1;next} /^v[0-9].*- \[/{p=0} p" CHANGELOG | sed '/^$/d')
 
             if [ -z "$CHANGES" ]; then
               echo "CHANGELOG_CONTENT=No changelog entry found for this version." >> $GITHUB_OUTPUT
