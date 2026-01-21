@@ -1101,6 +1101,7 @@ namespace alpaca
                     {
                         LOG_ERROR("Asset {} invalid", symbol);
                         BrokerError(("Asset " + symbol + " invalid").c_str());
+                        continue;
                     }
                     assets.emplace_back(iter->second);
                     token = strtok_s(nullptr, delim, &next_token);
